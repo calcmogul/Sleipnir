@@ -41,13 +41,12 @@ struct FilterEntry {
    * @param f The cost function.
    * @param μ The barrier parameter.
    * @param s The inequality constraint slack variables.
-   * @param c_e The equality constraint values (nonzero means violation).
    * @param c_i The inequality constraint values (negative means violation).
    */
   FilterEntry(Variable& f, double μ, const Eigen::VectorXd& s,
-              const Eigen::VectorXd& c_e, const Eigen::VectorXd& c_i)
+              const Eigen::VectorXd& c_i)
       : cost{f.Value() - μ * s.array().log().sum()},
-        constraintViolation{c_e.lpNorm<1>() + (c_i - s).lpNorm<1>()} {}
+        constraintViolation{(c_i - s).lpNorm<1>()} {}
 };
 
 /**
@@ -93,12 +92,10 @@ class Filter {
    * Creates a new filter entry.
    *
    * @param s The inequality constraint slack variables.
-   * @param c_e The equality constraint values (nonzero means violation).
    * @param c_i The inequality constraint values (negative means violation).
    */
-  FilterEntry MakeEntry(Eigen::VectorXd& s, const Eigen::VectorXd& c_e,
-                        const Eigen::VectorXd& c_i) {
-    return FilterEntry{*m_f, m_μ, s, c_e, c_i};
+  FilterEntry MakeEntry(Eigen::VectorXd& s, const Eigen::VectorXd& c_i) {
+    return FilterEntry{*m_f, m_μ, s, c_i};
   }
 
   /**

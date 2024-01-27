@@ -26,9 +26,6 @@ struct SolverIterationInfo {
   /// The Hessian of the Lagrangian.
   const Eigen::SparseMatrix<double>& H;
 
-  /// The equality constraint Jacobian.
-  const Eigen::SparseMatrix<double>& A_e;
-
   /// The inequality constraint Jacobian.
   const Eigen::SparseMatrix<double>& A_i;
 };
