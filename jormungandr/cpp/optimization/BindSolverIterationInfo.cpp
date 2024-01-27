@@ -26,9 +26,6 @@ void BindSolverIterationInfo(py::class_<SolverIterationInfo>& cls) {
       "H", [](const SolverIterationInfo& self) { return self.H; },
       DOC(sleipnir, SolverIterationInfo, H));
   cls.def_property_readonly(
-      "A_e", [](const SolverIterationInfo& self) { return self.A_e; },
-      DOC(sleipnir, SolverIterationInfo, A_e));
-  cls.def_property_readonly(
       "A_i", [](const SolverIterationInfo& self) { return self.A_i; },
       DOC(sleipnir, SolverIterationInfo, A_i));
 }

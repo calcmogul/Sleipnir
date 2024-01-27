@@ -36,8 +36,6 @@ are the inequality constraints.
 @param[in] f The cost function.
 @param[in] callback The user callback.
 @param[in] config Configuration options for the solver.
-@param[in] feasibilityRestoration Whether to use feasibility restoration instead
-  of the normal algorithm.
 @param[in,out] x The initial guess and output location for the decision
   variables.
 @param[in,out] s The initial guess and output location for the inequality
@@ -49,7 +47,7 @@ SLEIPNIR_DLLEXPORT void InteriorPoint(
     std::span<Variable> equalityConstraints,
     std::span<Variable> inequalityConstraints, Variable& f,
     function_ref<bool(const SolverIterationInfo& info)> callback,
-    const SolverConfig& config, bool feasibilityRestoration, Eigen::VectorXd& x,
-    Eigen::VectorXd& s, SolverStatus* status);
+    const SolverConfig& config, Eigen::VectorXd& x, Eigen::VectorXd& s,
+    SolverStatus* status);
 
 }  // namespace sleipnir

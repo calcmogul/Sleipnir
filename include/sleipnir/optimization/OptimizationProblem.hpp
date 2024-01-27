@@ -190,10 +190,12 @@ class SLEIPNIR_DLLEXPORT OptimizationProblem {
           std::max(status.equalityConstraintType, c.Type());
     }
 
-    m_equalityConstraints.reserve(m_equalityConstraints.size() +
-                                  constraint.constraints.size());
-    std::copy(constraint.constraints.begin(), constraint.constraints.end(),
-              std::back_inserter(m_equalityConstraints));
+    m_inequalityConstraints.reserve(m_inequalityConstraints.size() +
+                                    2 * constraint.constraints.size());
+    for (const auto& c : constraint.constraints) {
+      m_inequalityConstraints.emplace_back(c);
+      m_inequalityConstraints.emplace_back(-c);
+    }
   }
 
   /**
@@ -209,10 +211,12 @@ class SLEIPNIR_DLLEXPORT OptimizationProblem {
           std::max(status.equalityConstraintType, c.Type());
     }
 
-    m_equalityConstraints.reserve(m_equalityConstraints.size() +
-                                  constraint.constraints.size());
-    std::copy(constraint.constraints.begin(), constraint.constraints.end(),
-              std::back_inserter(m_equalityConstraints));
+    m_inequalityConstraints.reserve(m_inequalityConstraints.size() +
+                                    2 * constraint.constraints.size());
+    for (const auto& c : constraint.constraints) {
+      m_inequalityConstraints.emplace_back(c);
+      m_inequalityConstraints.emplace_back(-c);
+    }
   }
 
   /**
@@ -305,11 +309,21 @@ class SLEIPNIR_DLLEXPORT OptimizationProblem {
       return status;
     }
 
+    // Turn each equality constraint into two inequality constraints:
+    //
+    //   cₑ(x) = 0
+    //
+    //   cₑ ≥ 0
+    //   cₑ ≤ 0
+    //
+    //   cₑ ≥ 0
+    //   −cₑ ≥ 0
+
     // Solve the optimization problem
     Eigen::VectorXd s = Eigen::VectorXd::Ones(m_inequalityConstraints.size());
     InteriorPoint(m_decisionVariables, m_equalityConstraints,
-                  m_inequalityConstraints, m_f.value(), m_callback, config,
-                  false, x, s, &status);
+                  m_inequalityConstraints, m_f.value(), m_callback, config, x,
+                  s, &status);
 
     if (config.diagnostics) {
       sleipnir::println("Exit condition: {}", ToMessage(status.exitCondition));
