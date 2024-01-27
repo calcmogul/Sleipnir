@@ -17,8 +17,6 @@ namespace sleipnir {
  * Prints diagnostics for the current iteration.
  *
  * @param iterations Number of iterations.
- * @param feasibilityRestoration Whether solver is in feasibility restoration
- *     mode.
  * @param time The iteration duration.
  * @param error The error.
  * @param cost The cost.
@@ -27,20 +25,19 @@ namespace sleipnir {
  * @param α The step size.
  */
 template <typename Rep, typename Period = std::ratio<1>>
-void PrintIterationDiagnostics(int iterations, bool feasibilityRestoration,
+void PrintIterationDiagnostics(int iterations,
                                const std::chrono::duration<Rep, Period>& time,
                                double error, double cost, double infeasibility,
                                double δ, double α) {
   if (iterations % 20 == 0) {
-    sleipnir::println("{:^4}   {:^9}  {:^13}  {:^13}  {:^13}  {:^5}  {:^10}",
+    sleipnir::println("{:^4}  {:^9}  {:^13}  {:^13}  {:^13}  {:^5}  {:^10}",
                       "iter", "time (ms)", "error", "cost", "infeasibility",
                       "reg", "backtracks");
-    sleipnir::println("{:=^80}", "");
+    sleipnir::println("{:=^79}", "");
   }
 
-  sleipnir::print("{:4}{}  {:9.3f}  {:13e}  {:13e}  {:13e}  ", iterations,
-                  feasibilityRestoration ? "r" : " ", ToMilliseconds(time),
-                  error, cost, infeasibility);
+  sleipnir::print("{:4}  {:9.3f}  {:13e}  {:13e}  {:13e}  ", iterations,
+                  ToMilliseconds(time), error, cost, infeasibility);
 
   // Print regularization
   if (δ == 0.0) {

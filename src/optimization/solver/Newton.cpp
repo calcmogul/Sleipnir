@@ -143,7 +143,6 @@ void Newton(std::span<Variable> decisionVariables, Variable& f,
 
     // Call user callback
     if (callback({iterations, x, Eigen::VectorXd::Zero(0), g, H,
-                  Eigen::SparseMatrix<double>{},
                   Eigen::SparseMatrix<double>{}})) {
       status->exitCondition = SolverExitCondition::kCallbackRequestedStop;
       return;
@@ -155,7 +154,7 @@ void Newton(std::span<Variable> decisionVariables, Variable& f,
     // Solve the Newton-KKT system
     //
     // [H][ pₖˣ] = −[∇f]
-    solver.Compute(H, 0, config.tolerance / 10.0);
+    solver.Compute(H);
     Eigen::VectorXd step = solver.Solve(rhs);
 
     // step = [ pₖˣ]
@@ -249,8 +248,8 @@ void Newton(std::span<Variable> decisionVariables, Variable& f,
 
     if (config.diagnostics) {
       PrintIterationDiagnostics(
-          iterations, false, innerIterEndTime - innerIterStartTime, E_0,
-          f.Value(), 0.0, solver.HessianRegularization(), α);
+          iterations, innerIterEndTime - innerIterStartTime, E_0, f.Value(),
+          0.0, solver.HessianRegularization(), α);
     }
 
     ++iterations;

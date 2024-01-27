@@ -265,10 +265,6 @@ Parameter ``callback``:
 Parameter ``config``:
     Configuration options for the solver.
 
-Parameter ``feasibility_restoration``:
-    Whether to use feasibility restoration instead of the normal
-    algorithm.
-
 Parameter ``x``:
     The initial guess and output location for the decision variables.
 
@@ -966,8 +962,6 @@ elapsed wall clock time.)doc";
 static const char *__doc_sleipnir_SolverExitCondition_kTooFewDOFs = R"doc(The solver determined the problem to be overconstrained and gave up.)doc";
 
 static const char *__doc_sleipnir_SolverIterationInfo = R"doc(Solver iteration information exposed to a user callback.)doc";
-
-static const char *__doc_sleipnir_SolverIterationInfo_A_e = R"doc(The equality constraint Jacobian.)doc";
 
 static const char *__doc_sleipnir_SolverIterationInfo_A_i = R"doc(The inequality constraint Jacobian.)doc";
 
