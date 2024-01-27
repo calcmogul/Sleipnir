@@ -92,14 +92,13 @@ class Filter {
    * Creates a new interior-point method filter entry.
    *
    * @param s The inequality constraint slack variables.
-   * @param c_e The equality constraint values (nonzero means violation).
    * @param c_i The inequality constraint values (negative means violation).
    * @param μ The barrier parameter.
    */
-  FilterEntry MakeEntry(Eigen::VectorXd& s, const Eigen::VectorXd& c_e,
-                        const Eigen::VectorXd& c_i, double μ) {
+  FilterEntry MakeEntry(Eigen::VectorXd& s, const Eigen::VectorXd& c_i,
+                        double μ) {
     return FilterEntry{m_f->Value() - μ * s.array().log().sum(),
-                       c_e.lpNorm<1>() + (c_i - s).lpNorm<1>()};
+                       (c_i - s).lpNorm<1>()};
   }
 
   /**
