@@ -244,6 +244,10 @@ void InteriorPoint(std::span<Variable> decisionVariables,
     iterationsStartTime = std::chrono::steady_clock::now();
   }
 
+  std::ofstream errorCsv{"error.csv"};
+  errorCsv
+      << "iterations,|∇f − Aₑᵀy − Aᵢᵀz|_∞,|Sz − μe|_∞,|cₑ|_∞,|cᵢ − s|_∞,f\n";
+
   while (E_0 > config.tolerance &&
          acceptableIterCounter < config.maxAcceptableIterations) {
     std::chrono::steady_clock::time_point innerIterStartTime;
@@ -800,6 +804,13 @@ void InteriorPoint(std::span<Variable> decisionVariables,
                         E_0, f.Value(),
                         c_e.lpNorm<1>() + (c_i - s).lpNorm<1>());
     }
+
+    errorCsv << iterations << ','
+             << Eigen::VectorXd(g - A_e.transpose() * y - A_i.transpose() * z)
+                    .lpNorm<Eigen::Infinity>()
+             << ',' << (S * z - μ * e).lpNorm<Eigen::Infinity>() << ','
+             << c_e.lpNorm<Eigen::Infinity>() << ','
+             << (c_i - s).lpNorm<Eigen::Infinity>() << ',' << f.Value() << '\n';
 
     ++iterations;
 
