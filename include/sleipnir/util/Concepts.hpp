@@ -18,7 +18,7 @@ template <typename T>
 concept SleipnirMatrixLike = requires(T t, int rows, int cols) {
   t.Rows();
   t.Cols();
-  t(rows, cols);
+  t[rows, cols];
 };
 
 template <typename T>
