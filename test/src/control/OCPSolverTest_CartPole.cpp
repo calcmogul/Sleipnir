@@ -42,9 +42,9 @@ TEST_CASE("OCPSolver - Cart-pole", "[OCPSolver]") {
 
   // Initial guess
   for (int k = 0; k < N + 1; ++k) {
-    X(0, k).SetValue(
+    X[0, k].SetValue(
         std::lerp(x_initial(0), x_final(0), static_cast<double>(k) / N));
-    X(1, k).SetValue(
+    X[1, k].SetValue(
         std::lerp(x_initial(1), x_final(1), static_cast<double>(k) / N));
   }
 
@@ -61,8 +61,8 @@ TEST_CASE("OCPSolver - Cart-pole", "[OCPSolver]") {
   problem.ForEachStep([&](const sleipnir::VariableMatrix& x,
                           [[maybe_unused]]
                           const sleipnir::VariableMatrix& u) {
-    problem.SubjectTo(x(0) >= 0.0);
-    problem.SubjectTo(x(0) <= d_max);
+    problem.SubjectTo(x[0] >= 0.0);
+    problem.SubjectTo(x[0] <= d_max);
   });
 
   // Input constraints
@@ -98,12 +98,12 @@ TEST_CASE("OCPSolver - Cart-pole", "[OCPSolver]") {
   Eigen::Matrix<double, 1, 1> u{0.0};
   for (int k = 0; k < N; ++k) {
     // Cart position constraints
-    CHECK(X(0, k) >= 0.0);
-    CHECK(X(0, k) <= d_max);
+    CHECK(X[0, k] >= 0.0);
+    CHECK(X[0, k] <= d_max);
 
     // Input constraints
-    CHECK(U(0, k) >= -u_max);
-    CHECK(U(0, k) <= u_max);
+    CHECK(U[0, k] >= -u_max);
+    CHECK(U[0, k] <= u_max);
 
     // Verify state
     CHECK(X.Value(0, k) == Catch::Approx(x(0)).margin(1e-2));
