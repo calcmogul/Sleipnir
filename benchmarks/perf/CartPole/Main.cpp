@@ -42,30 +42,30 @@ sleipnir::VariableMatrix CartPoleDynamics(const sleipnir::VariableMatrix& x,
 
   auto q = x.Segment(0, 2);
   auto qdot = x.Segment(2, 2);
-  auto theta = q(1);
-  auto thetadot = qdot(1);
+  auto theta = q[1];
+  auto thetadot = qdot[1];
 
   //        [ m_c + m_p  m_p l cosθ]
   // M(q) = [m_p l cosθ    m_p l²  ]
   sleipnir::VariableMatrix M{2, 2};
-  M(0, 0) = m_c + m_p;
-  M(0, 1) = m_p * l * cos(theta);  // NOLINT
-  M(1, 0) = m_p * l * cos(theta);  // NOLINT
-  M(1, 1) = m_p * std::pow(l, 2);
+  M[0, 0] = m_c + m_p;
+  M[0, 1] = m_p * l * cos(theta);  // NOLINT
+  M[1, 0] = m_p * l * cos(theta);  // NOLINT
+  M[1, 1] = m_p * std::pow(l, 2);
 
   //           [0  −m_p lθ̇ sinθ]
   // C(q, q̇) = [0       0      ]
   sleipnir::VariableMatrix C{2, 2};
-  C(0, 0) = 0;
-  C(0, 1) = -m_p * l * thetadot * sin(theta);  // NOLINT
-  C(1, 0) = 0;
-  C(1, 1) = 0;
+  C[0, 0] = 0;
+  C[0, 1] = -m_p * l * thetadot * sin(theta);  // NOLINT
+  C[1, 0] = 0;
+  C[1, 1] = 0;
 
   //          [     0      ]
   // τ_g(q) = [-m_p gl sinθ]
   sleipnir::VariableMatrix tau_g{2, 1};
-  tau_g(0) = 0;
-  tau_g(1) = -m_p * g * l * sin(theta);  // NOLINT
+  tau_g[0] = 0;
+  tau_g[1] = -m_p * g * l * sin(theta);  // NOLINT
 
   //     [1]
   // B = [0]
@@ -93,9 +93,9 @@ sleipnir::OptimizationProblem CartPoleProblem(std::chrono::duration<double> dt,
 
   // Initial guess
   for (int k = 0; k < N + 1; ++k) {
-    X(0, k).SetValue(
+    X[0, k].SetValue(
         std::lerp(x_initial(0), x_final(0), static_cast<double>(k) / N));
-    X(1, k).SetValue(
+    X[1, k].SetValue(
         std::lerp(x_initial(1), x_final(1), static_cast<double>(k) / N));
   }
 

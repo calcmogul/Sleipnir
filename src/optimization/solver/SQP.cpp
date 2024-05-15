@@ -66,7 +66,7 @@ void SQP(
   // Lagrangian L
   //
   // L(xₖ, yₖ) = f(xₖ) − yₖᵀcₑ(xₖ)
-  auto L = f - (yAD.T() * c_eAD)(0);
+  auto L = f - (yAD.T() * c_eAD)[0];
 
   setupProfilers.back().Stop();
   setupProfilers.emplace_back("  ↳ ∂cₑ/∂x setup").Start();
@@ -122,8 +122,8 @@ void SQP(
       sleipnir::println(
           "Violated constraints (cₑ(x) = 0) in order of declaration:");
       for (int row = 0; row < c_e.rows(); ++row) {
-        if (c_e(row) < 0.0) {
-          sleipnir::println("  {}/{}: {} = 0", row + 1, c_e.rows(), c_e(row));
+        if (c_e[row] < 0.0) {
+          sleipnir::println("  {}/{}: {} = 0", row + 1, c_e.rows(), c_e[row]);
         }
       }
     }
@@ -261,8 +261,8 @@ void SQP(
         sleipnir::println(
             "Violated constraints (cₑ(x) = 0) in order of declaration:");
         for (int row = 0; row < c_e.rows(); ++row) {
-          if (c_e(row) < 0.0) {
-            sleipnir::println("  {}/{}: {} = 0", row + 1, c_e.rows(), c_e(row));
+          if (c_e[row] < 0.0) {
+            sleipnir::println("  {}/{}: {} = 0", row + 1, c_e.rows(), c_e[row]);
           }
         }
       }
@@ -538,7 +538,7 @@ void SQP(
     double maxStepScaled = 0.0;
     for (int row = 0; row < x.rows(); ++row) {
       maxStepScaled = std::max(maxStepScaled,
-                               std::abs(p_x(row)) / (1.0 + std::abs(x(row))));
+                               std::abs(p_x[row]) / (1.0 + std::abs(x[row])));
     }
     if (maxStepScaled < 10.0 * std::numeric_limits<double>::epsilon()) {
       α = α_max;
