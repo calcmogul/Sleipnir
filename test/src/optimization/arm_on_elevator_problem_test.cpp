@@ -46,19 +46,19 @@ TEST_CASE("Problem - Arm on elevator", "[Problem]") {
 
   for (int k = 0; k < N; ++k) {
     // Elevator dynamics constraints
-    problem.subject_to(elevator(0, k + 1) == elevator(0, k) +
-                                                 elevator(1, k) * dt.count() +
-                                                 0.5 * elevator_accel(0, k) *
+    problem.subject_to(elevator[0, k + 1] == elevator[0, k] +
+                                                 elevator[1, k] * dt.count() +
+                                                 0.5 * elevator_accel[0, k] *
                                                      dt.count() * dt.count());
-    problem.subject_to(elevator(1, k + 1) ==
-                       elevator(1, k) + elevator_accel(0, k) * dt.count());
+    problem.subject_to(elevator[1, k + 1] ==
+                       elevator[1, k] + elevator_accel[0, k] * dt.count());
 
     // Arm dynamics constraints
-    problem.subject_to(arm(0, k + 1) ==
-                       arm(0, k) + arm(1, k) * dt.count() +
-                           0.5 * arm_accel(0, k) * dt.count() * dt.count());
-    problem.subject_to(arm(1, k + 1) ==
-                       arm(1, k) + arm_accel(0, k) * dt.count());
+    problem.subject_to(arm[0, k + 1] ==
+                       arm[0, k] + arm[1, k] * dt.count() +
+                           0.5 * arm_accel[0, k] * dt.count() * dt.count());
+    problem.subject_to(arm[1, k + 1] ==
+                       arm[1, k] + arm_accel[0, k] * dt.count());
   }
 
   // Elevator start and end conditions
@@ -97,8 +97,8 @@ TEST_CASE("Problem - Arm on elevator", "[Problem]") {
   // Cost function
   slp::Variable J = 0.0;
   for (int k = 0; k < N + 1; ++k) {
-    J += slp::pow(ELEVATOR_END_HEIGHT - elevator(0, k), 2) +
-         slp::pow(ARM_END_ANGLE - arm(0, k), 2);
+    J += slp::pow(ELEVATOR_END_HEIGHT - elevator[0, k], 2) +
+         slp::pow(ARM_END_ANGLE - arm[0, k], 2);
   }
   problem.minimize(J);
 

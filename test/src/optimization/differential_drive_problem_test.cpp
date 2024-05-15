@@ -37,9 +37,9 @@ TEST_CASE("Problem - Differential drive", "[Problem]") {
 
   // Initial guess
   for (int k = 0; k < N; ++k) {
-    X(0, k).set_value(
+    X[0, k].set_value(
         std::lerp(x_initial(0), x_final(0), static_cast<double>(k) / N));
-    X(1, k).set_value(
+    X[1, k].set_value(
         std::lerp(x_initial(1), x_final(1), static_cast<double>(k) / N));
   }
 
@@ -92,10 +92,10 @@ TEST_CASE("Problem - Differential drive", "[Problem]") {
     u = U.col(k).value();
 
     // Input constraints
-    CHECK(U(0, k).value() >= -u_max);
-    CHECK(U(0, k).value() <= u_max);
-    CHECK(U(1, k).value() >= -u_max);
-    CHECK(U(1, k).value() <= u_max);
+    CHECK(U[0, k].value() >= -u_max);
+    CHECK(U[0, k].value() <= u_max);
+    CHECK(U[1, k].value() >= -u_max);
+    CHECK(U[1, k].value() <= u_max);
 
     // Verify state
     CHECK(X.value(0, k) == Catch::Approx(x[0]).margin(1e-8));
