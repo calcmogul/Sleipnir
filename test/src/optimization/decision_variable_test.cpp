@@ -157,9 +157,9 @@ TEST_CASE("decision_variable - Symmetric matrix", "[decision_variable]") {
   CHECK(A.value(1, 1) == 0.0);
 
   // Assign to lower triangle
-  A(0, 0).set_value(1.0);
-  A(1, 0).set_value(2.0);
-  A(1, 1).set_value(3.0);
+  A[0, 0].set_value(1.0);
+  A[1, 0].set_value(2.0);
+  A[1, 1].set_value(3.0);
 
   // Confirm whole matrix changed
   CHECK(A.value(0, 0) == 1.0);

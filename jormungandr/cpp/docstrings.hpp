@@ -1102,15 +1102,30 @@ static const char *__doc_slp_VariableBlock_m_row_slice_length = R"doc()doc";
 static const char *__doc_slp_VariableBlock_operator_Variable = R"doc(Implicit conversion operator from 1x1 VariableBlock to Variable.)doc";
 
 static const char *__doc_slp_VariableBlock_operator_array =
-R"doc(Returns a scalar subblock at the given row.
+R"doc(Returns a scalar subblock at the given row and column.
 
 Parameter ``row``:
     The scalar subblock's row.
 
+Parameter ``col``:
+    The scalar subblock's column.
+
 Returns:
-    A scalar subblock at the given row.)doc";
+    A scalar subblock at the given row and column.)doc";
 
 static const char *__doc_slp_VariableBlock_operator_array_2 =
+R"doc(Returns a scalar subblock at the given row and column.
+
+Parameter ``row``:
+    The scalar subblock's row.
+
+Parameter ``col``:
+    The scalar subblock's column.
+
+Returns:
+    A scalar subblock at the given row and column.)doc";
+
+static const char *__doc_slp_VariableBlock_operator_array_3 =
 R"doc(Returns a scalar subblock at the given row.
 
 Parameter ``row``:
@@ -1118,6 +1133,81 @@ Parameter ``row``:
 
 Returns:
     A scalar subblock at the given row.)doc";
+
+static const char *__doc_slp_VariableBlock_operator_array_4 =
+R"doc(Returns a scalar subblock at the given row.
+
+Parameter ``row``:
+    The scalar subblock's row.
+
+Returns:
+    A scalar subblock at the given row.)doc";
+
+static const char *__doc_slp_VariableBlock_operator_array_5 =
+R"doc(Returns a slice of the variable matrix.
+
+Parameter ``row_slice``:
+    The row slice.
+
+Parameter ``col_slice``:
+    The column slice.
+
+Returns:
+    A slice of the variable matrix.)doc";
+
+static const char *__doc_slp_VariableBlock_operator_array_6 =
+R"doc(Returns a slice of the variable matrix.
+
+Parameter ``row_slice``:
+    The row slice.
+
+Parameter ``col_slice``:
+    The column slice.
+
+Returns:
+    A slice of the variable matrix.)doc";
+
+static const char *__doc_slp_VariableBlock_operator_array_7 =
+R"doc(Returns a slice of the variable matrix.
+
+The given slices aren't adjusted. This overload is for Python bindings
+only.
+
+Parameter ``row_slice``:
+    The row slice.
+
+Parameter ``row_slice_length``:
+    The row slice length.
+
+Parameter ``col_slice``:
+    The column slice.
+
+Parameter ``col_slice_length``:
+    The column slice length.
+
+Returns:
+    A slice of the variable matrix.)doc";
+
+static const char *__doc_slp_VariableBlock_operator_array_8 =
+R"doc(Returns a slice of the variable matrix.
+
+The given slices aren't adjusted. This overload is for Python bindings
+only.
+
+Parameter ``row_slice``:
+    The row slice.
+
+Parameter ``row_slice_length``:
+    The row slice length.
+
+Parameter ``col_slice``:
+    The column slice.
+
+Parameter ``col_slice_length``:
+    The column slice length.
+
+Returns:
+    A slice of the variable matrix.)doc";
 
 static const char *__doc_slp_VariableBlock_operator_assign =
 R"doc(Assigns a VariableBlock to the block.
@@ -1165,96 +1255,6 @@ Parameter ``values``:
 
 Returns:
     This VariableBlock.)doc";
-
-static const char *__doc_slp_VariableBlock_operator_call =
-R"doc(Returns a scalar subblock at the given row and column.
-
-Parameter ``row``:
-    The scalar subblock's row.
-
-Parameter ``col``:
-    The scalar subblock's column.
-
-Returns:
-    A scalar subblock at the given row and column.)doc";
-
-static const char *__doc_slp_VariableBlock_operator_call_2 =
-R"doc(Returns a scalar subblock at the given row and column.
-
-Parameter ``row``:
-    The scalar subblock's row.
-
-Parameter ``col``:
-    The scalar subblock's column.
-
-Returns:
-    A scalar subblock at the given row and column.)doc";
-
-static const char *__doc_slp_VariableBlock_operator_call_3 =
-R"doc(Returns a slice of the variable matrix.
-
-Parameter ``row_slice``:
-    The row slice.
-
-Parameter ``col_slice``:
-    The column slice.
-
-Returns:
-    A slice of the variable matrix.)doc";
-
-static const char *__doc_slp_VariableBlock_operator_call_4 =
-R"doc(Returns a slice of the variable matrix.
-
-Parameter ``row_slice``:
-    The row slice.
-
-Parameter ``col_slice``:
-    The column slice.
-
-Returns:
-    A slice of the variable matrix.)doc";
-
-static const char *__doc_slp_VariableBlock_operator_call_5 =
-R"doc(Returns a slice of the variable matrix.
-
-The given slices aren't adjusted. This overload is for Python bindings
-only.
-
-Parameter ``row_slice``:
-    The row slice.
-
-Parameter ``row_slice_length``:
-    The row slice length.
-
-Parameter ``col_slice``:
-    The column slice.
-
-Parameter ``col_slice_length``:
-    The column slice length.
-
-Returns:
-    A slice of the variable matrix.)doc";
-
-static const char *__doc_slp_VariableBlock_operator_call_6 =
-R"doc(Returns a slice of the variable matrix.
-
-The given slices aren't adjusted. This overload is for Python bindings
-only.
-
-Parameter ``row_slice``:
-    The row slice.
-
-Parameter ``row_slice_length``:
-    The row slice length.
-
-Parameter ``col_slice``:
-    The column slice.
-
-Parameter ``col_slice_length``:
-    The column slice length.
-
-Returns:
-    A slice of the variable matrix.)doc";
 
 static const char *__doc_slp_VariableBlock_operator_iadd = R"doc()doc";
 
@@ -1638,15 +1638,30 @@ Returns:
 static const char *__doc_slp_VariableMatrix_operator_Variable = R"doc(Implicit conversion operator from 1x1 VariableMatrix to Variable.)doc";
 
 static const char *__doc_slp_VariableMatrix_operator_array =
-R"doc(Returns a block pointing to the given row.
+R"doc(Returns a block pointing to the given row and column.
 
 Parameter ``row``:
     The block row.
 
+Parameter ``col``:
+    The block column.
+
 Returns:
-    A block pointing to the given row.)doc";
+    A block pointing to the given row and column.)doc";
 
 static const char *__doc_slp_VariableMatrix_operator_array_2 =
+R"doc(Returns a block pointing to the given row and column.
+
+Parameter ``row``:
+    The block row.
+
+Parameter ``col``:
+    The block column.
+
+Returns:
+    A block pointing to the given row and column.)doc";
+
+static const char *__doc_slp_VariableMatrix_operator_array_3 =
 R"doc(Returns a block pointing to the given row.
 
 Parameter ``row``:
@@ -1654,6 +1669,81 @@ Parameter ``row``:
 
 Returns:
     A block pointing to the given row.)doc";
+
+static const char *__doc_slp_VariableMatrix_operator_array_4 =
+R"doc(Returns a block pointing to the given row.
+
+Parameter ``row``:
+    The block row.
+
+Returns:
+    A block pointing to the given row.)doc";
+
+static const char *__doc_slp_VariableMatrix_operator_array_5 =
+R"doc(Returns a slice of the variable matrix.
+
+Parameter ``row_slice``:
+    The row slice.
+
+Parameter ``col_slice``:
+    The column slice.
+
+Returns:
+    A slice of the variable matrix.)doc";
+
+static const char *__doc_slp_VariableMatrix_operator_array_6 =
+R"doc(Returns a slice of the variable matrix.
+
+Parameter ``row_slice``:
+    The row slice.
+
+Parameter ``col_slice``:
+    The column slice.
+
+Returns:
+    A slice of the variable matrix.)doc";
+
+static const char *__doc_slp_VariableMatrix_operator_array_7 =
+R"doc(Returns a slice of the variable matrix.
+
+The given slices aren't adjusted. This overload is for Python bindings
+only.
+
+Parameter ``row_slice``:
+    The row slice.
+
+Parameter ``row_slice_length``:
+    The row slice length.
+
+Parameter ``col_slice``:
+    The column slice.
+
+Parameter ``col_slice_length``:
+    The column slice length.
+
+Returns:
+    A slice of the variable matrix.)doc";
+
+static const char *__doc_slp_VariableMatrix_operator_array_8 =
+R"doc(Returns a slice of the variable matrix.
+
+The given slices aren't adjusted. This overload is for Python bindings
+only.
+
+Parameter ``row_slice``:
+    The row slice.
+
+Parameter ``row_slice_length``:
+    The row slice length.
+
+Parameter ``col_slice``:
+    The column slice.
+
+Parameter ``col_slice_length``:
+    The column slice length.
+
+Returns:
+    A slice of the variable matrix.)doc";
 
 static const char *__doc_slp_VariableMatrix_operator_assign =
 R"doc(Assigns an Eigen matrix to a VariableMatrix.
@@ -1665,96 +1755,6 @@ Returns:
     This VariableMatrix.)doc";
 
 static const char *__doc_slp_VariableMatrix_operator_assign_2 = R"doc()doc";
-
-static const char *__doc_slp_VariableMatrix_operator_call =
-R"doc(Returns a block pointing to the given row and column.
-
-Parameter ``row``:
-    The block row.
-
-Parameter ``col``:
-    The block column.
-
-Returns:
-    A block pointing to the given row and column.)doc";
-
-static const char *__doc_slp_VariableMatrix_operator_call_2 =
-R"doc(Returns a block pointing to the given row and column.
-
-Parameter ``row``:
-    The block row.
-
-Parameter ``col``:
-    The block column.
-
-Returns:
-    A block pointing to the given row and column.)doc";
-
-static const char *__doc_slp_VariableMatrix_operator_call_3 =
-R"doc(Returns a slice of the variable matrix.
-
-Parameter ``row_slice``:
-    The row slice.
-
-Parameter ``col_slice``:
-    The column slice.
-
-Returns:
-    A slice of the variable matrix.)doc";
-
-static const char *__doc_slp_VariableMatrix_operator_call_4 =
-R"doc(Returns a slice of the variable matrix.
-
-Parameter ``row_slice``:
-    The row slice.
-
-Parameter ``col_slice``:
-    The column slice.
-
-Returns:
-    A slice of the variable matrix.)doc";
-
-static const char *__doc_slp_VariableMatrix_operator_call_5 =
-R"doc(Returns a slice of the variable matrix.
-
-The given slices aren't adjusted. This overload is for Python bindings
-only.
-
-Parameter ``row_slice``:
-    The row slice.
-
-Parameter ``row_slice_length``:
-    The row slice length.
-
-Parameter ``col_slice``:
-    The column slice.
-
-Parameter ``col_slice_length``:
-    The column slice length.
-
-Returns:
-    A slice of the variable matrix.)doc";
-
-static const char *__doc_slp_VariableMatrix_operator_call_6 =
-R"doc(Returns a slice of the variable matrix.
-
-The given slices aren't adjusted. This overload is for Python bindings
-only.
-
-Parameter ``row_slice``:
-    The row slice.
-
-Parameter ``row_slice_length``:
-    The row slice length.
-
-Parameter ``col_slice``:
-    The column slice.
-
-Parameter ``col_slice_length``:
-    The column slice length.
-
-Returns:
-    A slice of the variable matrix.)doc";
 
 static const char *__doc_slp_VariableMatrix_operator_iadd = R"doc()doc";
 

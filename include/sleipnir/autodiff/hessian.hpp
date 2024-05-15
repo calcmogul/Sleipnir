@@ -110,9 +110,9 @@ class SLEIPNIR_DLLEXPORT Hessian {
       auto grad = m_graphs[row].generate_gradient_tree(m_wrt);
       for (int col = 0; col < m_wrt.rows(); ++col) {
         if (grad[col].expr != nullptr) {
-          result(row, col) = std::move(grad[col]);
+          result[row, col] = std::move(grad[col]);
         } else {
-          result(row, col) = Variable{0.0};
+          result[row, col] = Variable{0.0};
         }
       }
     }

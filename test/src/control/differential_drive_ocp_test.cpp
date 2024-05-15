@@ -35,8 +35,8 @@ TEST_CASE("OCP - Differential drive", "[OCP]") {
 
   // Seed the min time formulation with lerp between waypoints
   for (int i = 0; i < N + 1; ++i) {
-    problem.X()(0, i).set_value(static_cast<double>(i) / (N + 1));
-    problem.X()(1, i).set_value(static_cast<double>(i) / (N + 1));
+    problem.X()[0, i].set_value(static_cast<double>(i) / (N + 1));
+    problem.X()[1, i].set_value(static_cast<double>(i) / (N + 1));
   }
 
   problem.constrain_initial_state(x_initial);
@@ -78,10 +78,10 @@ TEST_CASE("OCP - Differential drive", "[OCP]") {
     u = U.col(k).value();
 
     // Input constraints
-    CHECK(U(0, k).value() >= -u_max[0]);
-    CHECK(U(0, k).value() <= u_max[0]);
-    CHECK(U(1, k).value() >= -u_max[1]);
-    CHECK(U(1, k).value() <= u_max[1]);
+    CHECK(U[0, k].value() >= -u_max[0]);
+    CHECK(U[0, k].value() <= u_max[0]);
+    CHECK(U[1, k].value() >= -u_max[1]);
+    CHECK(U[1, k].value() <= u_max[1]);
 
     // Verify state
     CHECK(X.value(0, k) == Catch::Approx(x[0]).margin(1e-8));
