@@ -78,7 +78,7 @@ class VariableBlock {
 
       for (int row = 0; row < Rows(); ++row) {
         for (int col = 0; col < Cols(); ++col) {
-          (*this)(row, col) = values(row, col);
+          (*this)[row, col] = values[row, col];
         }
       }
     }
@@ -119,7 +119,7 @@ class VariableBlock {
   VariableBlock<Mat>& operator=(double value) {
     Assert(Rows() == 1 && Cols() == 1);
 
-    (*this)(0, 0) = value;
+    (*this)[0, 0] = value;
 
     return *this;
   }
@@ -134,7 +134,7 @@ class VariableBlock {
   VariableBlock<Mat>& SetValue(double value) {
     Assert(Rows() == 1 && Cols() == 1);
 
-    (*this)(0, 0).SetValue(value);
+    (*this)[0, 0].SetValue(value);
 
     return *this;
   }
@@ -151,7 +151,7 @@ class VariableBlock {
 
     for (int row = 0; row < Rows(); ++row) {
       for (int col = 0; col < Cols(); ++col) {
-        (*this)(row, col) = values(row, col);
+        (*this)[row, col] = values(row, col);
       }
     }
 
@@ -171,7 +171,7 @@ class VariableBlock {
 
     for (int row = 0; row < Rows(); ++row) {
       for (int col = 0; col < Cols(); ++col) {
-        (*this)(row, col).SetValue(values(row, col));
+        (*this)[row, col].SetValue(values(row, col));
       }
     }
 
@@ -189,7 +189,7 @@ class VariableBlock {
 
     for (int row = 0; row < Rows(); ++row) {
       for (int col = 0; col < Cols(); ++col) {
-        (*this)(row, col) = values(row, col);
+        (*this)[row, col] = values[row, col];
       }
     }
     return *this;
@@ -206,7 +206,7 @@ class VariableBlock {
 
     for (int row = 0; row < Rows(); ++row) {
       for (int col = 0; col < Cols(); ++col) {
-        (*this)(row, col) = std::move(values(row, col));
+        (*this)[row, col] = std::move(values[row, col]);
       }
     }
     return *this;
@@ -218,12 +218,12 @@ class VariableBlock {
    * @param row The scalar subblock's row.
    * @param col The scalar subblock's column.
    */
-  Variable& operator()(int row, int col)
+  Variable& operator[](int row, int col)
     requires(!std::is_const_v<Mat>)
   {
     Assert(row >= 0 && row < Rows());
     Assert(col >= 0 && col < Cols());
-    return (*m_mat)(m_rowOffset + row, m_colOffset + col);
+    return (*m_mat)[m_rowOffset + row, m_colOffset + col];
   }
 
   /**
@@ -232,10 +232,10 @@ class VariableBlock {
    * @param row The scalar subblock's row.
    * @param col The scalar subblock's column.
    */
-  const Variable& operator()(int row, int col) const {
+  const Variable& operator[](int row, int col) const {
     Assert(row >= 0 && row < Rows());
     Assert(col >= 0 && col < Cols());
-    return (*m_mat)(m_rowOffset + row, m_colOffset + col);
+    return (*m_mat)[m_rowOffset + row, m_colOffset + col];
   }
 
   /**
@@ -243,11 +243,11 @@ class VariableBlock {
    *
    * @param row The scalar subblock's row.
    */
-  Variable& operator()(int row)
+  Variable& operator[](int row)
     requires(!std::is_const_v<Mat>)
   {
     Assert(row >= 0 && row < Rows() * Cols());
-    return (*this)(row / Cols(), row % Cols());
+    return (*this)[row / Cols(), row % Cols()];
   }
 
   /**
@@ -255,9 +255,9 @@ class VariableBlock {
    *
    * @param row The scalar subblock's row.
    */
-  const Variable& operator()(int row) const {
+  const Variable& operator[](int row) const {
     Assert(row >= 0 && row < Rows() * Cols());
-    return (*this)(row / Cols(), row % Cols());
+    return (*this)[row / Cols(), row % Cols()];
   }
 
   /**
@@ -445,7 +445,7 @@ class VariableBlock {
 
     for (int row = 0; row < Rows(); ++row) {
       for (int col = 0; col < Cols(); ++col) {
-        result(col, row) = (*this)(row, col);
+        result[col, row] = (*this)[row, col];
       }
     }
 
@@ -471,7 +471,7 @@ class VariableBlock {
   double Value(int row, int col) {
     Assert(row >= 0 && row < Rows());
     Assert(col >= 0 && col < Cols());
-    return (*m_mat)(m_rowOffset + row, m_colOffset + col).Value();
+    return (*m_mat)[m_rowOffset + row, m_colOffset + col].Value();
   }
 
   /**
@@ -481,8 +481,8 @@ class VariableBlock {
    */
   double Value(int index) {
     Assert(index >= 0 && index < Rows() * Cols());
-    return (*m_mat)(m_rowOffset + index / m_blockCols,
-                    m_colOffset + index % m_blockCols)
+    return (*m_mat)[m_rowOffset + index / m_blockCols,
+                    m_colOffset + index % m_blockCols]
         .Value();
   }
 
@@ -512,7 +512,7 @@ class VariableBlock {
 
     for (int row = 0; row < Rows(); ++row) {
       for (int col = 0; col < Cols(); ++col) {
-        result(row, col) = unaryOp((*this)(row, col));
+        result[row, col] = unaryOp((*this)[row, col]);
       }
     }
 
@@ -544,7 +544,7 @@ class VariableBlock {
       return retval;
     }
     bool operator==(const iterator&) const = default;
-    reference operator*() { return (*m_mat)(m_row, m_col); }
+    reference operator*() { return (*m_mat)[m_row, m_col]; }
 
    private:
     VariableBlock<Mat>* m_mat;
@@ -577,7 +577,7 @@ class VariableBlock {
       return retval;
     }
     bool operator==(const const_iterator&) const = default;
-    const_reference operator*() const { return (*m_mat)(m_row, m_col); }
+    const_reference operator*() const { return (*m_mat)[m_row, m_col]; }
 
    private:
     const VariableBlock<Mat>* m_mat;

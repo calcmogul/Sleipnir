@@ -78,7 +78,7 @@ class SLEIPNIR_DLLEXPORT OptimizationProblem {
     for (int row = 0; row < rows; ++row) {
       for (int col = 0; col < cols; ++col) {
         m_decisionVariables.emplace_back();
-        vars(row, col) = m_decisionVariables.back();
+        vars[row, col] = m_decisionVariables.back();
       }
     }
 
@@ -111,8 +111,8 @@ class SLEIPNIR_DLLEXPORT OptimizationProblem {
     for (int row = 0; row < rows; ++row) {
       for (int col = 0; col <= row; ++col) {
         m_decisionVariables.emplace_back();
-        vars(row, col) = m_decisionVariables.back();
-        vars(col, row) = m_decisionVariables.back();
+        vars[row, col] = m_decisionVariables.back();
+        vars[col, row] = m_decisionVariables.back();
       }
     }
 

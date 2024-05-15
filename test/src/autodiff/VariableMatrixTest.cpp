@@ -35,20 +35,20 @@ TEST_CASE("VariableMatrix - Assignment to default", "[VariableMatrix]") {
 
   CHECK(mat.Rows() == 2);
   CHECK(mat.Cols() == 2);
-  CHECK(mat(0, 0) == 0.0);
-  CHECK(mat(0, 1) == 0.0);
-  CHECK(mat(1, 0) == 0.0);
-  CHECK(mat(1, 1) == 0.0);
+  CHECK(mat[0, 0] == 0.0);
+  CHECK(mat[0, 1] == 0.0);
+  CHECK(mat[1, 0] == 0.0);
+  CHECK(mat[1, 1] == 0.0);
 
-  mat(0, 0) = 1.0;
-  mat(0, 1) = 2.0;
-  mat(1, 0) = 3.0;
-  mat(1, 1) = 4.0;
+  mat[0, 0] = 1.0;
+  mat[0, 1] = 2.0;
+  mat[1, 0] = 3.0;
+  mat[1, 1] = 4.0;
 
-  CHECK(mat(0, 0) == 1.0);
-  CHECK(mat(0, 1) == 2.0);
-  CHECK(mat(1, 0) == 3.0);
-  CHECK(mat(1, 1) == 4.0);
+  CHECK(mat[0, 0] == 1.0);
+  CHECK(mat[0, 1] == 2.0);
+  CHECK(mat[1, 0] == 3.0);
+  CHECK(mat[1, 1] == 4.0);
 }
 
 TEST_CASE("VariableMatrix - Assignment aliasing", "[VariableMatrix]") {
@@ -65,7 +65,7 @@ TEST_CASE("VariableMatrix - Assignment aliasing", "[VariableMatrix]") {
   CHECK(A == expectedB);
   CHECK(B == expectedB);
 
-  B(0, 0).SetValue(2.0);
+  B[0, 0].SetValue(2.0);
   expectedB(0, 0) = 2.0;
 
   CHECK(A == expectedB);

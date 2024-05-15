@@ -51,7 +51,7 @@ void BindVariableBlock(py::module_& autodiff,
   cls.def(
       "__setitem__",
       [](VariableBlock<VariableMatrix>& self, int row, const Variable& value) {
-        return self(row) = value;
+        return self[row] = value;
       },
       "row"_a, "value"_a);
   // TODO: Support slice stride other than 1
@@ -134,10 +134,10 @@ void BindVariableBlock(py::module_& autodiff,
         if (row < 0) {
           row = self.size() + row;
         }
-        return self(row);
+        return self[row];
       },
       py::keep_alive<0, 1>(), "row"_a,
-      DOC(sleipnir, VariableBlock, operator, call, 3));
+      DOC(sleipnir, VariableBlock, operator, array, 3));
   // TODO: Support slice stride other than 1
   cls.def(
       "__getitem__",
@@ -164,7 +164,7 @@ void BindVariableBlock(py::module_& autodiff,
           if (col < 0) {
             col = self.Cols() + col;
           }
-          return py::cast(self(row, col));
+          return py::cast(self[row, col]);
         }
 
         int rowOffset = 0;
@@ -215,7 +215,7 @@ void BindVariableBlock(py::module_& autodiff,
 
         return py::cast(self.Block(rowOffset, colOffset, blockRows, blockCols));
       },
-      py::keep_alive<0, 1>(), DOC(sleipnir, VariableBlock, operator, call),
+      py::keep_alive<0, 1>(), DOC(sleipnir, VariableBlock, operator, array),
       "slices"_a);
   cls.def("row", py::overload_cast<int>(&VariableBlock<VariableMatrix>::Row),
           "row"_a, DOC(sleipnir, VariableBlock, Row));

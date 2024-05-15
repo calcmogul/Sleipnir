@@ -182,7 +182,7 @@ class SLEIPNIR_DLLEXPORT OCPSolver : public OptimizationProblem {
     if (m_timestepMethod == TimestepMethod::kFixed) {
       m_DT = VariableMatrix{1, m_numSteps + 1};
       for (int i = 0; i < numSteps + 1; ++i) {
-        m_DT(0, i) = m_dt.count();
+        m_DT[0, i] = m_dt.count();
       }
     } else if (m_timestepMethod == TimestepMethod::kVariableSingle) {
       Variable DT = DecisionVariable();
@@ -191,12 +191,12 @@ class SLEIPNIR_DLLEXPORT OCPSolver : public OptimizationProblem {
       // Set the member variable matrix to track the decision variable
       m_DT = VariableMatrix{1, m_numSteps + 1};
       for (int i = 0; i < numSteps + 1; ++i) {
-        m_DT(0, i) = DT;
+        m_DT[0, i] = DT;
       }
     } else if (m_timestepMethod == TimestepMethod::kVariable) {
       m_DT = DecisionVariable(1, m_numSteps + 1);
       for (int i = 0; i < numSteps + 1; ++i) {
-        m_DT(0, i).SetValue(m_dt.count());
+        m_DT[0, i].SetValue(m_dt.count());
       }
     }
 
@@ -272,7 +272,7 @@ class SLEIPNIR_DLLEXPORT OCPSolver : public OptimizationProblem {
     for (int i = 0; i < m_numSteps + 1; ++i) {
       auto x = X().Col(i);
       auto u = U().Col(i);
-      auto dt = DT()(0, i);
+      auto dt = DT()[0, i];
       callback(time, x, u, dt);
 
       time += dt;
@@ -379,7 +379,7 @@ class SLEIPNIR_DLLEXPORT OCPSolver : public OptimizationProblem {
 
     // Derivation at https://mec560sbu.github.io/2016/09/30/direct_collocation/
     for (int i = 0; i < m_numSteps; ++i) {
-      Variable h = DT()(0, i);
+      Variable h = DT()[0, i];
 
       auto& f = m_dynamicsFunction;
 
@@ -414,7 +414,7 @@ class SLEIPNIR_DLLEXPORT OCPSolver : public OptimizationProblem {
       auto x_begin = X().Col(i);
       auto x_end = X().Col(i + 1);
       auto u = U().Col(i);
-      Variable dt = DT()(0, i);
+      Variable dt = DT()[0, i];
 
       if (m_dynamicsType == DynamicsType::kExplicitODE) {
         SubjectTo(x_end == RK4<const decltype(m_dynamicsFunction)&,
@@ -435,7 +435,7 @@ class SLEIPNIR_DLLEXPORT OCPSolver : public OptimizationProblem {
       auto x_begin = X().Col(i);
       auto x_end = X().Col(i + 1);
       auto u = U().Col(i);
-      Variable dt = DT()(0, i);
+      Variable dt = DT()[0, i];
 
       if (m_dynamicsType == DynamicsType::kExplicitODE) {
         x_end = RK4<const decltype(m_dynamicsFunction)&, VariableMatrix,

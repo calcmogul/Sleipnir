@@ -11,9 +11,9 @@ TEST_CASE("Jacobian - y = x", "[Jacobian]") {
 
   sleipnir::VariableMatrix y{3};
   sleipnir::VariableMatrix x{3};
-  x(0).SetValue(1);
-  x(1).SetValue(2);
-  x(2).SetValue(3);
+  x[0].SetValue(1);
+  x[1].SetValue(2);
+  x[2].SetValue(3);
 
   // y = x
   //
@@ -34,9 +34,9 @@ TEST_CASE("Jacobian - y = 3x", "[Jacobian]") {
 
   sleipnir::VariableMatrix y{3};
   sleipnir::VariableMatrix x{3};
-  x(0).SetValue(1);
-  x(1).SetValue(2);
-  x(2).SetValue(3);
+  x[0].SetValue(1);
+  x[1].SetValue(2);
+  x[2].SetValue(3);
 
   // y = 3x
   //
@@ -57,9 +57,9 @@ TEST_CASE("Jacobian - Products", "[Jacobian]") {
 
   sleipnir::VariableMatrix y{3};
   sleipnir::VariableMatrix x{3};
-  x(0).SetValue(1);
-  x(1).SetValue(2);
-  x(2).SetValue(3);
+  x[0].SetValue(1);
+  x[1].SetValue(2);
+  x[2].SetValue(3);
 
   //     [x₁x₂]
   // y = [x₂x₃]
@@ -72,9 +72,9 @@ TEST_CASE("Jacobian - Products", "[Jacobian]") {
   //         [2  1  0]
   // dy/dx = [0  3  2]
   //         [3  0  1]
-  y(0) = x(0) * x(1);
-  y(1) = x(1) * x(2);
-  y(2) = x(0) * x(2);
+  y[0] = x[0] * x[1];
+  y[1] = x[1] * x[2];
+  y[2] = x[0] * x[2];
   auto J = sleipnir::Jacobian(y, x);
 
   Eigen::MatrixXd expectedJ{{2.0, 1.0, 0.0}, {0.0, 3.0, 2.0}, {3.0, 0.0, 1.0}};
@@ -89,11 +89,11 @@ TEST_CASE("Jacobian - Nested products", "[Jacobian]") {
       [] { CHECK(sleipnir::GlobalPoolResource().blocks_in_use() == 0u); }};
 
   sleipnir::VariableMatrix z{1};
-  z(0).SetValue(1);
+  z[0].SetValue(1);
   sleipnir::VariableMatrix x{3};
-  x(0) = 1 * z(0);
-  x(1) = 2 * z(0);
-  x(2) = 3 * z(0);
+  x[0] = 1 * z[0];
+  x[1] = 2 * z[0];
+  x[2] = 3 * z[0];
 
   auto J = sleipnir::Jacobian(x, z);
   CHECK(J.Get().Value(0, 0) == 1.0);
@@ -115,9 +115,9 @@ TEST_CASE("Jacobian - Nested products", "[Jacobian]") {
   // dy/dx = [0  3  2]
   //         [3  0  1]
   sleipnir::VariableMatrix y{3};
-  y(0) = x(0) * x(1);
-  y(1) = x(1) * x(2);
-  y(2) = x(0) * x(2);
+  y[0] = x[0] * x[1];
+  y[1] = x[1] * x[2];
+  y[2] = x[0] * x[2];
   J = sleipnir::Jacobian(y, x);
 
   Eigen::MatrixXd expectedJ{{2.0, 1.0, 0.0}, {0.0, 3.0, 2.0}, {3.0, 0.0, 1.0}};
@@ -131,14 +131,14 @@ TEST_CASE("Jacobian - Non-square", "[Jacobian]") {
 
   sleipnir::VariableMatrix y{1};
   sleipnir::VariableMatrix x{3};
-  x(0).SetValue(1);
-  x(1).SetValue(2);
-  x(2).SetValue(3);
+  x[0].SetValue(1);
+  x[1].SetValue(2);
+  x[2].SetValue(3);
 
   // y = [x₁ + 3x₂ − 5x₃]
   //
   // dy/dx = [1  3  −5]
-  y(0) = x(0) + 3 * x(1) - 5 * x(2);
+  y[0] = x[0] + 3 * x[1] - 5 * x[2];
   auto J = sleipnir::Jacobian(y, x);
 
   Eigen::MatrixXd expectedJ{{1.0, 3.0, -5.0}};
@@ -162,9 +162,9 @@ TEST_CASE("Jacobian - Variable reuse", "[Jacobian]") {
   sleipnir::VariableMatrix x{2};
 
   // y = [x₁x₂]
-  x(0).SetValue(1);
-  x(1).SetValue(2);
-  y(0) = x(0) * x(1);
+  x[0].SetValue(1);
+  x[1].SetValue(2);
+  y[0] = x[0] * x[1];
 
   sleipnir::Jacobian jacobian{y, x};
 
@@ -177,8 +177,8 @@ TEST_CASE("Jacobian - Variable reuse", "[Jacobian]") {
   CHECK(J(0, 0) == 2.0);
   CHECK(J(0, 1) == 1.0);
 
-  x(0).SetValue(2);
-  x(1).SetValue(1);
+  x[0].SetValue(2);
+  x[1].SetValue(1);
   // dy/dx = [x₂  x₁]
   // dy/dx = [1  2]
   J = jacobian.Value();

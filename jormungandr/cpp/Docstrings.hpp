@@ -1089,6 +1089,36 @@ static const char *__doc_sleipnir_VariableBlock_m_mat = R"doc()doc";
 
 static const char *__doc_sleipnir_VariableBlock_m_rowOffset = R"doc()doc";
 
+static const char *__doc_sleipnir_VariableBlock_operator_array =
+R"doc(Returns a scalar subblock at the given row and column.
+
+Parameter ``row``:
+    The scalar subblock's row.
+
+Parameter ``col``:
+    The scalar subblock's column.)doc";
+
+static const char *__doc_sleipnir_VariableBlock_operator_array_2 =
+R"doc(Returns a scalar subblock at the given row and column.
+
+Parameter ``row``:
+    The scalar subblock's row.
+
+Parameter ``col``:
+    The scalar subblock's column.)doc";
+
+static const char *__doc_sleipnir_VariableBlock_operator_array_3 =
+R"doc(Returns a scalar subblock at the given row.
+
+Parameter ``row``:
+    The scalar subblock's row.)doc";
+
+static const char *__doc_sleipnir_VariableBlock_operator_array_4 =
+R"doc(Returns a scalar subblock at the given row.
+
+Parameter ``row``:
+    The scalar subblock's row.)doc";
+
 static const char *__doc_sleipnir_VariableBlock_operator_assign =
 R"doc(Assigns a VariableBlock to the block.
 
@@ -1123,36 +1153,6 @@ R"doc(Assigns a VariableMatrix to the block.
 
 Parameter ``values``:
     VariableMatrix of values.)doc";
-
-static const char *__doc_sleipnir_VariableBlock_operator_call =
-R"doc(Returns a scalar subblock at the given row and column.
-
-Parameter ``row``:
-    The scalar subblock's row.
-
-Parameter ``col``:
-    The scalar subblock's column.)doc";
-
-static const char *__doc_sleipnir_VariableBlock_operator_call_2 =
-R"doc(Returns a scalar subblock at the given row and column.
-
-Parameter ``row``:
-    The scalar subblock's row.
-
-Parameter ``col``:
-    The scalar subblock's column.)doc";
-
-static const char *__doc_sleipnir_VariableBlock_operator_call_3 =
-R"doc(Returns a scalar subblock at the given row.
-
-Parameter ``row``:
-    The scalar subblock's row.)doc";
-
-static const char *__doc_sleipnir_VariableBlock_operator_call_4 =
-R"doc(Returns a scalar subblock at the given row.
-
-Parameter ``row``:
-    The scalar subblock's row.)doc";
 
 static const char *__doc_sleipnir_VariableBlock_operator_iadd =
 R"doc(Compound addition-assignment operator.
@@ -1471,41 +1471,41 @@ static const char *__doc_sleipnir_VariableMatrix_m_storage = R"doc()doc";
 
 static const char *__doc_sleipnir_VariableMatrix_operator_Variable = R"doc(Implicit conversion operator from 1x1 VariableMatrix to Variable.)doc";
 
+static const char *__doc_sleipnir_VariableMatrix_operator_array =
+R"doc(Returns a block pointing to the given row and column.
+
+Parameter ``row``:
+    The block row.
+
+Parameter ``col``:
+    The block column.)doc";
+
+static const char *__doc_sleipnir_VariableMatrix_operator_array_2 =
+R"doc(Returns a block pointing to the given row and column.
+
+Parameter ``row``:
+    The block row.
+
+Parameter ``col``:
+    The block column.)doc";
+
+static const char *__doc_sleipnir_VariableMatrix_operator_array_3 =
+R"doc(Returns a block pointing to the given row.
+
+Parameter ``row``:
+    The block row.)doc";
+
+static const char *__doc_sleipnir_VariableMatrix_operator_array_4 =
+R"doc(Returns a block pointing to the given row.
+
+Parameter ``row``:
+    The block row.)doc";
+
 static const char *__doc_sleipnir_VariableMatrix_operator_assign =
 R"doc(Assigns an Eigen matrix to a VariableMatrix.
 
 Parameter ``values``:
     Eigen matrix of values.)doc";
-
-static const char *__doc_sleipnir_VariableMatrix_operator_call =
-R"doc(Returns a block pointing to the given row and column.
-
-Parameter ``row``:
-    The block row.
-
-Parameter ``col``:
-    The block column.)doc";
-
-static const char *__doc_sleipnir_VariableMatrix_operator_call_2 =
-R"doc(Returns a block pointing to the given row and column.
-
-Parameter ``row``:
-    The block row.
-
-Parameter ``col``:
-    The block column.)doc";
-
-static const char *__doc_sleipnir_VariableMatrix_operator_call_3 =
-R"doc(Returns a block pointing to the given row.
-
-Parameter ``row``:
-    The block row.)doc";
-
-static const char *__doc_sleipnir_VariableMatrix_operator_call_4 =
-R"doc(Returns a block pointing to the given row.
-
-Parameter ``row``:
-    The block row.)doc";
 
 static const char *__doc_sleipnir_VariableMatrix_operator_iadd =
 R"doc(Compound addition-assignment operator.
