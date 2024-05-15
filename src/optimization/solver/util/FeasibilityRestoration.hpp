@@ -139,8 +139,8 @@ inline void FeasibilityRestoration(
     double n = -b * std::sqrt(b * b - 4.0 * a * c) / (2.0 * a);
     double p = c_e + n;
 
-    p_e(row).SetValue(p);
-    n_e(row).SetValue(n);
+    p_e[row].SetValue(p);
+    n_e[row].SetValue(n);
   }
   for (int row = 0; row < p_i.Rows(); ++row) {
     double c_i = inequalityConstraints[row].Value() - s(row);
@@ -152,8 +152,8 @@ inline void FeasibilityRestoration(
     double n = -b * std::sqrt(b * b - 4.0 * a * c) / (2.0 * a);
     double p = c_i + n;
 
-    p_i(row).SetValue(p);
-    n_i(row).SetValue(n);
+    p_i[row].SetValue(p);
+    n_i[row].SetValue(n);
   }
 
   // cₑ(x) - pₑ + nₑ = 0
@@ -162,7 +162,7 @@ inline void FeasibilityRestoration(
                                 equalityConstraints.end());
   for (size_t row = 0; row < fr_equalityConstraints.size(); ++row) {
     auto& constraint = fr_equalityConstraints[row];
-    constraint = constraint - p_e(row) + n_e(row);
+    constraint = constraint - p_e[row] + n_e[row];
   }
 
   // cᵢ(x) - s - pᵢ + nᵢ = 0
@@ -171,7 +171,7 @@ inline void FeasibilityRestoration(
                                   inequalityConstraints.end());
   for (size_t row = 0; row < fr_inequalityConstraints.size(); ++row) {
     auto& constraint = fr_inequalityConstraints[row];
-    constraint = constraint - s(row) - p_i(row) + n_i(row);
+    constraint = constraint - s(row) - p_i[row] + n_i[row];
   }
 
   // pₑ ≥ 0
@@ -215,7 +215,7 @@ inline void FeasibilityRestoration(
 
   // J += ζ/2 (x - x_R)ᵀD_R(x - x_R)
   for (int row = 0; row < x.rows(); ++row) {
-    J += std::sqrt(μ) / 2.0 * D_R(row) * sleipnir::pow(xAD(row) - x(row), 2);
+    J += std::sqrt(μ) / 2.0 * D_R(row) * sleipnir::pow(xAD[row] - x(row), 2);
   }
 
   Eigen::VectorXd fr_x = VariableMatrix{fr_decisionVariables}.Value();
