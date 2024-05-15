@@ -36,20 +36,20 @@ TEST_CASE("VariableMatrix - Assignment to default", "[VariableMatrix]") {
 
   CHECK(mat.Rows() == 2);
   CHECK(mat.Cols() == 2);
-  CHECK(mat(0, 0) == 0.0);
-  CHECK(mat(0, 1) == 0.0);
-  CHECK(mat(1, 0) == 0.0);
-  CHECK(mat(1, 1) == 0.0);
+  CHECK(mat[0, 0] == 0.0);
+  CHECK(mat[0, 1] == 0.0);
+  CHECK(mat[1, 0] == 0.0);
+  CHECK(mat[1, 1] == 0.0);
 
-  mat(0, 0) = 1.0;
-  mat(0, 1) = 2.0;
-  mat(1, 0) = 3.0;
-  mat(1, 1) = 4.0;
+  mat[0, 0] = 1.0;
+  mat[0, 1] = 2.0;
+  mat[1, 0] = 3.0;
+  mat[1, 1] = 4.0;
 
-  CHECK(mat(0, 0) == 1.0);
-  CHECK(mat(0, 1) == 2.0);
-  CHECK(mat(1, 0) == 3.0);
-  CHECK(mat(1, 1) == 4.0);
+  CHECK(mat[0, 0] == 1.0);
+  CHECK(mat[0, 1] == 2.0);
+  CHECK(mat[1, 0] == 3.0);
+  CHECK(mat[1, 1] == 4.0);
 }
 
 TEST_CASE("VariableMatrix - Assignment aliasing", "[VariableMatrix]") {
@@ -66,7 +66,7 @@ TEST_CASE("VariableMatrix - Assignment aliasing", "[VariableMatrix]") {
   CHECK(A == expectedB);
   CHECK(B == expectedB);
 
-  B(0, 0).SetValue(2.0);
+  B[0, 0].SetValue(2.0);
   expectedB(0, 0) = 2.0;
 
   CHECK(A == expectedB);
@@ -101,46 +101,46 @@ TEST_CASE("VariableMatrix - Slicing", "[VariableMatrix]") {
 
   // Single-arg index operator on full matrix
   for (int i = 0; i < mat.Rows() * mat.Cols(); ++i) {
-    CHECK(mat(i) == i + 1);
+    CHECK(mat[i] == i + 1);
   }
 
   // Slice from start
   {
-    auto s = mat({1, _}, {2, _});
+    auto s = mat[{1, _}, {2, _}];
     CHECK(s.Rows() == 3);
     CHECK(s.Cols() == 2);
     // Single-arg index operator on forward slice
-    CHECK(s(0) == 7.0);
-    CHECK(s(1) == 8.0);
-    CHECK(s(2) == 11.0);
-    CHECK(s(3) == 12.0);
-    CHECK(s(4) == 15.0);
-    CHECK(s(5) == 16.0);
+    CHECK(s[0] == 7.0);
+    CHECK(s[1] == 8.0);
+    CHECK(s[2] == 11.0);
+    CHECK(s[3] == 12.0);
+    CHECK(s[4] == 15.0);
+    CHECK(s[5] == 16.0);
     // Double-arg index operator on forward slice
-    CHECK(s(0, 0) == 7.0);
-    CHECK(s(0, 1) == 8.0);
-    CHECK(s(1, 0) == 11.0);
-    CHECK(s(1, 1) == 12.0);
-    CHECK(s(2, 0) == 15.0);
-    CHECK(s(2, 1) == 16.0);
+    CHECK(s[0, 0] == 7.0);
+    CHECK(s[0, 1] == 8.0);
+    CHECK(s[1, 0] == 11.0);
+    CHECK(s[1, 1] == 12.0);
+    CHECK(s[2, 0] == 15.0);
+    CHECK(s[2, 1] == 16.0);
   }
 
   // Slice from end
   {
-    auto s = mat({-1, _}, {-2, _});
+    auto s = mat[{-1, _}, {-2, _}];
     CHECK(s.Rows() == 1);
     CHECK(s.Cols() == 2);
     // Single-arg index operator on reverse slice
-    CHECK(s(0) == 15.0);
-    CHECK(s(1) == 16.0);
+    CHECK(s[0] == 15.0);
+    CHECK(s[1] == 16.0);
     // Double-arg index operator on reverse slice
-    CHECK(s(0, 0) == 15.0);
-    CHECK(s(0, 1) == 16.0);
+    CHECK(s[0, 0] == 15.0);
+    CHECK(s[0, 1] == 16.0);
   }
 
   // Slice from start with step of 2
   {
-    auto s = mat({_}, {_, _, 2});
+    auto s = mat[{_}, {_, _, 2}];
     CHECK(s.Rows() == 4);
     CHECK(s.Cols() == 2);
     CHECK(s ==
@@ -149,7 +149,7 @@ TEST_CASE("VariableMatrix - Slicing", "[VariableMatrix]") {
 
   // Slice from end with negative step for row and column
   {
-    auto s = mat({_, _, -1}, {_, _, -2});
+    auto s = mat[{_, _, -1}, {_, _, -2}];
     CHECK(s.Rows() == 4);
     CHECK(s.Cols() == 2);
     CHECK(s ==
@@ -163,18 +163,18 @@ TEST_CASE("VariableMatrix - Subslicing", "[VariableMatrix]") {
   sleipnir::VariableMatrix A{{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}};
 
   // Block assignment
-  CHECK(A({1, 3}, {1, 3}).Rows() == 2);
-  CHECK(A({1, 3}, {1, 3}).Cols() == 2);
-  A({1, 3}, {1, 3}) = Eigen::MatrixXd{{10.0, 11.0}, {12.0, 13.0}};
+  CHECK(A[{1, 3}, {1, 3}].Rows() == 2);
+  CHECK(A[{1, 3}, {1, 3}].Cols() == 2);
+  A[{1, 3}, {1, 3}] = Eigen::MatrixXd{{10.0, 11.0}, {12.0, 13.0}};
 
   Eigen::MatrixXd expected1{
       {1.0, 2.0, 3.0}, {4.0, 10.0, 11.0}, {7.0, 12.0, 13.0}};
   CHECK(expected1 == A.Value());
 
   // Block-of-block assignment
-  CHECK(A({1, 3}, {1, 3})({1, _}, {1, _}).Rows() == 1);
-  CHECK(A({1, 3}, {1, 3})({1, _}, {1, _}).Cols() == 1);
-  A({1, 3}, {1, 3})({1, _}, {1, _}) = 14.0;
+  CHECK(A[{1, 3}, {1, 3}][{1, _}, {1, _}].Rows() == 1);
+  CHECK(A[{1, 3}, {1, 3}][{1, _}, {1, _}].Cols() == 1);
+  A[{1, 3}, {1, 3}][{1, _}, {1, _}] = 14.0;
 
   Eigen::MatrixXd expected2{
       {1.0, 2.0, 3.0}, {4.0, 10.0, 11.0}, {7.0, 12.0, 14.0}};
@@ -247,9 +247,9 @@ TEST_CASE("VariableMatrix - Value", "[VariableMatrix]") {
   CHECK(A.T().Block(1, 1, 2, 2).Value(2) == 6.0);
 
   // Slice
-  CHECK(A({1, 3}, {1, 3}).Value() == expected.block(1, 1, 2, 2));
-  CHECK(A({1, 3}, {1, 3}).Value(2) == 8.0);
-  CHECK(A({1, 3}, {1, 3}).T().Value(2) == 6.0);
+  CHECK(A[{1, 3}, {1, 3}].Value() == expected.block(1, 1, 2, 2));
+  CHECK(A[{1, 3}, {1, 3}].Value(2) == 8.0);
+  CHECK(A[{1, 3}, {1, 3}].T().Value(2) == 6.0);
 
   // Block-of-block
   CHECK(A.Block(1, 1, 2, 2).Block(0, 1, 2, 1).Value() ==
@@ -258,10 +258,10 @@ TEST_CASE("VariableMatrix - Value", "[VariableMatrix]") {
   CHECK(A.Block(1, 1, 2, 2).T().Block(0, 1, 2, 1).Value(1) == 9.0);
 
   // Slice-of-slice
-  CHECK(A({1, 3}, {1, 3})({_}, {1, _}).Value() ==
+  CHECK(A[{1, 3}, {1, 3}][{_}, {1, _}].Value() ==
         expected.block(1, 1, 2, 2).block(0, 1, 2, 1));
-  CHECK(A({1, 3}, {1, 3})({_}, {1, _}).Value(1) == 9.0);
-  CHECK(A({1, 3}, {1, 3}).T()({_}, {1, _}).Value(1) == 9.0);
+  CHECK(A[{1, 3}, {1, 3}][{_}, {1, _}].Value(1) == 9.0);
+  CHECK(A[{1, 3}, {1, 3}].T()[{_}, {1, _}].Value(1) == 9.0);
 }
 
 TEST_CASE("VariableMatrix - CwiseTransform()", "[VariableMatrix]") {

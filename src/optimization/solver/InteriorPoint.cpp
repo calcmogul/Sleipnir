@@ -65,7 +65,7 @@ void InteriorPoint(std::span<Variable> decisionVariables,
   // Lagrangian L
   //
   // L(xₖ, sₖ, yₖ, zₖ) = f(xₖ) − yₖᵀcₑ(xₖ) − zₖᵀ(cᵢ(xₖ) − sₖ)
-  auto L = f - (yAD.T() * c_eAD)(0) - (zAD.T() * (c_iAD - sAD))(0);
+  auto L = f - (yAD.T() * c_eAD)[0] - (zAD.T() * (c_iAD - sAD))[0];
 
   // Equality constraint Jacobian Aₑ
   //
@@ -107,8 +107,8 @@ void InteriorPoint(std::span<Variable> decisionVariables,
       sleipnir::println(
           "Violated constraints (cₑ(x) = 0) in order of declaration:");
       for (int row = 0; row < c_e.rows(); ++row) {
-        if (c_e(row) < 0.0) {
-          sleipnir::println("  {}/{}: {} = 0", row + 1, c_e.rows(), c_e(row));
+        if (c_e[row] < 0.0) {
+          sleipnir::println("  {}/{}: {} = 0", row + 1, c_e.rows(), c_e[row]);
         }
       }
     }
@@ -266,8 +266,8 @@ void InteriorPoint(std::span<Variable> decisionVariables,
         sleipnir::println(
             "Violated constraints (cₑ(x) = 0) in order of declaration:");
         for (int row = 0; row < c_e.rows(); ++row) {
-          if (c_e(row) < 0.0) {
-            sleipnir::println("  {}/{}: {} = 0", row + 1, c_e.rows(), c_e(row));
+          if (c_e[row] < 0.0) {
+            sleipnir::println("  {}/{}: {} = 0", row + 1, c_e.rows(), c_e[row]);
           }
         }
       }
@@ -285,8 +285,8 @@ void InteriorPoint(std::span<Variable> decisionVariables,
         sleipnir::println(
             "Violated constraints (cᵢ(x) ≥ 0) in order of declaration:");
         for (int row = 0; row < c_i.rows(); ++row) {
-          if (c_i(row) < 0.0) {
-            sleipnir::println("  {}/{}: {} ≥ 0", row + 1, c_i.rows(), c_i(row));
+          if (c_i[row] < 0.0) {
+            sleipnir::println("  {}/{}: {} ≥ 0", row + 1, c_i.rows(), c_i[row]);
           }
         }
       }
@@ -728,7 +728,7 @@ void InteriorPoint(std::span<Variable> decisionVariables,
     double maxStepScaled = 0.0;
     for (int row = 0; row < x.rows(); ++row) {
       maxStepScaled = std::max(maxStepScaled,
-                               std::abs(p_x(row)) / (1.0 + std::abs(x(row))));
+                               std::abs(p_x[row]) / (1.0 + std::abs(x[row])));
     }
     if (maxStepScaled < 10.0 * std::numeric_limits<double>::epsilon()) {
       α = α_max;
@@ -759,8 +759,8 @@ void InteriorPoint(std::span<Variable> decisionVariables,
       constexpr double κ_Σ = 1e10;
 
       for (int row = 0; row < z.rows(); ++row) {
-        z(row) =
-            std::max(std::min(z(row), κ_Σ * μ / s(row)), μ / (κ_Σ * s(row)));
+        z[row] =
+            std::max(std::min(z[row], κ_Σ * μ / s[row]), μ / (κ_Σ * s[row]));
       }
     }
 

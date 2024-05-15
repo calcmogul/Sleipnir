@@ -24,10 +24,10 @@ Eigen::Vector<double, 5> DifferentialDriveDynamicsDouble(
     const Eigen::Vector<double, 5>& x, const Eigen::Vector<double, 2>& u) {
   Eigen::Vector<double, 5> xdot;
 
-  auto v = (x(3) + x(4)) / 2.0;
-  xdot(0) = v * cos(x(2));  // NOLINT
-  xdot(1) = v * sin(x(2));  // NOLINT
-  xdot(2) = (x(4) - x(3)) / trackwidth;
+  auto v = (x[3] + x[4]) / 2.0;
+  xdot(0) = v * cos(x[2]);  // NOLINT
+  xdot(1) = v * sin(x[2]);  // NOLINT
+  xdot(2) = (x[4] - x[3]) / trackwidth;
   xdot.segment(3, 2) = A * x.segment(3, 2) + B * u;
 
   return xdot;
@@ -37,10 +37,10 @@ sleipnir::VariableMatrix DifferentialDriveDynamics(
     const sleipnir::VariableMatrix& x, const sleipnir::VariableMatrix& u) {
   sleipnir::VariableMatrix xdot{5};
 
-  auto v = (x(3) + x(4)) / 2.0;
-  xdot(0) = v * cos(x(2));  // NOLINT
-  xdot(1) = v * sin(x(2));  // NOLINT
-  xdot(2) = (x(4) - x(3)) / trackwidth;
+  auto v = (x[3] + x[4]) / 2.0;
+  xdot[0] = v * cos(x[2]);  // NOLINT
+  xdot[1] = v * sin(x[2]);  // NOLINT
+  xdot[2] = (x[4] - x[3]) / trackwidth;
   xdot.Segment(3, 2) = A * x.Segment(3, 2) + B * u;
 
   return xdot;

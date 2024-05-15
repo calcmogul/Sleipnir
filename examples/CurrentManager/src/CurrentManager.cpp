@@ -15,7 +15,7 @@ CurrentManager::CurrentManager(std::span<const double> currentTolerances,
   // Ensure m_desiredCurrents contains initialized Variables
   for (int row = 0; row < m_desiredCurrents.Rows(); ++row) {
     // Don't initialize to 0 or 1, because those will get folded by Sleipnir
-    m_desiredCurrents(row) = std::numeric_limits<double>::infinity();
+    m_desiredCurrents[row] = std::numeric_limits<double>::infinity();
   }
 
   sleipnir::Variable J = 0.0;
@@ -23,13 +23,13 @@ CurrentManager::CurrentManager(std::span<const double> currentTolerances,
   for (size_t i = 0; i < currentTolerances.size(); ++i) {
     // The weight is 1/tolᵢ² where tolᵢ is the tolerance between the desired
     // and allocated current for subsystem i
-    auto error = m_desiredCurrents(i) - m_allocatedCurrents(i);
+    auto error = m_desiredCurrents[i] - m_allocatedCurrents[i];
     J += error * error / (currentTolerances[i] * currentTolerances[i]);
 
-    currentSum += m_allocatedCurrents(i);
+    currentSum += m_allocatedCurrents[i];
 
     // Currents must be nonnegative
-    m_problem.SubjectTo(m_allocatedCurrents(i) >= 0.0);
+    m_problem.SubjectTo(m_allocatedCurrents[i] >= 0.0);
   }
   m_problem.Minimize(J);
 
@@ -46,7 +46,7 @@ std::vector<double> CurrentManager::Calculate(
   }
 
   for (size_t i = 0; i < desiredCurrents.size(); ++i) {
-    m_desiredCurrents(i).SetValue(desiredCurrents[i]);
+    m_desiredCurrents[i].SetValue(desiredCurrents[i]);
   }
 
   m_problem.Solve();

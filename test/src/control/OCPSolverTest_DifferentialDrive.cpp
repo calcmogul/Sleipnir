@@ -36,8 +36,8 @@ TEST_CASE("OCPSolver - Differential drive", "[OCPSolver]") {
 
   // Seed the min time formulation with lerp between waypoints
   for (int i = 0; i < N + 1; ++i) {
-    problem.X()(0, i).SetValue(static_cast<double>(i) / (N + 1));
-    problem.X()(1, i).SetValue(static_cast<double>(i) / (N + 1));
+    problem.X()[0, i].SetValue(static_cast<double>(i) / (N + 1));
+    problem.X()[1, i].SetValue(static_cast<double>(i) / (N + 1));
   }
 
   problem.ConstrainInitialState(x_initial);
@@ -76,10 +76,10 @@ TEST_CASE("OCPSolver - Differential drive", "[OCPSolver]") {
     u = U.Col(k).Value();
 
     // Input constraints
-    CHECK(U(0, k).Value() >= -u_max(0));
-    CHECK(U(0, k).Value() <= u_max(0));
-    CHECK(U(1, k).Value() >= -u_max(1));
-    CHECK(U(1, k).Value() <= u_max(1));
+    CHECK(U[0, k].Value() >= -u_max(0));
+    CHECK(U[0, k].Value() <= u_max(0));
+    CHECK(U[1, k].Value() >= -u_max(1));
+    CHECK(U[1, k].Value() <= u_max(1));
 
     // Verify state
     CHECK(X.Value(0, k) == Catch::Approx(x(0)).margin(1e-8));
