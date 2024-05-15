@@ -37,8 +37,8 @@ Eigen::Vector<double, 4> CartPoleDynamicsDouble(
     const Eigen::Vector<double, 4>& x, const Eigen::Vector<double, 1>& u) {
   auto q = x.segment(0, 2);
   auto qdot = x.segment(2, 2);
-  auto theta = q(1);
-  auto thetadot = qdot(1);
+  auto theta = q[1];
+  auto thetadot = qdot[1];
 
   //        [ m_c + m_p  m_p l cosθ]
   // M(q) = [m_p l cosθ    m_p l²  ]
@@ -71,8 +71,8 @@ sleipnir::VariableMatrix CartPoleDynamics(const sleipnir::VariableMatrix& x,
                                           const sleipnir::VariableMatrix& u) {
   auto q = x.Segment(0, 2);
   auto qdot = x.Segment(2, 2);
-  auto theta = q(1);
-  auto thetadot = qdot(1);
+  auto theta = q[1];
+  auto thetadot = qdot[1];
 
   //        [ m_c + m_p  m_p l cosθ]
   // M(q) = [m_p l cosθ    m_p l²  ]

@@ -138,7 +138,7 @@ See the [examples](https://github.com/SleipnirGroup/Sleipnir/tree/main/examples)
 
 ### Dependencies
 
-* C++23 compiler
+* C++26 compiler
   * On Windows 10 or greater, install [Visual Studio Community 2022](https://visualstudio.microsoft.com/vs/community/) and select the C++ programming language during installation
   * On Ubuntu 24.04 or greater, install GCC 14 via `sudo apt install g++-14`
   * On macOS 14 or greater, install the Xcode 15.3 command-line build tools via `xcode-select --install`

@@ -44,17 +44,17 @@ TEST_CASE("OptimizationProblem - Arm on elevator", "[OptimizationProblem]") {
 
   for (int k = 0; k < N; ++k) {
     // Elevator dynamics constraints
-    problem.SubjectTo(elevator(0, k + 1) ==
-                      elevator(0, k) + elevator(1, k) * dt.count() +
-                          0.5 * elevatorAccel(0, k) * dt.count() * dt.count());
-    problem.SubjectTo(elevator(1, k + 1) ==
-                      elevator(1, k) + elevatorAccel(0, k) * dt.count());
+    problem.SubjectTo(elevator[0, k + 1] ==
+                      elevator[0, k] + elevator[1, k] * dt.count() +
+                          0.5 * elevatorAccel[0, k] * dt.count() * dt.count());
+    problem.SubjectTo(elevator[1, k + 1] ==
+                      elevator[1, k] + elevatorAccel[0, k] * dt.count());
 
     // Arm dynamics constraints
-    problem.SubjectTo(arm(0, k + 1) ==
-                      arm(0, k) + arm(1, k) * dt.count() +
-                          0.5 * armAccel(0, k) * dt.count() * dt.count());
-    problem.SubjectTo(arm(1, k + 1) == arm(1, k) + armAccel(0, k) * dt.count());
+    problem.SubjectTo(arm[0, k + 1] ==
+                      arm[0, k] + arm[1, k] * dt.count() +
+                          0.5 * armAccel[0, k] * dt.count() * dt.count());
+    problem.SubjectTo(arm[1, k + 1] == arm[1, k] + armAccel[0, k] * dt.count());
   }
 
   // Elevator start and end conditions
@@ -91,8 +91,8 @@ TEST_CASE("OptimizationProblem - Arm on elevator", "[OptimizationProblem]") {
   // Cost function
   sleipnir::Variable J = 0.0;
   for (int k = 0; k < N + 1; ++k) {
-    J += sleipnir::pow(kElevatorEndHeight - elevator(0, k), 2) +
-         sleipnir::pow(kArmEndAngle - arm(0, k), 2);
+    J += sleipnir::pow(kElevatorEndHeight - elevator[0, k], 2) +
+         sleipnir::pow(kArmEndAngle - arm[0, k], 2);
   }
   problem.Minimize(J);
 

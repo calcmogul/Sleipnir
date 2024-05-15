@@ -41,9 +41,9 @@ slp::VariableMatrix f(const slp::VariableMatrix& x) {
   constexpr double m = 2.0;  // kg
   auto a_D = [](auto v) { return 0.5 * rho * v * v * C_D * A / m; };
 
-  auto v_x = x(3, 0);
-  auto v_y = x(4, 0);
-  auto v_z = x(5, 0);
+  auto v_x = x[3, 0];
+  auto v_y = x[4, 0];
+  auto v_z = x[5, 0];
   return slp::VariableMatrix{{v_x},       {v_y},       {v_z},
                              {-a_D(v_x)}, {-a_D(v_y)}, {-g - a_D(v_z)}};
 }
@@ -95,11 +95,11 @@ int main() {
   // Position initial guess is linear interpolation between start and end
   // position
   for (int k = 0; k < N; ++k) {
-    p_x(k).SetValue(std::lerp(shooter_wrt_field(0), target_wrt_field(0),
+    p_x[k].SetValue(std::lerp(shooter_wrt_field[0], target_wrt_field[0],
                               static_cast<double>(k) / N));
-    p_y(k).SetValue(std::lerp(shooter_wrt_field(1), target_wrt_field(1),
+    p_y[k].SetValue(std::lerp(shooter_wrt_field[1], target_wrt_field[1],
                               static_cast<double>(k) / N));
-    p_z(k).SetValue(std::lerp(shooter_wrt_field(2), target_wrt_field(2),
+    p_z[k].SetValue(std::lerp(shooter_wrt_field[2], target_wrt_field[2],
                               static_cast<double>(k) / N));
   }
 
@@ -119,9 +119,9 @@ int main() {
   //
   //   √{v_x² + v_y² + v_z²) ≤ vₘₐₓ
   //   v_x² + v_y² + v_z² ≤ vₘₐₓ²
-  problem.SubjectTo(slp::pow(v_x(0) - robot_wrt_field(3), 2) +
-                        slp::pow(v_y(0) - robot_wrt_field(4), 2) +
-                        slp::pow(v_z(0) - robot_wrt_field(5), 2) <=
+  problem.SubjectTo(slp::pow(v_x[0] - robot_wrt_field[3], 2) +
+                        slp::pow(v_y[0] - robot_wrt_field[4], 2) +
+                        slp::pow(v_z[0] - robot_wrt_field[5], 2) <=
                     max_initial_velocity * max_initial_velocity);
 
   // Dynamics constraints - RK4 integration
@@ -141,7 +141,7 @@ int main() {
   problem.SubjectTo(p.Col(N - 1) == target_wrt_field.block(0, 0, 3, 1));
 
   // Require the final velocity is down
-  problem.SubjectTo(v_z(N - 1) < 0.0);
+  problem.SubjectTo(v_z[N - 1] < 0.0);
 
   // Minimize time-to-target
   problem.Minimize(T);
@@ -155,10 +155,10 @@ int main() {
   double velocity = v0.norm();
   std::println("Velocity = {:.03} ms", velocity);
 
-  double pitch = std::atan2(v0(2), std::hypot(v0(0), v0(1)));
+  double pitch = std::atan2(v0[2], std::hypot(v0[0], v0[1]));
   std::println("Pitch = {:.03}°", pitch * 180.0 / std::numbers::pi);
 
-  double yaw = std::atan2(v0(1), v0(0));
+  double yaw = std::atan2(v0[1], v0[0]);
   std::println("Yaw = {:.03}°", yaw * 180.0 / std::numbers::pi);
 
   std::println("Total time = {:.03} s", T.Value());
