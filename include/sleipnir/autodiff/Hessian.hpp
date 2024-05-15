@@ -48,7 +48,7 @@ class SLEIPNIR_DLLEXPORT Hessian {
 
               VariableMatrix ret{wrt.Rows()};
               for (int row = 0; row < ret.Rows(); ++row) {
-                ret(row) = Variable{std::move(grad[row])};
+                ret[row] = Variable{std::move(grad[row])};
               }
               return ret;
             }(),
