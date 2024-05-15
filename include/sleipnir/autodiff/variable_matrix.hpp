@@ -211,7 +211,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
 
     for (int row = 0; row < values.rows(); ++row) {
       for (int col = 0; col < values.cols(); ++col) {
-        (*this)(row, col) = values(row, col);
+        (*this)[row, col] = values(row, col);
       }
     }
 
@@ -231,7 +231,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
 
     for (int row = 0; row < values.rows(); ++row) {
       for (int col = 0; col < values.cols(); ++col) {
-        (*this)(row, col).set_value(values(row, col));
+        (*this)[row, col].set_value(values(row, col));
       }
     }
   }
@@ -265,7 +265,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
     m_storage.reserve(rows() * cols());
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        m_storage.emplace_back(values(row, col));
+        m_storage.emplace_back(values[row, col]);
       }
     }
   }
@@ -280,7 +280,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
     m_storage.reserve(rows() * cols());
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        m_storage.emplace_back(values(row, col));
+        m_storage.emplace_back(values[row, col]);
       }
     }
   }
@@ -325,7 +325,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
    * @param col The block column.
    * @return A block pointing to the given row and column.
    */
-  Variable& operator()(int row, int col) {
+  Variable& operator[](int row, int col) {
     slp_assert(row >= 0 && row < rows());
     slp_assert(col >= 0 && col < cols());
     return m_storage[row * cols() + col];
@@ -338,7 +338,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
    * @param col The block column.
    * @return A block pointing to the given row and column.
    */
-  const Variable& operator()(int row, int col) const {
+  const Variable& operator[](int row, int col) const {
     slp_assert(row >= 0 && row < rows());
     slp_assert(col >= 0 && col < cols());
     return m_storage[row * cols() + col];
@@ -411,7 +411,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
    * @param col_slice The column slice.
    * @return A slice of the variable matrix.
    */
-  VariableBlock<VariableMatrix> operator()(Slice row_slice, Slice col_slice) {
+  VariableBlock<VariableMatrix> operator[](Slice row_slice, Slice col_slice) {
     int row_slice_length = row_slice.adjust(rows());
     int col_slice_length = col_slice.adjust(cols());
     return VariableBlock{*this, std::move(row_slice), row_slice_length,
@@ -425,7 +425,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
    * @param col_slice The column slice.
    * @return A slice of the variable matrix.
    */
-  const VariableBlock<const VariableMatrix> operator()(Slice row_slice,
+  const VariableBlock<const VariableMatrix> operator[](Slice row_slice,
                                                        Slice col_slice) const {
     int row_slice_length = row_slice.adjust(rows());
     int col_slice_length = col_slice.adjust(cols());
@@ -446,7 +446,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
    * @return A slice of the variable matrix.
    *
    */
-  VariableBlock<VariableMatrix> operator()(Slice row_slice,
+  VariableBlock<VariableMatrix> operator[](Slice row_slice,
                                            int row_slice_length,
                                            Slice col_slice,
                                            int col_slice_length) {
@@ -466,7 +466,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
    * @param col_slice_length The column slice length.
    * @return A slice of the variable matrix.
    */
-  const VariableBlock<const VariableMatrix> operator()(
+  const VariableBlock<const VariableMatrix> operator[](
       Slice row_slice, int row_slice_length, Slice col_slice,
       int col_slice_length) const {
     return VariableBlock{*this, std::move(row_slice), row_slice_length,
@@ -560,9 +560,9 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
       for (int j = 0; j < rhs.cols(); ++j) {
         Variable sum;
         for (int k = 0; k < lhs.cols(); ++k) {
-          sum += lhs(i, k) * rhs(k, j);
+          sum += lhs[i, k] * rhs[k, j];
         }
-        result(i, j) = sum;
+        result[i, j] = sum;
       }
     }
 
@@ -581,7 +581,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result(row, col) = lhs(row, col) * rhs;
+        result[row, col] = lhs[row, col] * rhs;
       }
     }
 
@@ -611,7 +611,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result(row, col) = rhs(row, col) * lhs;
+        result[row, col] = rhs[row, col] * lhs;
       }
     }
 
@@ -642,9 +642,9 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
       for (int j = 0; j < rhs.cols(); ++j) {
         Variable sum;
         for (int k = 0; k < cols(); ++k) {
-          sum += (*this)(i, k) * rhs(k, j);
+          sum += (*this)[i, k] * rhs[k, j];
         }
-        (*this)(i, j) = sum;
+        (*this)[i, j] = sum;
       }
     }
 
@@ -664,7 +664,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result(row, col) = lhs(row, col) / rhs;
+        result[row, col] = lhs[row, col] / rhs;
       }
     }
 
@@ -681,7 +681,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
   VariableMatrix& operator/=(const Variable& rhs) {
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)(row, col) /= rhs;
+        (*this)[row, col] /= rhs;
       }
     }
 
@@ -701,7 +701,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result(row, col) = lhs(row, col) + rhs(row, col);
+        result[row, col] = lhs[row, col] + rhs[row, col];
       }
     }
 
@@ -717,7 +717,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
   VariableMatrix& operator+=(const VariableMatrix& rhs) {
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)(row, col) += rhs(row, col);
+        (*this)[row, col] += rhs[row, col];
       }
     }
 
@@ -737,7 +737,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result(row, col) = lhs(row, col) - rhs(row, col);
+        result[row, col] = lhs[row, col] - rhs[row, col];
       }
     }
 
@@ -753,7 +753,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
   VariableMatrix& operator-=(const VariableMatrix& rhs) {
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)(row, col) -= rhs(row, col);
+        (*this)[row, col] -= rhs[row, col];
       }
     }
 
@@ -771,7 +771,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result(row, col) = -lhs(row, col);
+        result[row, col] = -lhs[row, col];
       }
     }
 
@@ -783,7 +783,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
    */
   operator Variable() const {  // NOLINT
     slp_assert(rows() == 1 && cols() == 1);
-    return (*this)(0, 0);
+    return (*this)[0, 0];
   }
 
   /**
@@ -796,7 +796,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        result(col, row) = (*this)(row, col);
+        result[col, row] = (*this)[row, col];
       }
     }
 
@@ -870,7 +870,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        result(row, col) = unary_op((*this)(row, col));
+        result[row, col] = unary_op((*this)[row, col]);
       }
     }
 
@@ -1052,7 +1052,7 @@ SLEIPNIR_DLLEXPORT inline VariableMatrix cwise_reduce(
 
   for (int row = 0; row < lhs.rows(); ++row) {
     for (int col = 0; col < lhs.cols(); ++col) {
-      result(row, col) = binary_op(lhs(row, col), rhs(row, col));
+      result[row, col] = binary_op(lhs[row, col], rhs[row, col]);
     }
   }
 
