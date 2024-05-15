@@ -64,7 +64,7 @@ void InteriorPoint(std::span<Variable> decisionVariables,
   // Lagrangian L
   //
   // L(xₖ, sₖ, yₖ, zₖ) = f(xₖ) − yₖᵀcₑ(xₖ) − zₖᵀ(cᵢ(xₖ) − sₖ)
-  auto L = f - (yAD.T() * c_eAD)(0) - (zAD.T() * (c_iAD - sAD))(0);
+  auto L = f - (yAD.T() * c_eAD)[0] - (zAD.T() * (c_iAD - sAD))[0];
 
   // Equality constraint Jacobian Aₑ
   //
