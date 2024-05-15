@@ -36,7 +36,7 @@ class SLEIPNIR_DLLEXPORT Jacobian {
       : m_variables{std::move(variables)}, m_wrt{std::move(wrt)} {
     // Initialize column each expression's adjoint occupies in the Jacobian
     for (size_t col = 0; col < m_wrt.size(); ++col) {
-      m_wrt(col).expr->col = col;
+      m_wrt[col].expr->col = col;
     }
 
     for (auto& variable : m_variables) {
@@ -49,16 +49,16 @@ class SLEIPNIR_DLLEXPORT Jacobian {
     }
 
     for (int row = 0; row < m_variables.Rows(); ++row) {
-      if (m_variables(row).expr == nullptr) {
+      if (m_variables[row].expr == nullptr) {
         continue;
       }
 
-      if (m_variables(row).Type() == ExpressionType::kLinear) {
+      if (m_variables[row].Type() == ExpressionType::kLinear) {
         // If the row is linear, compute its gradient once here and cache its
         // triplets. Constant rows are ignored because their gradients have no
         // nonzero triplets.
         m_graphs[row].AppendAdjointTriplets(m_cachedTriplets, row);
-      } else if (m_variables(row).Type() > ExpressionType::kLinear) {
+      } else if (m_variables[row].Type() > ExpressionType::kLinear) {
         // If the row is quadratic or nonlinear, add it to the list of nonlinear
         // rows to be recomputed in Value().
         m_nonlinearRows.emplace_back(row);
@@ -88,10 +88,10 @@ class SLEIPNIR_DLLEXPORT Jacobian {
     for (int row = 0; row < m_variables.Rows(); ++row) {
       auto grad = m_graphs[row].GenerateGradientTree(m_wrt);
       for (int col = 0; col < m_wrt.Rows(); ++col) {
-        if (grad(col).expr != nullptr) {
-          result(row, col) = std::move(grad(col));
+        if (grad[col].expr != nullptr) {
+          result[row, col] = std::move(grad[col]);
         } else {
-          result(row, col) = Variable{0.0};
+          result[row, col] = Variable{0.0};
         }
       }
     }

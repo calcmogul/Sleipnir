@@ -178,11 +178,11 @@ class RegularizedLDLT {
     Eigen::VectorXd vec{m_numDecisionVariables + m_numEqualityConstraints};
     size_t row = 0;
     while (row < m_numDecisionVariables) {
-      vec(row) = δ;
+      vec[row] = δ;
       ++row;
     }
     while (row < m_numDecisionVariables + m_numEqualityConstraints) {
-      vec(row) = -γ;
+      vec[row] = -γ;
       ++row;
     }
 

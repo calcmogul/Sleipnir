@@ -39,9 +39,9 @@ TEST_CASE("OptimizationProblem - Cart-pole", "[OptimizationProblem]") {
 
   // Initial guess
   for (int k = 0; k < N + 1; ++k) {
-    X(0, k).SetValue(
+    X[0, k].SetValue(
         std::lerp(x_initial(0), x_final(0), static_cast<double>(k) / N));
-    X(1, k).SetValue(
+    X[1, k].SetValue(
         std::lerp(x_initial(1), x_final(1), static_cast<double>(k) / N));
   }
 
@@ -93,19 +93,19 @@ TEST_CASE("OptimizationProblem - Cart-pole", "[OptimizationProblem]") {
   // Verify solution
   for (int k = 0; k < N; ++k) {
     // Cart position constraints
-    CHECK(X(0, k) >= 0.0);
-    CHECK(X(0, k) <= d_max);
+    CHECK(X[0, k] >= 0.0);
+    CHECK(X[0, k] <= d_max);
 
     // Input constraints
-    CHECK(U(0, k) >= -u_max);
-    CHECK(U(0, k) <= u_max);
+    CHECK(U[0, k] >= -u_max);
+    CHECK(U[0, k] <= u_max);
 
     // Dynamics constraints
     Eigen::VectorXd expected_x_k1 =
         RK4(CartPoleDynamicsDouble, X.Col(k).Value(), U.Col(k).Value(), dt);
     Eigen::VectorXd actual_x_k1 = X.Col(k + 1).Value();
     for (int row = 0; row < actual_x_k1.rows(); ++row) {
-      CHECK(actual_x_k1(row) == Catch::Approx(expected_x_k1(row)).margin(1e-8));
+      CHECK(actual_x_k1[row] == Catch::Approx(expected_x_k1[row]).margin(1e-8));
       INFO(std::format("  x({} @ k = {}", row, k));
     }
   }

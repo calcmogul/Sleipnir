@@ -269,7 +269,7 @@ void Newton(
     double maxStepScaled = 0.0;
     for (int row = 0; row < x.rows(); ++row) {
       maxStepScaled = std::max(maxStepScaled,
-                               std::abs(p_x(row)) / (1.0 + std::abs(x(row))));
+                               std::abs(p_x[row]) / (1.0 + std::abs(x[row])));
     }
     if (maxStepScaled < 10.0 * std::numeric_limits<double>::epsilon()) {
       α = α_max;
