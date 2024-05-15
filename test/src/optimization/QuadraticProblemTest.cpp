@@ -50,8 +50,8 @@ TEST_CASE("QuadraticProblem - Unconstrained 2D", "[QuadraticProblem]") {
     sleipnir::OptimizationProblem problem;
 
     auto x = problem.DecisionVariable(2);
-    x(0).SetValue(1.0);
-    x(1).SetValue(2.0);
+    x[0].SetValue(1.0);
+    x[1].SetValue(2.0);
 
     problem.Minimize(x.T() * x);
 
@@ -131,8 +131,8 @@ TEST_CASE("QuadraticProblem - Equality-constrained", "[QuadraticProblem]") {
     sleipnir::OptimizationProblem problem;
 
     auto x = problem.DecisionVariable(2);
-    x(0).SetValue(1.0);
-    x(1).SetValue(2.0);
+    x[0].SetValue(1.0);
+    x[1].SetValue(2.0);
 
     problem.Minimize(x.T() * x);
 

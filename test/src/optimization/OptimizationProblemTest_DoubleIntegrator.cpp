@@ -36,11 +36,11 @@ TEST_CASE("OptimizationProblem - Double integrator", "[OptimizationProblem]") {
   // Kinematics constraint assuming constant acceleration between timesteps
   for (int k = 0; k < N; ++k) {
     constexpr double t = dt.count();
-    auto p_k1 = X(0, k + 1);
-    auto v_k1 = X(1, k + 1);
-    auto p_k = X(0, k);
-    auto v_k = X(1, k);
-    auto a_k = U(0, k);
+    auto p_k1 = X[0, k + 1];
+    auto v_k1 = X[1, k + 1];
+    auto p_k = X[0, k];
+    auto v_k = X[1, k];
+    auto a_k = U[0, k];
 
     // pₖ₊₁ = pₖ + vₖt + 1/2aₖt²
     problem.SubjectTo(p_k1 == p_k + v_k * t + 0.5 * a_k * t * t);
@@ -64,7 +64,7 @@ TEST_CASE("OptimizationProblem - Double integrator", "[OptimizationProblem]") {
   // Cost function - minimize position error
   sleipnir::Variable J = 0.0;
   for (int k = 0; k < N + 1; ++k) {
-    J += sleipnir::pow(r - X(0, k), 2);
+    J += sleipnir::pow(r - X[0, k], 2);
   }
   problem.Minimize(J);
 
