@@ -37,9 +37,9 @@ TEST_CASE("OptimizationProblem - Differential drive", "[OptimizationProblem]") {
 
   // Initial guess
   for (int k = 0; k < N; ++k) {
-    X(0, k).SetValue(
+    X[0, k].SetValue(
         std::lerp(x_initial(0), x_final(0), static_cast<double>(k) / N));
-    X(1, k).SetValue(
+    X[1, k].SetValue(
         std::lerp(x_initial(1), x_final(1), static_cast<double>(k) / N));
   }
 
@@ -92,10 +92,10 @@ TEST_CASE("OptimizationProblem - Differential drive", "[OptimizationProblem]") {
     u = U.Col(k).Value();
 
     // Input constraints
-    CHECK(U(0, k).Value() >= -u_max);
-    CHECK(U(0, k).Value() <= u_max);
-    CHECK(U(1, k).Value() >= -u_max);
-    CHECK(U(1, k).Value() <= u_max);
+    CHECK(U[0, k].Value() >= -u_max);
+    CHECK(U[0, k].Value() <= u_max);
+    CHECK(U[1, k].Value() >= -u_max);
+    CHECK(U[1, k].Value() <= u_max);
 
     // Verify state
     CHECK(X.Value(0, k) == Catch::Approx(x(0)).margin(1e-8));

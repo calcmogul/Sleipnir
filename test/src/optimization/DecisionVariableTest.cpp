@@ -29,12 +29,12 @@ TEST_CASE("DecisionVariable - Vector init assign", "[DecisionVariable]") {
   CHECK(y.Value(1) == 0.0);
 
   // Vector assignment
-  y(0).SetValue(1.0);
-  y(1).SetValue(2.0);
+  y[0].SetValue(1.0);
+  y[1].SetValue(2.0);
   CHECK(y.Value(0) == 1.0);
   CHECK(y.Value(1) == 2.0);
-  y(0).SetValue(3.0);
-  y(1).SetValue(4.0);
+  y[0].SetValue(3.0);
+  y[1].SetValue(4.0);
   CHECK(y.Value(0) == 3.0);
   CHECK(y.Value(1) == 4.0);
 }
@@ -157,9 +157,9 @@ TEST_CASE("DecisionVariable - Symmetric matrix", "[DecisionVariable]") {
   CHECK(A.Value(1, 1) == 0.0);
 
   // Assign to lower triangle
-  A(0, 0).SetValue(1.0);
-  A(1, 0).SetValue(2.0);
-  A(1, 1).SetValue(3.0);
+  A[0, 0].SetValue(1.0);
+  A[1, 0].SetValue(2.0);
+  A[1, 1].SetValue(3.0);
 
   // Confirm whole matrix changed
   CHECK(A.Value(0, 0) == 1.0);

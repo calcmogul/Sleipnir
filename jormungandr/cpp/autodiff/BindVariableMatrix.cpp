@@ -67,7 +67,7 @@ void BindVariableMatrix(nb::module_& autodiff,
         if (row < 0) {
           row += self.size();
         }
-        return self(row) = value;
+        return self[row] = value;
       },
       "row"_a, "value"_a);
   cls.def(
@@ -114,31 +114,31 @@ void BindVariableMatrix(nb::module_& autodiff,
         }
 
         if (auto rhs = TryCast<VariableMatrix>(value)) {
-          self(rowSlice, rowSliceLength, colSlice, colSliceLength) =
+          self[rowSlice, rowSliceLength, colSlice, colSliceLength] =
               rhs.value();
         } else if (auto rhs = TryCast<VariableBlock<VariableMatrix>>(value)) {
-          self(rowSlice, rowSliceLength, colSlice, colSliceLength) =
+          self[rowSlice, rowSliceLength, colSlice, colSliceLength] =
               rhs.value();
         } else if (auto rhs = TryCastToEigen<double>(value)) {
-          self(rowSlice, rowSliceLength, colSlice, colSliceLength) =
+          self[rowSlice, rowSliceLength, colSlice, colSliceLength] =
               rhs.value();
         } else if (auto rhs = TryCastToEigen<float>(value)) {
-          self(rowSlice, rowSliceLength, colSlice, colSliceLength) =
+          self[rowSlice, rowSliceLength, colSlice, colSliceLength] =
               rhs.value();
         } else if (auto rhs = TryCastToEigen<int64_t>(value)) {
-          self(rowSlice, rowSliceLength, colSlice, colSliceLength) =
+          self[rowSlice, rowSliceLength, colSlice, colSliceLength] =
               rhs.value();
         } else if (auto rhs = TryCastToEigen<int32_t>(value)) {
-          self(rowSlice, rowSliceLength, colSlice, colSliceLength) =
+          self[rowSlice, rowSliceLength, colSlice, colSliceLength] =
               rhs.value();
         } else if (auto rhs = TryCast<Variable>(value)) {
-          self(rowSlice, rowSliceLength, colSlice, colSliceLength) =
+          self[rowSlice, rowSliceLength, colSlice, colSliceLength] =
               rhs.value();
         } else if (auto rhs = TryCast<double>(value)) {
-          self(rowSlice, rowSliceLength, colSlice, colSliceLength) =
+          self[rowSlice, rowSliceLength, colSlice, colSliceLength] =
               rhs.value();
         } else if (auto rhs = TryCast<int>(value)) {
-          self(rowSlice, rowSliceLength, colSlice, colSliceLength) =
+          self[rowSlice, rowSliceLength, colSlice, colSliceLength] =
               rhs.value();
         } else {
           throw nb::value_error(
@@ -152,10 +152,10 @@ void BindVariableMatrix(nb::module_& autodiff,
         if (row < 0) {
           row += self.size();
         }
-        return self(row);
+        return self[row];
       },
       nb::keep_alive<0, 1>(), "row"_a,
-      DOC(sleipnir, VariableMatrix, operator, call, 3));
+      DOC(sleipnir, VariableMatrix, operator, array, 3));
   cls.def(
       "__getitem__",
       [](VariableMatrix& self, nb::tuple slices) -> nb::object {
@@ -180,7 +180,7 @@ void BindVariableMatrix(nb::module_& autodiff,
           if (col < 0) {
             col += self.Cols();
           }
-          return nb::cast(self(row, col));
+          return nb::cast(self[row, col]);
         }
 
         Slice rowSlice;
@@ -216,10 +216,10 @@ void BindVariableMatrix(nb::module_& autodiff,
         }
 
         return nb::cast(
-            self(rowSlice, rowSliceLength, colSlice, colSliceLength));
+            self[rowSlice, rowSliceLength, colSlice, colSliceLength]);
       },
       nb::keep_alive<0, 1>(), "slices"_a,
-      DOC(sleipnir, VariableMatrix, operator, call));
+      DOC(sleipnir, VariableMatrix, operator, array));
   cls.def("row", nb::overload_cast<int>(&VariableMatrix::Row), "row"_a,
           DOC(sleipnir, VariableMatrix, Row));
   cls.def("col", nb::overload_cast<int>(&VariableMatrix::Col), "col"_a,
