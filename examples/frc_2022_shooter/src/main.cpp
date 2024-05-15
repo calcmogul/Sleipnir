@@ -39,9 +39,9 @@ slp::VariableMatrix f(const slp::VariableMatrix& x) {
   constexpr double m = 2.0;  // kg
   auto a_D = [](auto v) { return 0.5 * rho * v * v * C_D * A / m; };
 
-  auto v_x = x(3, 0);
-  auto v_y = x(4, 0);
-  auto v_z = x(5, 0);
+  auto v_x = x[3, 0];
+  auto v_y = x[4, 0];
+  auto v_z = x[5, 0];
   return slp::VariableMatrix{{v_x},       {v_y},       {v_z},
                              {-a_D(v_x)}, {-a_D(v_y)}, {-g - a_D(v_z)}};
 }

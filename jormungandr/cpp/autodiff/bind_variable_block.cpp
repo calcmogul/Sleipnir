@@ -117,31 +117,31 @@ void bind_variable_block(nb::class_<VariableBlock<VariableMatrix>>& cls) {
         }
 
         if (auto rhs = try_cast<VariableMatrix>(value)) {
-          self(row_slice, row_slice_length, col_slice, col_slice_length) =
+          self[row_slice, row_slice_length, col_slice, col_slice_length] =
               rhs.value();
         } else if (auto rhs = try_cast<VariableBlock<VariableMatrix>>(value)) {
-          self(row_slice, row_slice_length, col_slice, col_slice_length) =
+          self[row_slice, row_slice_length, col_slice, col_slice_length] =
               rhs.value();
         } else if (auto rhs = try_cast_to_eigen<double>(value)) {
-          self(row_slice, row_slice_length, col_slice, col_slice_length) =
+          self[row_slice, row_slice_length, col_slice, col_slice_length] =
               rhs.value();
         } else if (auto rhs = try_cast_to_eigen<float>(value)) {
-          self(row_slice, row_slice_length, col_slice, col_slice_length) =
+          self[row_slice, row_slice_length, col_slice, col_slice_length] =
               rhs.value();
         } else if (auto rhs = try_cast_to_eigen<int64_t>(value)) {
-          self(row_slice, row_slice_length, col_slice, col_slice_length) =
+          self[row_slice, row_slice_length, col_slice, col_slice_length] =
               rhs.value();
         } else if (auto rhs = try_cast_to_eigen<int32_t>(value)) {
-          self(row_slice, row_slice_length, col_slice, col_slice_length) =
+          self[row_slice, row_slice_length, col_slice, col_slice_length] =
               rhs.value();
         } else if (auto rhs = try_cast<Variable>(value)) {
-          self(row_slice, row_slice_length, col_slice, col_slice_length) =
+          self[row_slice, row_slice_length, col_slice, col_slice_length] =
               rhs.value();
         } else if (auto rhs = try_cast<double>(value)) {
-          self(row_slice, row_slice_length, col_slice, col_slice_length) =
+          self[row_slice, row_slice_length, col_slice, col_slice_length] =
               rhs.value();
         } else if (auto rhs = try_cast<int>(value)) {
-          self(row_slice, row_slice_length, col_slice, col_slice_length) =
+          self[row_slice, row_slice_length, col_slice, col_slice_length] =
               rhs.value();
         } else {
           throw nb::value_error(
@@ -158,7 +158,7 @@ void bind_variable_block(nb::class_<VariableBlock<VariableMatrix>>& cls) {
         return self[row];
       },
       nb::keep_alive<0, 1>(), "row"_a,
-      DOC(slp, VariableBlock, operator, call, 3));
+      DOC(slp, VariableBlock, operator, array, 3));
   cls.def(
       "__getitem__",
       [](VariableBlock<VariableMatrix>& self, nb::tuple slices) -> nb::object {
@@ -183,7 +183,7 @@ void bind_variable_block(nb::class_<VariableBlock<VariableMatrix>>& cls) {
           if (col < 0) {
             col += self.cols();
           }
-          return nb::cast(self(row, col));
+          return nb::cast(self[row, col]);
         }
 
         Slice row_slice;
@@ -222,9 +222,9 @@ void bind_variable_block(nb::class_<VariableBlock<VariableMatrix>>& cls) {
         }
 
         return nb::cast(
-            self(row_slice, row_slice_length, col_slice, col_slice_length));
+            self[row_slice, row_slice_length, col_slice, col_slice_length]);
       },
-      nb::keep_alive<0, 1>(), DOC(slp, VariableBlock, operator, call),
+      nb::keep_alive<0, 1>(), DOC(slp, VariableBlock, operator, array),
       "slices"_a);
   cls.def("row", nb::overload_cast<int>(&VariableBlock<VariableMatrix>::row),
           "row"_a, DOC(slp, VariableBlock, row));
