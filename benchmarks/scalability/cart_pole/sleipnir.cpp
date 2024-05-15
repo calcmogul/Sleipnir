@@ -47,18 +47,18 @@ slp::VariableMatrix cart_pole_dynamics(const slp::VariableMatrix& x,
   //        [ m_c + m_p  m_p l cosθ]
   // M(q) = [m_p l cosθ    m_p l²  ]
   slp::VariableMatrix M{2, 2};
-  M(0, 0) = m_c + m_p;
-  M(0, 1) = m_p * l * cos(theta);  // NOLINT
-  M(1, 0) = m_p * l * cos(theta);  // NOLINT
-  M(1, 1) = m_p * std::pow(l, 2);
+  M[0, 0] = m_c + m_p;
+  M[0, 1] = m_p * l * cos(theta);  // NOLINT
+  M[1, 0] = m_p * l * cos(theta);  // NOLINT
+  M[1, 1] = m_p * std::pow(l, 2);
 
   //           [0  −m_p lθ̇ sinθ]
   // C(q, q̇) = [0       0      ]
   slp::VariableMatrix C{2, 2};
-  C(0, 0) = 0;
-  C(0, 1) = -m_p * l * thetadot * sin(theta);  // NOLINT
-  C(1, 0) = 0;
-  C(1, 1) = 0;
+  C[0, 0] = 0;
+  C[0, 1] = -m_p * l * thetadot * sin(theta);  // NOLINT
+  C[1, 0] = 0;
+  C[1, 1] = 0;
 
   //          [     0      ]
   // τ_g(q) = [-m_p gl sinθ]
@@ -91,9 +91,9 @@ slp::Problem cart_pole_sleipnir(std::chrono::duration<double> dt, int N) {
 
   // Initial guess
   for (int k = 0; k < N + 1; ++k) {
-    X(0, k).set_value(
+    X[0, k].set_value(
         std::lerp(x_initial(0), x_final(0), static_cast<double>(k) / N));
-    X(1, k).set_value(
+    X[1, k].set_value(
         std::lerp(x_initial(1), x_final(1), static_cast<double>(k) / N));
   }
 

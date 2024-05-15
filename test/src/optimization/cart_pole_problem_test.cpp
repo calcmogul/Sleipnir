@@ -39,9 +39,9 @@ TEST_CASE("Problem - Cart-pole", "[Problem]") {
 
   // Initial guess
   for (int k = 0; k < N + 1; ++k) {
-    X(0, k).set_value(
+    X[0, k].set_value(
         std::lerp(x_initial(0), x_final(0), static_cast<double>(k) / N));
-    X(1, k).set_value(
+    X[1, k].set_value(
         std::lerp(x_initial(1), x_final(1), static_cast<double>(k) / N));
   }
 
@@ -92,12 +92,12 @@ TEST_CASE("Problem - Cart-pole", "[Problem]") {
   // Verify solution
   for (int k = 0; k < N; ++k) {
     // Cart position constraints
-    CHECK(X(0, k) >= 0.0);
-    CHECK(X(0, k) <= d_max);
+    CHECK(X[0, k] >= 0.0);
+    CHECK(X[0, k] <= d_max);
 
     // Input constraints
-    CHECK(U(0, k) >= -u_max);
-    CHECK(U(0, k) <= u_max);
+    CHECK(U[0, k] >= -u_max);
+    CHECK(U[0, k] <= u_max);
 
     // Dynamics constraints
     Eigen::VectorXd expected_x_k1 =

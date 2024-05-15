@@ -12,17 +12,17 @@ VariableMatrix solve(const VariableMatrix& A, const VariableMatrix& B) {
 
   if (A.rows() == 1 && A.cols() == 1) {
     // Compute optimal inverse instead of using Eigen's general solver
-    return B(0, 0) / A(0, 0);
+    return B[0, 0] / A[0, 0];
   } else if (A.rows() == 2 && A.cols() == 2) {
     // Compute optimal inverse instead of using Eigen's general solver
     //
     // [a  b]⁻¹  ___1___ [ d  −b]
     // [c  d]  = ad − bc [−c   a]
 
-    const auto& a = A(0, 0);
-    const auto& b = A(0, 1);
-    const auto& c = A(1, 0);
-    const auto& d = A(1, 1);
+    const auto& a = A[0, 0];
+    const auto& b = A[0, 1];
+    const auto& c = A[1, 0];
+    const auto& d = A[1, 1];
 
     slp::VariableMatrix adj_A{{d, -b}, {-c, a}};
     auto det_A = a * d - b * c;
@@ -39,15 +39,15 @@ VariableMatrix solve(const VariableMatrix& A, const VariableMatrix& B) {
     //
     // https://www.wolframalpha.com/input?i=inverse+%7B%7Ba%2C+b%2C+c%7D%2C+%7Bd%2C+e%2C+f%7D%2C+%7Bg%2C+h%2C+i%7D%7D
 
-    const auto& a = A(0, 0);
-    const auto& b = A(0, 1);
-    const auto& c = A(0, 2);
-    const auto& d = A(1, 0);
-    const auto& e = A(1, 1);
-    const auto& f = A(1, 2);
-    const auto& g = A(2, 0);
-    const auto& h = A(2, 1);
-    const auto& i = A(2, 2);
+    const auto& a = A[0, 0];
+    const auto& b = A[0, 1];
+    const auto& c = A[0, 2];
+    const auto& d = A[1, 0];
+    const auto& e = A[1, 1];
+    const auto& f = A[1, 2];
+    const auto& g = A[2, 0];
+    const auto& h = A[2, 1];
+    const auto& i = A[2, 2];
 
     auto ae = a * e;
     auto af = a * f;
@@ -87,22 +87,22 @@ VariableMatrix solve(const VariableMatrix& A, const VariableMatrix& B) {
     //
     // https://www.wolframalpha.com/input?i=inverse+%7B%7Ba%2C+b%2C+c%2C+d%7D%2C+%7Be%2C+f%2C+g%2C+h%7D%2C+%7Bi%2C+j%2C+k%2C+l%7D%2C+%7Bm%2C+n%2C+o%2C+p%7D%7D
 
-    const auto& a = A(0, 0);
-    const auto& b = A(0, 1);
-    const auto& c = A(0, 2);
-    const auto& d = A(0, 3);
-    const auto& e = A(1, 0);
-    const auto& f = A(1, 1);
-    const auto& g = A(1, 2);
-    const auto& h = A(1, 3);
-    const auto& i = A(2, 0);
-    const auto& j = A(2, 1);
-    const auto& k = A(2, 2);
-    const auto& l = A(2, 3);
-    const auto& m = A(3, 0);
-    const auto& n = A(3, 1);
-    const auto& o = A(3, 2);
-    const auto& p = A(3, 3);
+    const auto& a = A[0, 0];
+    const auto& b = A[0, 1];
+    const auto& c = A[0, 2];
+    const auto& d = A[0, 3];
+    const auto& e = A[1, 0];
+    const auto& f = A[1, 1];
+    const auto& g = A[1, 2];
+    const auto& h = A[1, 3];
+    const auto& i = A[2, 0];
+    const auto& j = A[2, 1];
+    const auto& k = A[2, 2];
+    const auto& l = A[2, 3];
+    const auto& m = A[3, 0];
+    const auto& n = A[3, 1];
+    const auto& o = A[3, 2];
+    const auto& p = A[3, 3];
 
     auto afk = a * f * k;
     auto afl = a * f * l;
@@ -232,14 +232,14 @@ VariableMatrix solve(const VariableMatrix& A, const VariableMatrix& B) {
     MatrixXv eigen_A{A.rows(), A.cols()};
     for (int row = 0; row < A.rows(); ++row) {
       for (int col = 0; col < A.cols(); ++col) {
-        eigen_A(row, col) = A(row, col);
+        eigen_A(row, col) = A[row, col];
       }
     }
 
     MatrixXv eigen_B{B.rows(), B.cols()};
     for (int row = 0; row < B.rows(); ++row) {
       for (int col = 0; col < B.cols(); ++col) {
-        eigen_B(row, col) = B(row, col);
+        eigen_B(row, col) = B[row, col];
       }
     }
 
@@ -248,7 +248,7 @@ VariableMatrix solve(const VariableMatrix& A, const VariableMatrix& B) {
     VariableMatrix X{A.cols(), B.cols()};
     for (int row = 0; row < X.rows(); ++row) {
       for (int col = 0; col < X.cols(); ++col) {
-        X(row, col) = eigen_X(row, col);
+        X[row, col] = eigen_X(row, col);
       }
     }
 
