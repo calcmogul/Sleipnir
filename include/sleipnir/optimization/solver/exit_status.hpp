@@ -4,8 +4,9 @@
 
 #include <stdint.h>
 
-#include <format>
 #include <utility>
+
+#include <fmt/base.h>
 
 namespace slp {
 
@@ -45,14 +46,16 @@ enum class ExitStatus : int8_t {
 
 }  // namespace slp
 
+// @cond Suppress Doxygen
+
 /// Formatter for ExitStatus.
 template <>
-struct std::formatter<slp::ExitStatus> {
+struct fmt::formatter<slp::ExitStatus> {
   /// Parses format string.
   ///
   /// @param ctx Format parse context.
   /// @return Format parse context iterator.
-  constexpr auto parse(std::format_parse_context& ctx) {
+  constexpr auto parse(fmt::format_parse_context& ctx) {
     return m_underlying.parse(ctx);
   }
 
@@ -63,7 +66,8 @@ struct std::formatter<slp::ExitStatus> {
   /// @param ctx Format context.
   /// @return Format context iterator.
   template <typename FmtContext>
-  auto format(const slp::ExitStatus& exit_status, FmtContext& ctx) const {
+  constexpr auto format(const slp::ExitStatus& exit_status,
+                        FmtContext& ctx) const {
     using enum slp::ExitStatus;
 
     switch (exit_status) {
@@ -97,5 +101,7 @@ struct std::formatter<slp::ExitStatus> {
   }
 
  private:
-  std::formatter<const char*> m_underlying;
+  fmt::formatter<const char*> m_underlying;
 };
+
+// @endcond
