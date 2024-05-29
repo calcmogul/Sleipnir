@@ -1,11 +1,11 @@
 // Copyright (c) Sleipnir contributors
 
-#include <format>
 #include <functional>
 #include <iterator>
 
 #include <Eigen/Core>
 #include <catch2/catch_test_macros.hpp>
+#include <fmt/format.h>
 #include <sleipnir/autodiff/variable_matrix.hpp>
 
 TEST_CASE("VariableMatrix - Construct from Eigen::MatrixBase",
@@ -343,7 +343,7 @@ TEST_CASE("VariableMatrix - Block() free function", "[VariableMatrix]") {
 template <int Rows>
 void check_solve(const Eigen::Matrix<double, Rows, Rows>& A,
                  const Eigen::Matrix<double, Rows, 1>& B) {
-  INFO(std::format("Solve {}x{}", Rows, Rows));
+  INFO(fmt::format("Solve {}x{}", Rows, Rows));
 
   slp::VariableMatrix slp_A{A};
   slp::VariableMatrix slp_B{B};
