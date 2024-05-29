@@ -124,7 +124,7 @@ target_link_libraries(Sleipnir PUBLIC Eigen3::Eigen)
 fetchcontent_declare(
     fmt
     GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-    GIT_TAG 11.1.3
+    GIT_TAG 11.1.4
 )
 fetchcontent_makeavailable(fmt)
 

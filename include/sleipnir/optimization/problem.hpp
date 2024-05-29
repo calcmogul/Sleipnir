@@ -300,7 +300,7 @@ class SLEIPNIR_DLLEXPORT Problem {
         slp::println("  ↳ executed {} iterations", options.max_iterations);
       }
       if (std::isfinite(options.timeout.count())) {
-        slp::println("  ↳ {} elapsed", options.timeout);
+        slp::println("  ↳ {} s elapsed", options.timeout.count());
       }
 
       if (m_decision_variables.size() == 1) {
