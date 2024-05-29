@@ -4,8 +4,9 @@
 
 #include <stdint.h>
 
-#include <format>
 #include <utility>
+
+#include <fmt/base.h>
 
 namespace slp {
 
@@ -27,14 +28,16 @@ enum class ExpressionType : uint8_t {
 
 }  // namespace slp
 
+// @cond Suppress Doxygen
+
 /// Formatter for ExpressionType.
 template <>
-struct std::formatter<slp::ExpressionType> {
+struct fmt::formatter<slp::ExpressionType> {
   /// Parse format string.
   ///
   /// @param ctx Format parse context.
   /// @return Format parse context iterator.
-  constexpr auto parse(std::format_parse_context& ctx) {
+  constexpr auto parse(fmt::format_parse_context& ctx) {
     return m_underlying.parse(ctx);
   }
 
@@ -45,7 +48,8 @@ struct std::formatter<slp::ExpressionType> {
   /// @param ctx Format context.
   /// @return Format context iterator.
   template <typename FmtContext>
-  auto format(const slp::ExpressionType& type, FmtContext& ctx) const {
+  constexpr auto format(const slp::ExpressionType& type,
+                        FmtContext& ctx) const {
     using enum slp::ExpressionType;
 
     switch (type) {
@@ -65,5 +69,7 @@ struct std::formatter<slp::ExpressionType> {
   }
 
  private:
-  std::formatter<const char*> m_underlying;
+  fmt::formatter<const char*> m_underlying;
 };
+
+// @endcond

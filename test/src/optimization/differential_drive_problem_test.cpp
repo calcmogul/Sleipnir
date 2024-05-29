@@ -1,12 +1,12 @@
 // Copyright (c) Sleipnir contributors
 
 #include <chrono>
-#include <format>
 #include <fstream>
 
 #include <Eigen/Core>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <fmt/format.h>
 #include <sleipnir/optimization/problem.hpp>
 #include <sleipnir/util/scope_exit.hpp>
 
@@ -104,7 +104,7 @@ TEMPLATE_TEST_CASE("Problem - Differential drive", "[Problem]",
     CHECK_THAT(X.value(2, k), WithinAbs(x[2], T(1e-8)));
     CHECK_THAT(X.value(3, k), WithinAbs(x[3], T(1e-8)));
     CHECK_THAT(X.value(4, k), WithinAbs(x[4], T(1e-8)));
-    INFO(std::format("  k = {}", k));
+    INFO(fmt::format("  k = {}", k));
 
     // Project state forward
     x = rk4<T>(DifferentialDriveUtil<T>::dynamics_scalar, x, u, dt);
@@ -124,7 +124,7 @@ TEMPLATE_TEST_CASE("Problem - Differential drive", "[Problem]",
               "velocity (m/s),Right velocity (m/s)\n";
 
     for (int k = 0; k < N + 1; ++k) {
-      states << std::format("{},{},{},{},{},{}\n", T(k) * dt.count(),
+      states << fmt::format("{},{},{},{},{},{}\n", T(k) * dt.count(),
                             X.value(0, k), X.value(1, k), X.value(2, k),
                             X.value(3, k), X.value(4, k));
     }
@@ -137,10 +137,10 @@ TEMPLATE_TEST_CASE("Problem - Differential drive", "[Problem]",
 
     for (int k = 0; k < N + 1; ++k) {
       if (k < N) {
-        inputs << std::format("{},{},{}\n", T(k) * dt.count(), U.value(0, k),
+        inputs << fmt::format("{},{},{}\n", T(k) * dt.count(), U.value(0, k),
                               U.value(1, k));
       } else {
-        inputs << std::format("{},{},{}\n", T(k) * dt.count(), T(0), T(0));
+        inputs << fmt::format("{},{},{}\n", T(k) * dt.count(), T(0), T(0));
       }
     }
   }

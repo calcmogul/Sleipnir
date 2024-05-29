@@ -1,9 +1,8 @@
 // Copyright (c) Sleipnir contributors
 
-#include <format>
-
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <fmt/format.h>
 #include <sleipnir/optimization/problem.hpp>
 #include <sleipnir/optimization/solver/exit_status.hpp>
 
@@ -232,26 +231,26 @@ TEMPLATE_TEST_CASE("ExitStatus - Timeout", "[ExitStatus]",
 }
 
 TEST_CASE("ExitStatus - Formatter", "[Formatter]") {
-  CHECK(std::format("{}", slp::ExitStatus::SUCCESS) == "success");
-  CHECK(std::format("{}", slp::ExitStatus::CALLBACK_REQUESTED_STOP) ==
+  CHECK(fmt::format("{}", slp::ExitStatus::SUCCESS) == "success");
+  CHECK(fmt::format("{}", slp::ExitStatus::CALLBACK_REQUESTED_STOP) ==
         "callback requested stop");
-  CHECK(std::format("{}", slp::ExitStatus::TOO_FEW_DOFS) ==
+  CHECK(fmt::format("{}", slp::ExitStatus::TOO_FEW_DOFS) ==
         "too few degrees of freedom");
-  CHECK(std::format("{}", slp::ExitStatus::LOCALLY_INFEASIBLE) ==
+  CHECK(fmt::format("{}", slp::ExitStatus::LOCALLY_INFEASIBLE) ==
         "locally infeasible");
-  CHECK(std::format("{}", slp::ExitStatus::GLOBALLY_INFEASIBLE) ==
+  CHECK(fmt::format("{}", slp::ExitStatus::GLOBALLY_INFEASIBLE) ==
         "globally infeasible");
-  CHECK(std::format("{}", slp::ExitStatus::FACTORIZATION_FAILED) ==
+  CHECK(fmt::format("{}", slp::ExitStatus::FACTORIZATION_FAILED) ==
         "factorization failed");
-  CHECK(std::format("{}", slp::ExitStatus::LINE_SEARCH_FAILED) ==
+  CHECK(fmt::format("{}", slp::ExitStatus::LINE_SEARCH_FAILED) ==
         "line search failed");
-  CHECK(std::format("{}", slp::ExitStatus::FEASIBILITY_RESTORATION_FAILED) ==
+  CHECK(fmt::format("{}", slp::ExitStatus::FEASIBILITY_RESTORATION_FAILED) ==
         "feasibility restoration failed");
-  CHECK(std::format("{}", slp::ExitStatus::NONFINITE_INITIAL_GUESS) ==
+  CHECK(fmt::format("{}", slp::ExitStatus::NONFINITE_INITIAL_GUESS) ==
         "nonfinite initial guess");
-  CHECK(std::format("{}", slp::ExitStatus::DIVERGING_ITERATES) ==
+  CHECK(fmt::format("{}", slp::ExitStatus::DIVERGING_ITERATES) ==
         "diverging iterates");
-  CHECK(std::format("{}", slp::ExitStatus::MAX_ITERATIONS_EXCEEDED) ==
+  CHECK(fmt::format("{}", slp::ExitStatus::MAX_ITERATIONS_EXCEEDED) ==
         "max iterations exceeded");
-  CHECK(std::format("{}", slp::ExitStatus::TIMEOUT) == "timeout");
+  CHECK(fmt::format("{}", slp::ExitStatus::TIMEOUT) == "timeout");
 }

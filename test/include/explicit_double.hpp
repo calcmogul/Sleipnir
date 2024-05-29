@@ -4,11 +4,11 @@
 
 #include <cmath>
 #include <concepts>
-#include <format>
 #include <limits>
 #include <ostream>
 
 #include <Eigen/Core>
+#include <fmt/base.h>
 
 /// A scalar type not implicitly convertible from/to floating-point or integral
 /// types.
@@ -185,18 +185,18 @@ class ExplicitDouble {
 };
 
 template <>
-struct std::formatter<ExplicitDouble> {
-  constexpr auto parse(std::format_parse_context& ctx) {
+struct fmt::formatter<ExplicitDouble> {
+  constexpr auto parse(fmt::format_parse_context& ctx) {
     return m_underlying.parse(ctx);
   }
 
   template <typename FmtContext>
-  auto format(const ExplicitDouble& d, FmtContext& ctx) const {
+  constexpr auto format(const ExplicitDouble& d, FmtContext& ctx) const {
     return m_underlying.format(d.value(), ctx);
   }
 
  private:
-  std::formatter<double> m_underlying;
+  fmt::formatter<double> m_underlying;
 };
 
 namespace std {

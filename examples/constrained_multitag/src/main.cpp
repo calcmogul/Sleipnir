@@ -4,12 +4,12 @@
 //
 // The robot pose is constrained to be on the floor (z = 0).
 
-#include <print>
 #include <ranges>
 #include <utility>
 #include <vector>
 
 #include <Eigen/Core>
+#include <fmt/base.h>
 #include <sleipnir/autodiff/variable_matrix.hpp>
 #include <sleipnir/optimization/problem.hpp>
 
@@ -80,7 +80,7 @@ int main() {
     auto& y = camera2point[1];
     auto& z = camera2point[2];
 
-    std::println("camera2point = {}, {}, {}", x.value(), y.value(), z.value());
+    fmt::println("camera2point = {}, {}, {}", x.value(), y.value(), z.value());
 
     // coordinates observed at
     auto [u_observed, v_observed] = observation;
@@ -91,8 +91,8 @@ int main() {
     auto u = fx * X + cx;
     auto v = fy * Y + cy;
 
-    std::println("Expected u {}, saw {}", u.value(), u_observed);
-    std::println("Expected v {}, saw {}", v.value(), v_observed);
+    fmt::println("Expected u {}, saw {}", u.value(), u_observed);
+    fmt::println("Expected v {}, saw {}", v.value(), v_observed);
 
     auto u_err = u - u_observed;
     auto v_err = v - v_observed;
@@ -105,7 +105,7 @@ int main() {
 
   problem.solve({.diagnostics = true});
 
-  std::println("x = {} m", robot_x.value());
-  std::println("y = {} m", robot_y.value());
-  std::println("θ = {} rad", robot_θ.value());
+  fmt::println("x = {} m", robot_x.value());
+  fmt::println("y = {} m", robot_y.value());
+  fmt::println("θ = {} rad", robot_θ.value());
 }
