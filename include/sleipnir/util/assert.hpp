@@ -4,9 +4,10 @@
 
 #ifdef SLEIPNIR_PYTHON
 
-#include <format>
 #include <source_location>
 #include <stdexcept>
+
+#include <fmt/format.h>
 
 /**
  * Throw an exception in Python.
@@ -15,7 +16,7 @@
   do {                                                               \
     if (!(condition)) {                                              \
       auto location = std::source_location::current();               \
-      throw std::invalid_argument(std::format(                       \
+      throw std::invalid_argument(fmt::format(                       \
           "{}:{}: {}: Assertion `{}' failed.", location.file_name(), \
           location.line(), location.function_name(), #condition));   \
     }                                                                \
