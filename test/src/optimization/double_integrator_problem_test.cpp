@@ -2,12 +2,12 @@
 
 #include <chrono>
 #include <cmath>
-#include <format>
 #include <fstream>
 
 #include <Eigen/Core>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <fmt/format.h>
 #include <sleipnir/optimization/problem.hpp>
 #include <sleipnir/util/scope_exit.hpp>
 
@@ -117,7 +117,7 @@ TEMPLATE_TEST_CASE("Problem - Double integrator", "[Problem]",
       CHECK_THAT(U.value(0, k), WithinAbs(u[0], T(1e-4)));
     }
 
-    INFO(std::format("  k = {}", k));
+    INFO(fmt::format("  k = {}", k));
 
     // Project state forward
     x = A * x + B * u;
@@ -133,7 +133,7 @@ TEMPLATE_TEST_CASE("Problem - Double integrator", "[Problem]",
     states << "Time (s),Position (m),Velocity (m/s)\n";
 
     for (int k = 0; k < N + 1; ++k) {
-      states << std::format("{},{},{}\n", T(k) * dt.count(), X.value(0, k),
+      states << fmt::format("{},{},{}\n", T(k) * dt.count(), X.value(0, k),
                             X.value(1, k));
     }
   }
@@ -145,9 +145,9 @@ TEMPLATE_TEST_CASE("Problem - Double integrator", "[Problem]",
 
     for (int k = 0; k < N + 1; ++k) {
       if (k < N) {
-        inputs << std::format("{},{}\n", T(k) * dt.count(), U.value(0, k));
+        inputs << fmt::format("{},{}\n", T(k) * dt.count(), U.value(0, k));
       } else {
-        inputs << std::format("{},{}\n", T(k) * dt.count(), T(0));
+        inputs << fmt::format("{},{}\n", T(k) * dt.count(), T(0));
       }
     }
   }
