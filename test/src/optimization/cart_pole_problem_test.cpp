@@ -1,13 +1,13 @@
 // Copyright (c) Sleipnir contributors
 
 #include <chrono>
-#include <format>
 #include <fstream>
 #include <numbers>
 
 #include <Eigen/Core>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <fmt/format.h>
 #include <sleipnir/optimization/problem.hpp>
 #include <sleipnir/util/scope_exit.hpp>
 
@@ -118,7 +118,7 @@ TEMPLATE_TEST_CASE("Problem - Cart-pole", "[Problem]",
     Eigen::Vector<T, Eigen::Dynamic> actual_x_k1 = X.col(k + 1).value();
     for (int row = 0; row < actual_x_k1.rows(); ++row) {
       CHECK_THAT(actual_x_k1[row], WithinAbs(expected_x_k1[row], T(1e-8)));
-      INFO(std::format("  x({} @ k = {}", row, k));
+      INFO(fmt::format("  x({} @ k = {}", row, k));
     }
   }
 
@@ -135,7 +135,7 @@ TEMPLATE_TEST_CASE("Problem - Cart-pole", "[Problem]",
               "Pole angular velocity (rad/s)\n";
 
     for (int k = 0; k < N + 1; ++k) {
-      states << std::format("{},{},{},{},{}\n", T(k) * dt.count(),
+      states << fmt::format("{},{},{},{},{}\n", T(k) * dt.count(),
                             X.value(0, k), X.value(1, k), X.value(2, k),
                             X.value(3, k));
     }
@@ -148,9 +148,9 @@ TEMPLATE_TEST_CASE("Problem - Cart-pole", "[Problem]",
 
     for (int k = 0; k < N + 1; ++k) {
       if (k < N) {
-        inputs << std::format("{},{}\n", T(k) * dt.count(), U.value(0, k));
+        inputs << fmt::format("{},{}\n", T(k) * dt.count(), U.value(0, k));
       } else {
-        inputs << std::format("{},{}\n", T(k) * dt.count(), T(0));
+        inputs << fmt::format("{},{}\n", T(k) * dt.count(), T(0));
       }
     }
   }
