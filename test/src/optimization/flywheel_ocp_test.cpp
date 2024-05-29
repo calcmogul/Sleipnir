@@ -2,13 +2,13 @@
 
 #include <chrono>
 #include <cmath>
-#include <format>
 #include <fstream>
 #include <string>
 
 #include <Eigen/Core>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <fmt/format.h>
 #include <sleipnir/optimization/ocp.hpp>
 
 #include "catch_string_converters.hpp"
@@ -107,7 +107,7 @@ void flywheel_test(
       }
     }
 
-    INFO(std::format("  k = {}", k));
+    INFO(fmt::format("  k = {}", k));
 
     // Project state forward
     x = A_discrete * x + B_discrete * u;
@@ -117,26 +117,26 @@ void flywheel_test(
   CHECK(problem.X().value(0, N) == Catch::Approx(r).margin(1e-7));
 
   // Log states for offline viewing
-  std::ofstream states{std::format("{} states.csv", test_name)};
+  std::ofstream states{fmt::format("{} states.csv", test_name)};
   if (states.is_open()) {
     states << "Time (s),Velocity (rad/s)\n";
 
     for (int k = 0; k < N + 1; ++k) {
-      states << std::format("{},{}\n", k * dt.count(), problem.X().value(0, k));
+      states << fmt::format("{},{}\n", k * dt.count(), problem.X().value(0, k));
     }
   }
 
   // Log inputs for offline viewing
-  std::ofstream inputs{std::format("{} inputs.csv", test_name)};
+  std::ofstream inputs{fmt::format("{} inputs.csv", test_name)};
   if (inputs.is_open()) {
     inputs << "Time (s),Voltage (V)\n";
 
     for (int k = 0; k < N + 1; ++k) {
       if (k < N) {
-        inputs << std::format("{},{}\n", k * dt.count(),
+        inputs << fmt::format("{},{}\n", k * dt.count(),
                               problem.U().value(0, k));
       } else {
-        inputs << std::format("{},{}\n", k * dt.count(), 0.0);
+        inputs << fmt::format("{},{}\n", k * dt.count(), 0.0);
       }
     }
   }
