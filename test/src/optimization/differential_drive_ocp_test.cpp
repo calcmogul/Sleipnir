@@ -1,12 +1,12 @@
 // Copyright (c) Sleipnir contributors
 
 #include <chrono>
-#include <format>
 #include <fstream>
 
 #include <Eigen/Core>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <fmt/format.h>
 #include <sleipnir/optimization/ocp.hpp>
 #include <sleipnir/util/scope_exit.hpp>
 
@@ -93,7 +93,7 @@ TEMPLATE_TEST_CASE("OCP - Differential drive", "[OCP]",
     CHECK_THAT(X.value(3, k), WithinAbs(x[3], T(1e-8)));
     CHECK_THAT(X.value(4, k), WithinAbs(x[4], T(1e-8)));
 
-    INFO(std::format("  k = {}", k));
+    INFO(fmt::format("  k = {}", k));
 
     // Project state forward
     x = rk4<T>(DifferentialDriveUtil<T>::dynamics_scalar, x, u,
@@ -115,7 +115,7 @@ TEMPLATE_TEST_CASE("OCP - Differential drive", "[OCP]",
 
     T time(0);
     for (int k = 0; k < N + 1; ++k) {
-      states << std::format("{},{},{},{},{},{}\n", time,
+      states << fmt::format("{},{},{},{},{},{}\n", time,
                             problem.X().value(0, k), problem.X().value(1, k),
                             problem.X().value(2, k), problem.X().value(3, k),
                             problem.X().value(4, k));
@@ -132,10 +132,10 @@ TEMPLATE_TEST_CASE("OCP - Differential drive", "[OCP]",
     T time(0);
     for (int k = 0; k < N + 1; ++k) {
       if (k < N) {
-        inputs << std::format("{},{},{}\n", time, problem.U().value(0, k),
+        inputs << fmt::format("{},{},{}\n", time, problem.U().value(0, k),
                               problem.U().value(1, k));
       } else {
-        inputs << std::format("{},{},{}\n", time, T(0), T(0));
+        inputs << fmt::format("{},{},{}\n", time, T(0), T(0));
       }
 
       time += problem.dt().value(0, k);
