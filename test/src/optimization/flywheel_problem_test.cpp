@@ -2,12 +2,12 @@
 
 #include <chrono>
 #include <cmath>
-#include <format>
 #include <fstream>
 
 #include <Eigen/Core>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <fmt/format.h>
 #include <sleipnir/optimization/problem.hpp>
 
 #include "catch_string_converters.hpp"
@@ -102,7 +102,7 @@ TEST_CASE("Problem - Flywheel", "[Problem]") {
       CHECK(U.value(0, k) == Catch::Approx(u).margin(1e-4));
     }
 
-    INFO(std::format("  k = {}", k));
+    INFO(fmt::format("  k = {}", k));
 
     // Project state forward
     x = A * x + B * u;
@@ -117,7 +117,7 @@ TEST_CASE("Problem - Flywheel", "[Problem]") {
     states << "Time (s),Velocity (rad/s)\n";
 
     for (int k = 0; k < N + 1; ++k) {
-      states << std::format("{},{}\n", k * dt.count(), X.value(0, k));
+      states << fmt::format("{},{}\n", k * dt.count(), X.value(0, k));
     }
   }
 
@@ -128,9 +128,9 @@ TEST_CASE("Problem - Flywheel", "[Problem]") {
 
     for (int k = 0; k < N + 1; ++k) {
       if (k < N) {
-        inputs << std::format("{},{}\n", k * dt.count(), U.value(0, k));
+        inputs << fmt::format("{},{}\n", k * dt.count(), U.value(0, k));
       } else {
-        inputs << std::format("{},{}\n", k * dt.count(), 0.0);
+        inputs << fmt::format("{},{}\n", k * dt.count(), 0.0);
       }
     }
   }
