@@ -282,7 +282,7 @@ class SLEIPNIR_DLLEXPORT OptimizationProblem {
         sleipnir::println("  ↳ executed {} iterations", config.max_iterations);
       }
       if (std::isfinite(config.timeout.count())) {
-        sleipnir::println("  ↳ {} elapsed", config.timeout);
+        sleipnir::println("  ↳ {} s elapsed", config.timeout.count());
       }
 
       sleipnir::println("\n{} decision variables", m_decision_variables.size());
