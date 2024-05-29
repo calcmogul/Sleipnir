@@ -3,10 +3,10 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/function.h>
 
-#include <format>
 #include <string>
 #include <utility>
 
+#include <fmt/format.h>
 #include <sleipnir/optimization/problem.hpp>
 #include <sleipnir/optimization/solver/options.hpp>
 
@@ -101,7 +101,7 @@ void bind_problem(nb::class_<Problem<double>>& cls) {
             spy = nb::cast<bool>(value);
           } else {
             throw nb::key_error(
-                std::format("Invalid keyword argument: {}", key_str).c_str());
+                fmt::format("Invalid keyword argument: {}", key_str).c_str());
           }
         }
 
