@@ -2,10 +2,10 @@
 
 #pragma once
 
-#include <format>
 #include <string>
 
 #include <catch2/catch_tostring.hpp>
+#include <fmt/format.h>
 #include <sleipnir/autodiff/expression_type.hpp>
 #include <sleipnir/optimization/solver/exit_status.hpp>
 
@@ -73,9 +73,9 @@ template <>
 struct StringMaker<Coord> {
   static std::string convert(const Coord& coord) {
     if (coord.sign == '+' || coord.sign == '-' || coord.sign == '0') {
-      return std::format("{{{}, {}, '{}'}}", coord.row, coord.col, coord.sign);
+      return fmt::format("{{{}, {}, '{}'}}", coord.row, coord.col, coord.sign);
     } else {
-      return std::format("{{{}, {}, char({})}}", coord.row, coord.col,
+      return fmt::format("{{{}, {}, char({})}}", coord.row, coord.col,
                          static_cast<int>(coord.sign));
     }
   }

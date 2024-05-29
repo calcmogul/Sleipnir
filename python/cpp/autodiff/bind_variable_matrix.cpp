@@ -9,10 +9,10 @@
 #include <nanobind/stl/vector.h>
 
 #include <concepts>
-#include <format>
 #include <string>
 #include <vector>
 
+#include <fmt/format.h>
 #include <sleipnir/autodiff/variable_matrix.hpp>
 
 #include "docstrings.hpp"
@@ -84,7 +84,7 @@ void bind_variable_matrix(nb::module_& autodiff,
       [](VariableMatrix<double>& self, nb::tuple slices, nb::object value) {
         if (slices.size() != 2) {
           throw nb::index_error(
-              std::format("Expected 2 slices, got {}.", slices.size()).c_str());
+              fmt::format("Expected 2 slices, got {}.", slices.size()).c_str());
         }
 
         Slice row_slice;
@@ -164,7 +164,7 @@ void bind_variable_matrix(nb::module_& autodiff,
       [](VariableMatrix<double>& self, nb::tuple slices) -> nb::object {
         if (slices.size() != 2) {
           throw nb::index_error(
-              std::format("Expected 2 slices, got {}.", slices.size()).c_str());
+              fmt::format("Expected 2 slices, got {}.", slices.size()).c_str());
         }
 
         // If both indices are integers instead of slices, return Variable
@@ -348,7 +348,7 @@ void bind_variable_matrix(nb::module_& autodiff,
         std::string input2_name =
             nb::cast<std::string>(inputs[1].attr("__repr__")());
         throw nb::value_error(
-            std::format("VariableMatrix: numpy method {}, ufunc {} not "
+            fmt::format("VariableMatrix: numpy method {}, ufunc {} not "
                         "implemented for ({}, {})",
                         method_name, ufunc_name, input1_name, input2_name)
                 .c_str());

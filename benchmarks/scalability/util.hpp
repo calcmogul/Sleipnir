@@ -5,12 +5,12 @@
 #include <chrono>
 #include <concepts>
 #include <fstream>
-#include <print>
 #include <span>
 #include <string>
 #include <string_view>
 
 #include <casadi/casadi.hpp>
+#include <fmt/base.h>
 #include <sleipnir/optimization/problem.hpp>
 #include <sleipnir/util/function_ref.hpp>
 
@@ -59,7 +59,7 @@ int run_benchmarks_and_log(
   for (int N : sample_sizes_to_test) {
     auto dt = T / N;
 
-    std::print(stderr, "N = {}...", N);
+    fmt::print(stderr, "N = {}...", N);
 
     // Record setup time
     auto setup_start_time = std::chrono::steady_clock::now();
@@ -88,10 +88,10 @@ int run_benchmarks_and_log(
               << to_ms(solve_end_time - solve_start_time) << '\n';
       std::flush(results);
     } else {
-      std::print(stderr, " FAIL");
+      fmt::print(stderr, " FAIL");
     }
 
-    std::println(stderr, " done.");
+    fmt::println(stderr, " done.");
   }
 
   return 0;

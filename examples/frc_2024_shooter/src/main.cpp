@@ -2,9 +2,9 @@
 
 #include <cmath>
 #include <numbers>
-#include <print>
 
 #include <Eigen/Core>
+#include <fmt/base.h>
 #include <sleipnir/autodiff/gradient.hpp>
 #include <sleipnir/optimization/problem.hpp>
 
@@ -174,15 +174,15 @@ int main() {
   Eigen::Vector3d v0 = v0_wrt_shooter.value();
 
   double velocity = v0.norm();
-  std::println("Velocity = {:.03} ms", velocity);
+  fmt::println("Velocity = {:.03} ms", velocity);
 
   double pitch = std::atan2(v0[2], std::hypot(v0[0], v0[1]));
-  std::println("Pitch = {:.03}°", pitch * 180.0 / std::numbers::pi);
+  fmt::println("Pitch = {:.03}°", pitch * 180.0 / std::numbers::pi);
 
   double yaw = std::atan2(v0[1], v0[0]);
-  std::println("Yaw = {:.03}°", yaw * 180.0 / std::numbers::pi);
+  fmt::println("Yaw = {:.03}°", yaw * 180.0 / std::numbers::pi);
 
-  std::println("Total time = {:.03} s", T.value());
-  std::println("dt = {:.03} ms", dt.value() * 1e3);
+  fmt::println("Total time = {:.03} s", T.value());
+  fmt::println("dt = {:.03} ms", dt.value() * 1e3);
 }
 #endif

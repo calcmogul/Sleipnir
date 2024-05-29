@@ -1,13 +1,13 @@
 // Copyright (c) Sleipnir contributors
 
 #include <chrono>
-#include <format>
 #include <fstream>
 #include <numbers>
 
 #include <Eigen/Core>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <fmt/format.h>
 #include <sleipnir/optimization/ocp.hpp>
 #include <sleipnir/util/scope_exit.hpp>
 
@@ -108,7 +108,7 @@ TEMPLATE_TEST_CASE("OCP - Cart-pole", "[OCP]", SCALAR_TYPES_UNDER_TEST) {
     CHECK_THAT(X.value(1, k), WithinAbs(x[1], T(1e-2)));
     CHECK_THAT(X.value(2, k), WithinAbs(x[2], T(1e-2)));
     CHECK_THAT(X.value(3, k), WithinAbs(x[3], T(1e-2)));
-    INFO(std::format("  k = {}", k));
+    INFO(fmt::format("  k = {}", k));
 
     // Project state forward
     x = rk4<T>(CartPoleUtil<T>::dynamics_scalar, x, u, dt);
@@ -127,7 +127,7 @@ TEMPLATE_TEST_CASE("OCP - Cart-pole", "[OCP]", SCALAR_TYPES_UNDER_TEST) {
               "Pole angular velocity (rad/s)\n";
 
     for (int k = 0; k < N + 1; ++k) {
-      states << std::format("{},{},{},{},{}\n", T(k) * dt.count(),
+      states << fmt::format("{},{},{},{},{}\n", T(k) * dt.count(),
                             X.value(0, k), X.value(1, k), X.value(2, k),
                             X.value(3, k));
     }
@@ -140,10 +140,10 @@ TEMPLATE_TEST_CASE("OCP - Cart-pole", "[OCP]", SCALAR_TYPES_UNDER_TEST) {
 
     for (int k = 0; k < N + 1; ++k) {
       if (k < N) {
-        inputs << std::format("{},{}\n", T(k) * dt.count(),
+        inputs << fmt::format("{},{}\n", T(k) * dt.count(),
                               problem.U().value(0, k));
       } else {
-        inputs << std::format("{},{}\n", T(k) * dt.count(), T(0));
+        inputs << fmt::format("{},{}\n", T(k) * dt.count(), T(0));
       }
     }
   }

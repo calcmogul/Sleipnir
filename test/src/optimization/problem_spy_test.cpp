@@ -2,12 +2,12 @@
 
 #include <stdint.h>
 
-#include <format>
 #include <fstream>
 #include <string>
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <fmt/format.h>
 #include <sleipnir/autodiff/expression_type.hpp>
 #include <sleipnir/optimization/problem.hpp>
 #include <sleipnir/optimization/solver/exit_status.hpp>
@@ -21,7 +21,7 @@
 std::ifstream open(std::string_view filename) {
   std::ifstream file{std::string{filename}, std::ios::binary};
   if (!file.is_open()) {
-    FAIL(std::format("Could not open {}", filename));
+    FAIL(fmt::format("Could not open {}", filename));
   }
   return file;
 }

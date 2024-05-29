@@ -1,12 +1,12 @@
 // Copyright (c) Sleipnir contributors
 
-#include <format>
 #include <functional>
 #include <iterator>
 
 #include <Eigen/Core>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <fmt/format.h>
 #include <sleipnir/autodiff/variable_matrix.hpp>
 
 #include "scalar_types_under_test.hpp"
@@ -466,7 +466,7 @@ TEMPLATE_TEST_CASE("VariableMatrix - Block() free function", "[VariableMatrix]",
 
 template <typename T>
 void check_solve(slp::VariableMatrix<T> A, slp::VariableMatrix<T> B) {
-  INFO(std::format("Solve {}x{}", A.rows(), A.cols()));
+  INFO(fmt::format("Solve {}x{}", A.rows(), A.cols()));
 
   auto X = solve(A, B);
 
