@@ -4,13 +4,13 @@
 
 #include <cmath>
 #include <concepts>
-#include <format>
 #include <sstream>
 #include <string>
 
 #include <Eigen/Core>
 #include <Eigen/SparseCore>
 #include <catch2/matchers/catch_matchers_templated.hpp>
+#include <fmt/format.h>
 
 template <typename T>
 struct WithinAbs : Catch::Matchers::MatcherGenericBase {
@@ -22,7 +22,7 @@ struct WithinAbs : Catch::Matchers::MatcherGenericBase {
   }
 
   std::string describe() const override {
-    return std::format("\n==\n{}", target);
+    return fmt::format("\n==\n{}", target);
   }
 
  private:

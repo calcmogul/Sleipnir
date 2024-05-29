@@ -1,8 +1,9 @@
 // Copyright (c) Sleipnir contributors
 
 #include <chrono>
-#include <print>
 #include <vector>
+
+#include <fmt/base.h>
 
 #include "casadi.hpp"
 #include "cmdline_args.hpp"
@@ -30,7 +31,7 @@ int main(int argc, const char* argv[]) {
   }
   sample_sizes_to_test.emplace_back(300);
 
-  std::println("Solving cart-pole problem from N = {} to N = {}.",
+  fmt::println("Solving cart-pole problem from N = {} to N = {}.",
                sample_sizes_to_test.front(), sample_sizes_to_test.back());
   if (run_casadi) {
     run_benchmarks_and_log<casadi::Opti>(
