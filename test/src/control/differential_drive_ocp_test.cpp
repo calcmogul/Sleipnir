@@ -1,12 +1,12 @@
 // Copyright (c) Sleipnir contributors
 
 #include <chrono>
-#include <format>
 #include <fstream>
 
 #include <Eigen/Core>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <fmt/format.h>
 #include <sleipnir/control/ocp.hpp>
 
 #include "catch_string_converters.hpp"
@@ -90,7 +90,7 @@ TEST_CASE("OCP - Differential drive", "[OCP]") {
     CHECK(X.value(3, k) == Catch::Approx(x[3]).margin(1e-8));
     CHECK(X.value(4, k) == Catch::Approx(x[4]).margin(1e-8));
 
-    INFO(std::format("  k = {}", k));
+    INFO(fmt::format("  k = {}", k));
 
     // Project state forward
     x = rk4(differential_drive_dynamics_double, x, u,
@@ -112,7 +112,7 @@ TEST_CASE("OCP - Differential drive", "[OCP]") {
 
     double time = 0.0;
     for (int k = 0; k < N + 1; ++k) {
-      states << std::format("{},{},{},{},{},{}\n", time,
+      states << fmt::format("{},{},{},{},{},{}\n", time,
                             problem.X().value(0, k), problem.X().value(1, k),
                             problem.X().value(2, k), problem.X().value(3, k),
                             problem.X().value(4, k));
@@ -129,10 +129,10 @@ TEST_CASE("OCP - Differential drive", "[OCP]") {
     double time = 0.0;
     for (int k = 0; k < N + 1; ++k) {
       if (k < N) {
-        inputs << std::format("{},{},{}\n", time, problem.U().value(0, k),
+        inputs << fmt::format("{},{},{}\n", time, problem.U().value(0, k),
                               problem.U().value(1, k));
       } else {
-        inputs << std::format("{},{},{}\n", time, 0.0, 0.0);
+        inputs << fmt::format("{},{},{}\n", time, 0.0, 0.0);
       }
 
       time += problem.dt().value(0, k);

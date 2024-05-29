@@ -1,9 +1,8 @@
 // Copyright (c) Sleipnir contributors
 
-#include <format>
-
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <fmt/format.h>
 #include <sleipnir/autodiff/expression_type.hpp>
 #include <sleipnir/optimization/problem.hpp>
 #include <sleipnir/optimization/solver/exit_status.hpp>
@@ -61,11 +60,11 @@ TEST_CASE("Problem - Rosenbrock with cubic and line constraint", "[Problem]") {
       // Local minimum at (0.0, 0.0)
       // Global minimum at (1.0, 1.0)
       CHECK((Near(0.0, x.value(), 1e-2) || Near(1.0, x.value(), 1e-2)));
-      INFO(std::format("  (x₀, y₀) = ({}, {})", x0, y0));
-      INFO(std::format("  (x, y) = ({}, {})", x.value(), y.value()));
+      INFO(fmt::format("  (x₀, y₀) = ({}, {})", x0, y0));
+      INFO(fmt::format("  (x, y) = ({}, {})", x.value(), y.value()));
       CHECK((Near(0.0, y.value(), 1e-2) || Near(1.0, y.value(), 1e-2)));
-      INFO(std::format("  (x₀, y₀) = ({}, {})", x0, y0));
-      INFO(std::format("  (x, y) = ({}, {})", x.value(), y.value()));
+      INFO(fmt::format("  (x₀, y₀) = ({}, {})", x0, y0));
+      INFO(fmt::format("  (x, y) = ({}, {})", x.value(), y.value()));
     }
   }
 }
@@ -94,11 +93,11 @@ TEST_CASE("Problem - Rosenbrock with disk constraint", "[Problem]") {
       CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
 
       CHECK(x.value() == Catch::Approx(1.0).margin(1e-3));
-      INFO(std::format("  (x₀, y₀) = ({}, {})", x0, y0));
-      INFO(std::format("  (x, y) = ({}, {})", x.value(), y.value()));
+      INFO(fmt::format("  (x₀, y₀) = ({}, {})", x0, y0));
+      INFO(fmt::format("  (x, y) = ({}, {})", x.value(), y.value()));
       CHECK(y.value() == Catch::Approx(1.0).margin(1e-3));
-      INFO(std::format("  (x₀, y₀) = ({}, {})", x0, y0));
-      INFO(std::format("  (x, y) = ({}, {})", x.value(), y.value()));
+      INFO(fmt::format("  (x₀, y₀) = ({}, {})", x0, y0));
+      INFO(fmt::format("  (x, y) = ({}, {})", x.value(), y.value()));
     }
   }
 }

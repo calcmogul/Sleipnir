@@ -2,13 +2,13 @@
 
 #include <chrono>
 #include <cmath>
-#include <format>
 #include <fstream>
 #include <numbers>
 
 #include <Eigen/Core>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <fmt/format.h>
 #include <sleipnir/control/ocp.hpp>
 
 #include "cart_pole_util.hpp"
@@ -108,7 +108,7 @@ TEST_CASE("OCP - Cart-pole", "[OCP]") {
     CHECK(X.value(1, k) == Catch::Approx(x(1)).margin(1e-2));
     CHECK(X.value(2, k) == Catch::Approx(x(2)).margin(1e-2));
     CHECK(X.value(3, k) == Catch::Approx(x(3)).margin(1e-2));
-    INFO(std::format("  k = {}", k));
+    INFO(fmt::format("  k = {}", k));
 
     // Project state forward
     x = rk4(cart_pole_dynamics_double, x, u, dt);
@@ -127,7 +127,7 @@ TEST_CASE("OCP - Cart-pole", "[OCP]") {
               "Pole angular velocity (rad/s)\n";
 
     for (int k = 0; k < N + 1; ++k) {
-      states << std::format("{},{},{},{},{}\n", k * dt.count(), X.value(0, k),
+      states << fmt::format("{},{},{},{},{}\n", k * dt.count(), X.value(0, k),
                             X.value(1, k), X.value(2, k), X.value(3, k));
     }
   }
@@ -139,10 +139,10 @@ TEST_CASE("OCP - Cart-pole", "[OCP]") {
 
     for (int k = 0; k < N + 1; ++k) {
       if (k < N) {
-        inputs << std::format("{},{}\n", k * dt.count(),
+        inputs << fmt::format("{},{}\n", k * dt.count(),
                               problem.U().value(0, k));
       } else {
-        inputs << std::format("{},{}\n", k * dt.count(), 0.0);
+        inputs << fmt::format("{},{}\n", k * dt.count(), 0.0);
       }
     }
   }
