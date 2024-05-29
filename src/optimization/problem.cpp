@@ -335,7 +335,7 @@ void Problem::print_exit_conditions([[maybe_unused]] const Options& options) {
     slp::println("  ↳ executed {} iterations", options.max_iterations);
   }
   if (std::isfinite(options.timeout.count())) {
-    slp::println("  ↳ {} elapsed", options.timeout);
+    slp::println("  ↳ {} elapsed", options.timeout.count());
   }
 }
 
