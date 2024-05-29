@@ -2,12 +2,12 @@
 
 #include <chrono>
 #include <cmath>
-#include <format>
 #include <fstream>
 
 #include <Eigen/Core>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <fmt/format.h>
 #include <sleipnir/optimization/problem.hpp>
 
 #include "catch_string_converters.hpp"
@@ -103,7 +103,7 @@ TEST_CASE("Problem - Differential drive", "[Problem]") {
     CHECK(X.value(2, k) == Catch::Approx(x[2]).margin(1e-8));
     CHECK(X.value(3, k) == Catch::Approx(x[3]).margin(1e-8));
     CHECK(X.value(4, k) == Catch::Approx(x[4]).margin(1e-8));
-    INFO(std::format("  k = {}", k));
+    INFO(fmt::format("  k = {}", k));
 
     // Project state forward
     x = rk4(differential_drive_dynamics_double, x, u, dt);
@@ -123,7 +123,7 @@ TEST_CASE("Problem - Differential drive", "[Problem]") {
               "velocity (m/s),Right velocity (m/s)\n";
 
     for (int k = 0; k < N + 1; ++k) {
-      states << std::format("{},{},{},{},{},{}\n", k * dt.count(),
+      states << fmt::format("{},{},{},{},{},{}\n", k * dt.count(),
                             X.value(0, k), X.value(1, k), X.value(2, k),
                             X.value(3, k), X.value(4, k));
     }
@@ -136,10 +136,10 @@ TEST_CASE("Problem - Differential drive", "[Problem]") {
 
     for (int k = 0; k < N + 1; ++k) {
       if (k < N) {
-        inputs << std::format("{},{},{}\n", k * dt.count(), U.value(0, k),
+        inputs << fmt::format("{},{},{}\n", k * dt.count(), U.value(0, k),
                               U.value(1, k));
       } else {
-        inputs << std::format("{},{},{}\n", k * dt.count(), 0.0, 0.0);
+        inputs << fmt::format("{},{},{}\n", k * dt.count(), 0.0, 0.0);
       }
     }
   }
