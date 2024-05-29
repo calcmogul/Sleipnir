@@ -2,8 +2,8 @@
 
 #include <chrono>
 #include <cmath>
-#include <print>
 
+#include <fmt/base.h>
 #include <sleipnir/optimization/problem.hpp>
 
 #ifndef RUNNING_TESTS
@@ -44,9 +44,9 @@ int main() {
   problem.solve();
 
   // The first state
-  std::println("x₀ = {}", X.value(0, 0));
+  fmt::println("x₀ = {}", X.value(0, 0));
 
   // The first input
-  std::println("u₀ = {}", U.value(0, 0));
+  fmt::println("u₀ = {}", U.value(0, 0));
 }
 #endif

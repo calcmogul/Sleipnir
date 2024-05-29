@@ -89,8 +89,8 @@ set(FMT_INSTALL ON)
 FetchContent_Declare(
     fmt
     GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-    # master on 2025-11-05
-    GIT_TAG 11222685101e0947b86751df42f9b39933b18f30
+    # master on 2026-03-02
+    GIT_TAG 4e1b170b44cf1c3be924abe2b8158d1bfe69829c
     SYSTEM
 )
 FetchContent_MakeAvailable(fmt)
