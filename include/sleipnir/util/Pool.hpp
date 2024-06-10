@@ -24,13 +24,13 @@ class SLEIPNIR_DLLEXPORT PoolResource {
    *
    * @param blocksPerChunk Number of blocks per chunk of memory.
    */
-  explicit PoolResource(size_t blocksPerChunk)
+  constexpr explicit PoolResource(size_t blocksPerChunk)
       : blocksPerChunk{blocksPerChunk} {}
 
-  PoolResource(const PoolResource&) = delete;
-  PoolResource& operator=(const PoolResource&) = delete;
-  PoolResource(PoolResource&&) = default;
-  PoolResource& operator=(PoolResource&&) = default;
+  constexpr PoolResource(const PoolResource&) = delete;
+  constexpr PoolResource& operator=(const PoolResource&) = delete;
+  constexpr PoolResource(PoolResource&&) = default;
+  constexpr PoolResource& operator=(PoolResource&&) = default;
 
   /**
    * Returns a block of memory from the pool.
@@ -39,8 +39,8 @@ class SLEIPNIR_DLLEXPORT PoolResource {
    * @param alignment Alignment of the block (unused).
    */
   [[nodiscard]]
-  void* allocate(size_t bytes, [[maybe_unused]] size_t alignment =
-                                   alignof(std::max_align_t)) {
+  constexpr void* allocate(size_t bytes, [[maybe_unused]] size_t alignment =
+                                             alignof(std::max_align_t)) {
     if (m_freeList.empty()) {
       AddChunk(bytes);
     }
@@ -57,7 +57,7 @@ class SLEIPNIR_DLLEXPORT PoolResource {
    * @param bytes Number of bytes in the block (unused).
    * @param alignment Alignment of the block (unused).
    */
-  void deallocate(
+  constexpr void deallocate(
       void* p, [[maybe_unused]] size_t bytes,
       [[maybe_unused]] size_t alignment = alignof(std::max_align_t)) {
     m_freeList.emplace_back(p);
@@ -66,14 +66,14 @@ class SLEIPNIR_DLLEXPORT PoolResource {
   /**
    * Returns true if this pool resource has the same backing storage as another.
    */
-  bool is_equal(const PoolResource& other) const noexcept {
+  constexpr bool is_equal(const PoolResource& other) const noexcept {
     return this == &other;
   }
 
   /**
    * Returns the number of blocks from this pool resource that are in use.
    */
-  size_t blocks_in_use() const noexcept {
+  constexpr size_t blocks_in_use() const noexcept {
     return m_buffer.size() * blocksPerChunk - m_freeList.size();
   }
 
@@ -88,7 +88,7 @@ class SLEIPNIR_DLLEXPORT PoolResource {
    *
    * @param bytesPerBlock Number of bytes in the block.
    */
-  void AddChunk(size_t bytesPerBlock) {
+  constexpr void AddChunk(size_t bytesPerBlock) {
     m_buffer.emplace_back(new std::byte[bytesPerBlock * blocksPerChunk]);
     for (int i = blocksPerChunk - 1; i >= 0; --i) {
       m_freeList.emplace_back(m_buffer.back().get() + bytesPerBlock * i);
