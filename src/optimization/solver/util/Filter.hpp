@@ -55,7 +55,7 @@ class Filter {
    *
    * @param f The cost function.
    */
-  explicit Filter(Variable& f) {
+  constexpr explicit Filter(Variable& f) {
     m_f = &f;
 
     // Initial filter entry rejects constraint violations above max
@@ -66,7 +66,7 @@ class Filter {
   /**
    * Reset the filter.
    */
-  void Reset() {
+  constexpr void Reset() {
     m_filter.clear();
 
     // Initial filter entry rejects constraint violations above max
@@ -102,7 +102,7 @@ class Filter {
    *
    * @param entry The entry to add to the filter.
    */
-  void Add(const FilterEntry& entry) {
+  constexpr void Add(const FilterEntry& entry) {
     // Remove dominated entries
     erase_if(m_filter, [&](const auto& elem) {
       return entry.cost <= elem.cost &&
@@ -117,7 +117,7 @@ class Filter {
    *
    * @param entry The entry to add to the filter.
    */
-  void Add(FilterEntry&& entry) {
+  constexpr void Add(FilterEntry&& entry) {
     // Remove dominated entries
     erase_if(m_filter, [&](const auto& elem) {
       return entry.cost <= elem.cost &&
@@ -132,7 +132,7 @@ class Filter {
    *
    * @param entry The entry to attempt adding to the filter.
    */
-  bool TryAdd(const FilterEntry& entry) {
+  constexpr bool TryAdd(const FilterEntry& entry) {
     if (IsAcceptable(entry)) {
       Add(entry);
       return true;
@@ -146,7 +146,7 @@ class Filter {
    *
    * @param entry The entry to attempt adding to the filter.
    */
-  bool TryAdd(FilterEntry&& entry) {
+  constexpr bool TryAdd(FilterEntry&& entry) {
     if (IsAcceptable(entry)) {
       Add(std::move(entry));
       return true;
@@ -160,7 +160,7 @@ class Filter {
    *
    * @param entry The entry to check.
    */
-  bool IsAcceptable(const FilterEntry& entry) {
+  constexpr bool IsAcceptable(const FilterEntry& entry) {
     if (!std::isfinite(entry.cost) ||
         !std::isfinite(entry.constraintViolation)) {
       return false;

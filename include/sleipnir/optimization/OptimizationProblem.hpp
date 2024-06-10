@@ -58,7 +58,7 @@ class SLEIPNIR_DLLEXPORT OptimizationProblem {
    * Create a decision variable in the optimization problem.
    */
   [[nodiscard]]
-  Variable DecisionVariable() {
+  constexpr Variable DecisionVariable() {
     m_decisionVariables.emplace_back();
     return m_decisionVariables.back();
   }
@@ -70,7 +70,7 @@ class SLEIPNIR_DLLEXPORT OptimizationProblem {
    * @param cols Number of matrix columns.
    */
   [[nodiscard]]
-  VariableMatrix DecisionVariable(int rows, int cols = 1) {
+  constexpr VariableMatrix DecisionVariable(int rows, int cols = 1) {
     m_decisionVariables.reserve(m_decisionVariables.size() + rows * cols);
 
     VariableMatrix vars{rows, cols};
@@ -95,7 +95,7 @@ class SLEIPNIR_DLLEXPORT OptimizationProblem {
    * @param rows Number of matrix rows.
    */
   [[nodiscard]]
-  VariableMatrix SymmetricDecisionVariable(int rows) {
+  constexpr VariableMatrix SymmetricDecisionVariable(int rows) {
     // We only need to store the lower triangle of an n x n symmetric matrix;
     // the other elements are duplicates. The lower triangle has (n² + n)/2
     // elements.
@@ -128,7 +128,7 @@ class SLEIPNIR_DLLEXPORT OptimizationProblem {
    *
    * @param cost The cost function to minimize.
    */
-  void Minimize(const Variable& cost) {
+  constexpr void Minimize(const Variable& cost) {
     m_f = cost;
     status.costFunctionType = m_f.value().Type();
   }
@@ -142,7 +142,7 @@ class SLEIPNIR_DLLEXPORT OptimizationProblem {
    *
    * @param cost The cost function to minimize.
    */
-  void Minimize(Variable&& cost) {
+  constexpr void Minimize(Variable&& cost) {
     m_f = std::move(cost);
     status.costFunctionType = m_f.value().Type();
   }
@@ -156,7 +156,7 @@ class SLEIPNIR_DLLEXPORT OptimizationProblem {
    *
    * @param objective The objective function to maximize.
    */
-  void Maximize(const Variable& objective) {
+  constexpr void Maximize(const Variable& objective) {
     // Maximizing a cost function is the same as minimizing its negative
     m_f = -objective;
     status.costFunctionType = m_f.value().Type();
@@ -171,7 +171,7 @@ class SLEIPNIR_DLLEXPORT OptimizationProblem {
    *
    * @param objective The objective function to maximize.
    */
-  void Maximize(Variable&& objective) {
+  constexpr void Maximize(Variable&& objective) {
     // Maximizing a cost function is the same as minimizing its negative
     m_f = -std::move(objective);
     status.costFunctionType = m_f.value().Type();
@@ -183,7 +183,7 @@ class SLEIPNIR_DLLEXPORT OptimizationProblem {
    *
    * @param constraint The constraint to satisfy.
    */
-  void SubjectTo(const EqualityConstraints& constraint) {
+  constexpr void SubjectTo(const EqualityConstraints& constraint) {
     // Get the highest order equality constraint expression type
     for (const auto& c : constraint.constraints) {
       status.equalityConstraintType =
@@ -202,7 +202,7 @@ class SLEIPNIR_DLLEXPORT OptimizationProblem {
    *
    * @param constraint The constraint to satisfy.
    */
-  void SubjectTo(EqualityConstraints&& constraint) {
+  constexpr void SubjectTo(EqualityConstraints&& constraint) {
     // Get the highest order equality constraint expression type
     for (const auto& c : constraint.constraints) {
       status.equalityConstraintType =
@@ -221,7 +221,7 @@ class SLEIPNIR_DLLEXPORT OptimizationProblem {
    *
    * @param constraint The constraint to satisfy.
    */
-  void SubjectTo(const InequalityConstraints& constraint) {
+  constexpr void SubjectTo(const InequalityConstraints& constraint) {
     // Get the highest order inequality constraint expression type
     for (const auto& c : constraint.constraints) {
       status.inequalityConstraintType =
@@ -240,7 +240,7 @@ class SLEIPNIR_DLLEXPORT OptimizationProblem {
    *
    * @param constraint The constraint to satisfy.
    */
-  void SubjectTo(InequalityConstraints&& constraint) {
+  constexpr void SubjectTo(InequalityConstraints&& constraint) {
     // Get the highest order inequality constraint expression type
     for (const auto& c : constraint.constraints) {
       status.inequalityConstraintType =
@@ -337,7 +337,7 @@ class SLEIPNIR_DLLEXPORT OptimizationProblem {
     requires requires(F callback, const SolverIterationInfo& info) {
       { callback(info) } -> std::same_as<void>;
     }
-  void Callback(F&& callback) {
+  constexpr void Callback(F&& callback) {
     m_callback = [=, callback = std::forward<F>(callback)](
                      const SolverIterationInfo& info) {
       callback(info);
@@ -357,7 +357,7 @@ class SLEIPNIR_DLLEXPORT OptimizationProblem {
     requires requires(F callback, const SolverIterationInfo& info) {
       { callback(info) } -> std::same_as<bool>;
     }
-  void Callback(F&& callback) {
+  constexpr void Callback(F&& callback) {
     m_callback = std::forward<F>(callback);
   }
 
