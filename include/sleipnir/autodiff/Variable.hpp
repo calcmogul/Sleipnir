@@ -23,42 +23,45 @@ class SLEIPNIR_DLLEXPORT Variable {
   /**
    * Constructs a linear Variable with a value of zero.
    */
-  Variable() = default;
+  constexpr Variable() = default;
 
   /**
    * Constructs a Variable from a double.
    *
    * @param value The value of the Variable.
    */
-  Variable(double value) : expr{detail::MakeExpressionPtr(value)} {}  // NOLINT
+  constexpr Variable(double value)  // NOLINT
+      : expr{detail::MakeExpressionPtr(value)} {}
 
   /**
    * Constructs a Variable from an int.
    *
    * @param value The value of the Variable.
    */
-  Variable(int value) : expr{detail::MakeExpressionPtr(value)} {}  // NOLINT
+  constexpr Variable(int value)  // NOLINT
+      : expr{detail::MakeExpressionPtr(value)} {}
 
   /**
    * Constructs a Variable pointing to the specified expression.
    *
    * @param expr The autodiff variable.
    */
-  explicit Variable(const detail::ExpressionPtr& expr) : expr{expr} {}
+  constexpr explicit Variable(const detail::ExpressionPtr& expr) : expr{expr} {}
 
   /**
    * Constructs a Variable pointing to the specified expression.
    *
    * @param expr The autodiff variable.
    */
-  explicit Variable(detail::ExpressionPtr&& expr) : expr{std::move(expr)} {}
+  constexpr explicit Variable(detail::ExpressionPtr&& expr)
+      : expr{std::move(expr)} {}
 
   /**
    * Assignment operator for double.
    *
    * @param value The value of the Variable.
    */
-  Variable& operator=(double value) {
+  constexpr Variable& operator=(double value) {
     expr = detail::MakeExpressionPtr(value);
 
     return *this;
@@ -69,7 +72,7 @@ class SLEIPNIR_DLLEXPORT Variable {
    *
    * @param value The value of the Variable.
    */
-  Variable& operator=(int value) {
+  constexpr Variable& operator=(int value) {
     expr = detail::MakeExpressionPtr(value);
 
     return *this;
@@ -80,7 +83,7 @@ class SLEIPNIR_DLLEXPORT Variable {
    *
    * @param value The value of the Variable.
    */
-  Variable& SetValue(double value) {
+  constexpr Variable& SetValue(double value) {
     if (expr->IsConstant(0.0)) {
       expr = detail::MakeExpressionPtr(value);
     } else {
@@ -102,7 +105,7 @@ class SLEIPNIR_DLLEXPORT Variable {
    *
    * @param value The value of the Variable.
    */
-  Variable& SetValue(int value) {
+  constexpr Variable& SetValue(int value) {
     if (expr->IsConstant(0.0)) {
       expr = detail::MakeExpressionPtr(value);
     } else {
@@ -224,7 +227,7 @@ class SLEIPNIR_DLLEXPORT Variable {
   /**
    * Returns the value of this variable.
    */
-  double Value() {
+  constexpr double Value() {
     // Updates the value of this variable based on the values of its dependent
     // variables
     detail::ExpressionGraph{expr}.Update();
@@ -236,7 +239,7 @@ class SLEIPNIR_DLLEXPORT Variable {
    * Returns the type of this expression (constant, linear, quadratic, or
    * nonlinear).
    */
-  ExpressionType Type() const { return expr->type; }
+  constexpr ExpressionType Type() const { return expr->type; }
 
  private:
   /// The expression node.

@@ -32,7 +32,7 @@ struct FilterEntry {
    * @param cost The cost function's value.
    * @param constraintViolation The constraint violation.
    */
-  FilterEntry(double cost, double constraintViolation)
+  constexpr FilterEntry(double cost, double constraintViolation)
       : cost{cost}, constraintViolation{constraintViolation} {}
 
   /**
@@ -66,7 +66,7 @@ class Filter {
    * @param f The cost function.
    * @param μ The barrier parameter.
    */
-  explicit Filter(Variable& f, double μ) {
+  constexpr explicit Filter(Variable& f, double μ) {
     m_f = &f;
     m_μ = μ;
 
@@ -80,7 +80,7 @@ class Filter {
    *
    * @param μ The new barrier parameter.
    */
-  void Reset(double μ) {
+  constexpr void Reset(double μ) {
     m_μ = μ;
     m_filter.clear();
 
@@ -106,7 +106,7 @@ class Filter {
    *
    * @param entry The entry to add to the filter.
    */
-  void Add(const FilterEntry& entry) {
+  constexpr void Add(const FilterEntry& entry) {
     // Remove dominated entries
     erase_if(m_filter, [&](const auto& elem) {
       return entry.cost <= elem.cost &&
@@ -121,7 +121,7 @@ class Filter {
    *
    * @param entry The entry to add to the filter.
    */
-  void Add(FilterEntry&& entry) {
+  constexpr void Add(FilterEntry&& entry) {
     // Remove dominated entries
     erase_if(m_filter, [&](const auto& elem) {
       return entry.cost <= elem.cost &&
@@ -136,7 +136,7 @@ class Filter {
    *
    * @param entry The entry to attempt adding to the filter.
    */
-  bool TryAdd(const FilterEntry& entry) {
+  constexpr bool TryAdd(const FilterEntry& entry) {
     if (IsAcceptable(entry)) {
       Add(entry);
       return true;
@@ -150,7 +150,7 @@ class Filter {
    *
    * @param entry The entry to attempt adding to the filter.
    */
-  bool TryAdd(FilterEntry&& entry) {
+  constexpr bool TryAdd(FilterEntry&& entry) {
     if (IsAcceptable(entry)) {
       Add(std::move(entry));
       return true;
@@ -164,7 +164,7 @@ class Filter {
    *
    * @param entry The entry to check.
    */
-  bool IsAcceptable(const FilterEntry& entry) {
+  constexpr bool IsAcceptable(const FilterEntry& entry) {
     if (!std::isfinite(entry.cost) ||
         !std::isfinite(entry.constraintViolation)) {
       return false;

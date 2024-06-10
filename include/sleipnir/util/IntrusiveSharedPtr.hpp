@@ -206,7 +206,8 @@ IntrusiveSharedPtr<T> MakeIntrusiveShared(Args&&... args) {
  * @param args Constructor arguments for T.
  */
 template <typename T, typename Alloc, typename... Args>
-IntrusiveSharedPtr<T> AllocateIntrusiveShared(Alloc alloc, Args&&... args) {
+constexpr IntrusiveSharedPtr<T> AllocateIntrusiveShared(Alloc alloc,
+                                                        Args&&... args) {
   auto ptr = std::allocator_traits<Alloc>::allocate(alloc, sizeof(T));
   std::allocator_traits<Alloc>::construct(alloc, ptr,
                                           std::forward<Args>(args)...);

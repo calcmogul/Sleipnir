@@ -21,6 +21,8 @@ namespace sleipnir::detail {
 
 struct SLEIPNIR_DLLEXPORT Expression;
 
+inline PoolResource constPool{16384};
+
 inline constexpr void IntrusiveSharedPtrIncRefCount(Expression* expr);
 inline constexpr void IntrusiveSharedPtrDecRefCount(Expression* expr);
 
@@ -36,9 +38,14 @@ using ExpressionPtr = IntrusiveSharedPtr<Expression>;
  * @param args Constructor arguments for Expression.
  */
 template <typename... Args>
-static ExpressionPtr MakeExpressionPtr(Args&&... args) {
-  return AllocateIntrusiveShared<Expression>(GlobalPoolAllocator<Expression>(),
-                                             std::forward<Args>(args)...);
+static constexpr ExpressionPtr MakeExpressionPtr(Args&&... args) {
+  if consteval {
+    return AllocateIntrusiveShared<Expression>(
+        PoolAllocator<Expression>{&constPool}, std::forward<Args>(args)...);
+  } else {
+    return AllocateIntrusiveShared<Expression>(
+        GlobalPoolAllocator<Expression>(), std::forward<Args>(args)...);
+  }
 }
 
 /**

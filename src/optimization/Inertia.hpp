@@ -52,7 +52,7 @@ class Inertia {
     }
   }
 
-  bool operator==(const Inertia&) const = default;
+  constexpr bool operator==(const Inertia&) const = default;
 };
 
 }  // namespace sleipnir

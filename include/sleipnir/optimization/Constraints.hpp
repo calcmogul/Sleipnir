@@ -32,7 +32,7 @@ template <typename LHS, typename RHS>
           (ScalarLike<std::decay_t<RHS>> || MatrixLike<std::decay_t<RHS>>) &&
           (!std::same_as<std::decay_t<LHS>, double> ||
            !std::same_as<std::decay_t<RHS>, double>)
-small_vector<Variable> MakeConstraints(LHS&& lhs, RHS&& rhs) {
+constexpr small_vector<Variable> MakeConstraints(LHS&& lhs, RHS&& rhs) {
   small_vector<Variable> constraints;
 
   if constexpr (ScalarLike<std::decay_t<LHS>> &&
@@ -165,13 +165,13 @@ struct SLEIPNIR_DLLEXPORT EqualityConstraints {
             (ScalarLike<std::decay_t<RHS>> || MatrixLike<std::decay_t<RHS>>) &&
             (!std::same_as<std::decay_t<LHS>, double> ||
              !std::same_as<std::decay_t<RHS>, double>)
-  EqualityConstraints(LHS&& lhs, RHS&& rhs)
+  constexpr EqualityConstraints(LHS&& lhs, RHS&& rhs)
       : constraints{MakeConstraints(lhs, rhs)} {}
 
   /**
    * Implicit conversion operator to bool.
    */
-  operator bool() {  // NOLINT
+  constexpr operator bool() {  // NOLINT
     return std::all_of(
         constraints.begin(), constraints.end(),
         [](auto& constraint) { return constraint.Value() == 0.0; });
@@ -229,13 +229,13 @@ struct SLEIPNIR_DLLEXPORT InequalityConstraints {
             (ScalarLike<std::decay_t<RHS>> || MatrixLike<std::decay_t<RHS>>) &&
             (!std::same_as<std::decay_t<LHS>, double> ||
              !std::same_as<std::decay_t<RHS>, double>)
-  InequalityConstraints(LHS&& lhs, RHS&& rhs)
+  constexpr InequalityConstraints(LHS&& lhs, RHS&& rhs)
       : constraints{MakeConstraints(lhs, rhs)} {}
 
   /**
    * Implicit conversion operator to bool.
    */
-  operator bool() {  // NOLINT
+  constexpr operator bool() {  // NOLINT
     return std::all_of(
         constraints.begin(), constraints.end(),
         [](auto& constraint) { return constraint.Value() >= 0.0; });
@@ -253,7 +253,7 @@ template <typename LHS, typename RHS>
           (ScalarLike<std::decay_t<RHS>> || MatrixLike<std::decay_t<RHS>>) &&
           (!std::same_as<std::decay_t<LHS>, double> ||
            !std::same_as<std::decay_t<RHS>, double>)
-EqualityConstraints operator==(LHS&& lhs, RHS&& rhs) {
+constexpr EqualityConstraints operator==(LHS&& lhs, RHS&& rhs) {
   return EqualityConstraints{lhs, rhs};
 }
 
@@ -269,7 +269,7 @@ template <typename LHS, typename RHS>
           (ScalarLike<std::decay_t<RHS>> || MatrixLike<std::decay_t<RHS>>) &&
           (!std::same_as<std::decay_t<LHS>, double> ||
            !std::same_as<std::decay_t<RHS>, double>)
-InequalityConstraints operator<(LHS&& lhs, RHS&& rhs) {
+constexpr InequalityConstraints operator<(LHS&& lhs, RHS&& rhs) {
   return rhs >= lhs;
 }
 
@@ -285,7 +285,7 @@ template <typename LHS, typename RHS>
           (ScalarLike<std::decay_t<RHS>> || MatrixLike<std::decay_t<RHS>>) &&
           (!std::same_as<std::decay_t<LHS>, double> ||
            !std::same_as<std::decay_t<RHS>, double>)
-InequalityConstraints operator<=(LHS&& lhs, RHS&& rhs) {
+constexpr InequalityConstraints operator<=(LHS&& lhs, RHS&& rhs) {
   return rhs >= lhs;
 }
 
@@ -301,7 +301,7 @@ template <typename LHS, typename RHS>
           (ScalarLike<std::decay_t<RHS>> || MatrixLike<std::decay_t<RHS>>) &&
           (!std::same_as<std::decay_t<LHS>, double> ||
            !std::same_as<std::decay_t<RHS>, double>)
-InequalityConstraints operator>(LHS&& lhs, RHS&& rhs) {
+constexpr InequalityConstraints operator>(LHS&& lhs, RHS&& rhs) {
   return lhs >= rhs;
 }
 
@@ -317,7 +317,7 @@ template <typename LHS, typename RHS>
           (ScalarLike<std::decay_t<RHS>> || MatrixLike<std::decay_t<RHS>>) &&
           (!std::same_as<std::decay_t<LHS>, double> ||
            !std::same_as<std::decay_t<RHS>, double>)
-InequalityConstraints operator>=(LHS&& lhs, RHS&& rhs) {
+constexpr InequalityConstraints operator>=(LHS&& lhs, RHS&& rhs) {
   return InequalityConstraints{lhs, rhs};
 }
 
