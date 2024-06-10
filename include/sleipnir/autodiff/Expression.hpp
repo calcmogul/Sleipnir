@@ -9,6 +9,7 @@
 #include <cmath>
 #include <memory>
 #include <numbers>
+#include <type_traits>
 #include <utility>
 
 #include "sleipnir/autodiff/ExpressionType.hpp"
@@ -29,6 +30,8 @@ inline constexpr bool kUsePoolAllocator = true;
 
 struct SLEIPNIR_DLLEXPORT Expression;
 
+inline PoolResource constPool{16384};
+
 inline constexpr void IntrusiveSharedPtrIncRefCount(Expression* expr);
 inline constexpr void IntrusiveSharedPtrDecRefCount(Expression* expr);
 
@@ -44,8 +47,8 @@ using ExpressionPtr = IntrusiveSharedPtr<Expression>;
  * @param args Constructor arguments for Expression.
  */
 template <typename... Args>
-static ExpressionPtr MakeExpressionPtr(Args&&... args) {
-  if constexpr (kUsePoolAllocator) {
+static constexpr ExpressionPtr MakeExpressionPtr(Args&&... args) {
+  if constexpr (kUsePoolAllocator && !std::is_constant_evaluated()) {
     return AllocateIntrusiveShared<Expression>(
         GlobalPoolAllocator<Expression>(), std::forward<Args>(args)...);
   } else {

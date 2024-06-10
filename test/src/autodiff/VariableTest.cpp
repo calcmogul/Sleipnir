@@ -6,7 +6,7 @@
 #include "CatchStringConverters.hpp"
 
 TEST_CASE("Variable - Default constructor", "[Variable]") {
-  sleipnir::Variable a;
+  constexpr sleipnir::Variable a;
 
   CHECK(a.Value() == 0.0);
   CHECK(a.Type() == sleipnir::ExpressionType::kLinear);
