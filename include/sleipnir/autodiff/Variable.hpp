@@ -33,35 +33,37 @@ class SLEIPNIR_DLLEXPORT Variable {
   /**
    * Constructs a linear Variable with a value of zero.
    */
-  Variable() = default;
+  constexpr Variable() = default;
 
   /**
    * Constructs a Variable from a double.
    *
    * @param value The value of the Variable.
    */
-  Variable(double value) : expr{detail::MakeExpressionPtr(value)} {}  // NOLINT
+  constexpr Variable(double value)  // NOLINT
+      : expr{detail::MakeExpressionPtr(value)} {}
 
   /**
    * Constructs a Variable pointing to the specified expression.
    *
    * @param expr The autodiff variable.
    */
-  explicit Variable(const detail::ExpressionPtr& expr) : expr{expr} {}
+  constexpr explicit Variable(const detail::ExpressionPtr& expr) : expr{expr} {}
 
   /**
    * Constructs a Variable pointing to the specified expression.
    *
    * @param expr The autodiff variable.
    */
-  explicit Variable(detail::ExpressionPtr&& expr) : expr{std::move(expr)} {}
+  constexpr explicit Variable(detail::ExpressionPtr&& expr)
+      : expr{std::move(expr)} {}
 
   /**
    * Assignment operator for double.
    *
    * @param value The value of the Variable.
    */
-  Variable& operator=(double value) {
+  constexpr Variable& operator=(double value) {
     expr = detail::MakeExpressionPtr(value);
 
     return *this;
@@ -72,7 +74,7 @@ class SLEIPNIR_DLLEXPORT Variable {
    *
    * @param value The value of the Variable.
    */
-  void SetValue(double value) {
+  constexpr void SetValue(double value) {
     if (expr->IsConstant(0.0)) {
       expr = detail::MakeExpressionPtr(value);
     } else {
@@ -193,7 +195,7 @@ class SLEIPNIR_DLLEXPORT Variable {
   /**
    * Returns the value of this variable.
    */
-  double Value() {
+  constexpr double Value() {
     // Updates the value of this variable based on the values of its dependent
     // variables
     detail::ExpressionGraph{expr}.Update();
@@ -205,7 +207,7 @@ class SLEIPNIR_DLLEXPORT Variable {
    * Returns the type of this expression (constant, linear, quadratic, or
    * nonlinear).
    */
-  ExpressionType Type() const { return expr->type; }
+  constexpr ExpressionType Type() const { return expr->type; }
 
  private:
   /// The expression node.
@@ -445,7 +447,7 @@ template <typename LHS, typename RHS>
           (ScalarLike<std::decay_t<RHS>> || MatrixLike<std::decay_t<RHS>>) &&
           (!std::same_as<std::decay_t<LHS>, double> ||
            !std::same_as<std::decay_t<RHS>, double>)
-small_vector<Variable> MakeConstraints(LHS&& lhs, RHS&& rhs) {
+constexpr small_vector<Variable> MakeConstraints(LHS&& lhs, RHS&& rhs) {
   small_vector<Variable> constraints;
 
   if constexpr (ScalarLike<std::decay_t<LHS>> &&
@@ -541,7 +543,7 @@ struct SLEIPNIR_DLLEXPORT EqualityConstraints {
    *
    * @param equalityConstraints The list of EqualityConstraints to concatenate.
    */
-  EqualityConstraints(
+  constexpr EqualityConstraints(
       std::initializer_list<EqualityConstraints> equalityConstraints) {
     for (const auto& elem : equalityConstraints) {
       constraints.insert(constraints.end(), elem.constraints.begin(),
@@ -556,7 +558,7 @@ struct SLEIPNIR_DLLEXPORT EqualityConstraints {
    *
    * @param equalityConstraints The list of EqualityConstraints to concatenate.
    */
-  explicit EqualityConstraints(
+  explicit constexpr EqualityConstraints(
       const std::vector<EqualityConstraints>& equalityConstraints) {
     for (const auto& elem : equalityConstraints) {
       constraints.insert(constraints.end(), elem.constraints.begin(),
@@ -578,13 +580,13 @@ struct SLEIPNIR_DLLEXPORT EqualityConstraints {
             (ScalarLike<std::decay_t<RHS>> || MatrixLike<std::decay_t<RHS>>) &&
             (!std::same_as<std::decay_t<LHS>, double> ||
              !std::same_as<std::decay_t<RHS>, double>)
-  EqualityConstraints(LHS&& lhs, RHS&& rhs)
+  constexpr EqualityConstraints(LHS&& lhs, RHS&& rhs)
       : constraints{MakeConstraints(lhs, rhs)} {}
 
   /**
    * Implicit conversion operator to bool.
    */
-  operator bool() {  // NOLINT
+  constexpr operator bool() {  // NOLINT
     return std::all_of(
         constraints.begin(), constraints.end(),
         [](auto& constraint) { return constraint.Value() == 0.0; });
@@ -604,7 +606,7 @@ struct SLEIPNIR_DLLEXPORT InequalityConstraints {
    * @param inequalityConstraints The list of InequalityConstraints to
    * concatenate.
    */
-  InequalityConstraints(
+  constexpr InequalityConstraints(
       std::initializer_list<InequalityConstraints> inequalityConstraints) {
     for (const auto& elem : inequalityConstraints) {
       constraints.insert(constraints.end(), elem.constraints.begin(),
@@ -620,7 +622,7 @@ struct SLEIPNIR_DLLEXPORT InequalityConstraints {
    * @param inequalityConstraints The list of InequalityConstraints to
    * concatenate.
    */
-  explicit InequalityConstraints(
+  explicit constexpr InequalityConstraints(
       const std::vector<InequalityConstraints>& inequalityConstraints) {
     for (const auto& elem : inequalityConstraints) {
       constraints.insert(constraints.end(), elem.constraints.begin(),
@@ -642,13 +644,13 @@ struct SLEIPNIR_DLLEXPORT InequalityConstraints {
             (ScalarLike<std::decay_t<RHS>> || MatrixLike<std::decay_t<RHS>>) &&
             (!std::same_as<std::decay_t<LHS>, double> ||
              !std::same_as<std::decay_t<RHS>, double>)
-  InequalityConstraints(LHS&& lhs, RHS&& rhs)
+  constexpr InequalityConstraints(LHS&& lhs, RHS&& rhs)
       : constraints{MakeConstraints(lhs, rhs)} {}
 
   /**
    * Implicit conversion operator to bool.
    */
-  operator bool() {  // NOLINT
+  constexpr operator bool() {  // NOLINT
     return std::all_of(
         constraints.begin(), constraints.end(),
         [](auto& constraint) { return constraint.Value() >= 0.0; });
@@ -666,7 +668,7 @@ template <typename LHS, typename RHS>
           (ScalarLike<std::decay_t<RHS>> || MatrixLike<std::decay_t<RHS>>) &&
           (!std::same_as<std::decay_t<LHS>, double> ||
            !std::same_as<std::decay_t<RHS>, double>)
-EqualityConstraints operator==(LHS&& lhs, RHS&& rhs) {
+constexpr EqualityConstraints operator==(LHS&& lhs, RHS&& rhs) {
   return EqualityConstraints{lhs, rhs};
 }
 
@@ -682,7 +684,7 @@ template <typename LHS, typename RHS>
           (ScalarLike<std::decay_t<RHS>> || MatrixLike<std::decay_t<RHS>>) &&
           (!std::same_as<std::decay_t<LHS>, double> ||
            !std::same_as<std::decay_t<RHS>, double>)
-InequalityConstraints operator<(LHS&& lhs, RHS&& rhs) {
+constexpr InequalityConstraints operator<(LHS&& lhs, RHS&& rhs) {
   return rhs >= lhs;
 }
 
@@ -698,7 +700,7 @@ template <typename LHS, typename RHS>
           (ScalarLike<std::decay_t<RHS>> || MatrixLike<std::decay_t<RHS>>) &&
           (!std::same_as<std::decay_t<LHS>, double> ||
            !std::same_as<std::decay_t<RHS>, double>)
-InequalityConstraints operator<=(LHS&& lhs, RHS&& rhs) {
+constexpr InequalityConstraints operator<=(LHS&& lhs, RHS&& rhs) {
   return rhs >= lhs;
 }
 
@@ -714,7 +716,7 @@ template <typename LHS, typename RHS>
           (ScalarLike<std::decay_t<RHS>> || MatrixLike<std::decay_t<RHS>>) &&
           (!std::same_as<std::decay_t<LHS>, double> ||
            !std::same_as<std::decay_t<RHS>, double>)
-InequalityConstraints operator>(LHS&& lhs, RHS&& rhs) {
+constexpr InequalityConstraints operator>(LHS&& lhs, RHS&& rhs) {
   return lhs >= rhs;
 }
 
@@ -730,7 +732,7 @@ template <typename LHS, typename RHS>
           (ScalarLike<std::decay_t<RHS>> || MatrixLike<std::decay_t<RHS>>) &&
           (!std::same_as<std::decay_t<LHS>, double> ||
            !std::same_as<std::decay_t<RHS>, double>)
-InequalityConstraints operator>=(LHS&& lhs, RHS&& rhs) {
+constexpr InequalityConstraints operator>=(LHS&& lhs, RHS&& rhs) {
   return InequalityConstraints{lhs, rhs};
 }
 
