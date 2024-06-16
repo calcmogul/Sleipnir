@@ -1120,14 +1120,14 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
    *
    * @return Begin iterator.
    */
-  const_iterator cbegin() const { return const_iterator{m_storage.cbegin()}; }
+  const_iterator cbegin() const { return const_iterator{m_storage.begin()}; }
 
   /**
    * Returns end iterator.
    *
    * @return End iterator.
    */
-  const_iterator cend() const { return const_iterator{m_storage.cend()}; }
+  const_iterator cend() const { return const_iterator{m_storage.end()}; }
 
   /**
    * Returns number of elements in matrix.
