@@ -4,8 +4,9 @@
 
 #include <ranges>
 
+#include <wpi/SmallVector.h>
+
 #include "sleipnir/autodiff/Expression.hpp"
-#include "sleipnir/util/small_vector.hpp"
 
 namespace sleipnir::detail {
 
@@ -16,8 +17,9 @@ namespace sleipnir::detail {
  *
  * @param root The root node of the expression.
  */
-inline small_vector<Expression*> TopologicalSort(const ExpressionPtr& root) {
-  small_vector<Expression*> list;
+inline wpi::SmallVector<Expression*> TopologicalSort(
+    const ExpressionPtr& root) {
+  wpi::SmallVector<Expression*> list;
 
   // If the root type is a constant, Update() is a no-op, so there's no work
   // to do
@@ -26,7 +28,7 @@ inline small_vector<Expression*> TopologicalSort(const ExpressionPtr& root) {
   }
 
   // Stack of nodes to explore
-  small_vector<Expression*> stack;
+  wpi::SmallVector<Expression*> stack;
 
   // Enumerate incoming edges for each node via depth-first search
   stack.emplace_back(root.Get());
@@ -73,7 +75,7 @@ inline small_vector<Expression*> TopologicalSort(const ExpressionPtr& root) {
  *
  * @param list Topological sort of graph from parent to child.
  */
-inline void UpdateValues(const small_vector<Expression*>& list) {
+inline void UpdateValues(const wpi::SmallVector<Expression*>& list) {
   // Traverse graph from child to parent and update values
   for (auto& node : list | std::views::reverse) {
     auto& lhs = node->args[0];
@@ -94,7 +96,7 @@ inline void UpdateValues(const small_vector<Expression*>& list) {
  *
  * @param list Topological sort of graph from parent to child.
  */
-inline void UpdateAdjoints(const small_vector<Expression*>& list) {
+inline void UpdateAdjoints(const wpi::SmallVector<Expression*>& list) {
   // Read docs/algorithms.md#Reverse_accumulation_automatic_differentiation
   // for background on reverse accumulation automatic differentiation.
 

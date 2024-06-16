@@ -10,6 +10,7 @@
 #include <string_view>
 
 #include <Eigen/SparseCore>
+#include <wpi/SmallVector.h>
 
 #include "sleipnir/util/SymbolExports.hpp"
 

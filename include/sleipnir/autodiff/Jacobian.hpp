@@ -5,6 +5,7 @@
 #include <utility>
 
 #include <Eigen/SparseCore>
+#include <wpi/SmallVector.h>
 
 #include "sleipnir/autodiff/AdjointExpressionGraph.hpp"
 #include "sleipnir/autodiff/Variable.hpp"
@@ -12,7 +13,6 @@
 #include "sleipnir/util/ScopedProfiler.hpp"
 #include "sleipnir/util/SolveProfiler.hpp"
 #include "sleipnir/util/SymbolExports.hpp"
-#include "sleipnir/util/small_vector.hpp"
 
 namespace sleipnir {
 
@@ -144,7 +144,7 @@ class SLEIPNIR_DLLEXPORT Jacobian {
   /**
    * Returns the profilers.
    */
-  const small_vector<SolveProfiler>& GetProfilers() const {
+  const wpi::SmallVector<SolveProfiler>& GetProfilers() const {
     return m_profilers;
   }
 
@@ -152,18 +152,18 @@ class SLEIPNIR_DLLEXPORT Jacobian {
   VariableMatrix m_variables;
   VariableMatrix m_wrt;
 
-  small_vector<detail::AdjointExpressionGraph> m_graphs;
+  wpi::SmallVector<detail::AdjointExpressionGraph> m_graphs;
 
   Eigen::SparseMatrix<double> m_J{m_variables.Rows(), m_wrt.Rows()};
 
   // Cached triplets for gradients of linear rows
-  small_vector<Eigen::Triplet<double>> m_cachedTriplets;
+  wpi::SmallVector<Eigen::Triplet<double>> m_cachedTriplets;
 
   // List of row indices for nonlinear rows whose graients will be computed in
   // Value()
-  small_vector<int> m_nonlinearRows;
+  wpi::SmallVector<int> m_nonlinearRows;
 
-  small_vector<SolveProfiler> m_profilers;
+  wpi::SmallVector<SolveProfiler> m_profilers;
 };
 
 }  // namespace sleipnir

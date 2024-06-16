@@ -10,6 +10,7 @@
 #include <utility>
 
 #include <Eigen/Core>
+#include <wpi/SmallVector.h>
 
 #include "sleipnir/autodiff/Variable.hpp"
 #include "sleipnir/autodiff/VariableMatrix.hpp"
@@ -21,7 +22,6 @@
 #include "sleipnir/optimization/solver/Newton.hpp"
 #include "sleipnir/optimization/solver/SQP.hpp"
 #include "sleipnir/util/SymbolExports.hpp"
-#include "sleipnir/util/small_vector.hpp"
 
 #ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
 #include <array>
@@ -378,19 +378,19 @@ class SLEIPNIR_DLLEXPORT OptimizationProblem {
  private:
   // The list of decision variables, which are the root of the problem's
   // expression tree
-  small_vector<Variable> m_decisionVariables;
+  wpi::SmallVector<Variable> m_decisionVariables;
 
   // The cost function: f(x)
   std::optional<Variable> m_f;
 
   // The list of equality constraints: cₑ(x) = 0
-  small_vector<Variable> m_equalityConstraints;
+  wpi::SmallVector<Variable> m_equalityConstraints;
 
   // The list of inequality constraints: cᵢ(x) ≥ 0
-  small_vector<Variable> m_inequalityConstraints;
+  wpi::SmallVector<Variable> m_inequalityConstraints;
 
   // The user callback
-  small_vector<std::function<bool(const SolverIterationInfo& info)>>
+  wpi::SmallVector<std::function<bool(const SolverIterationInfo& info)>>
       m_callbacks;
 
   // The solver status

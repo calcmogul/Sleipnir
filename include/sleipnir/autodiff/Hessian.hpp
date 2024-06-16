@@ -3,6 +3,7 @@
 #pragma once
 
 #include <Eigen/SparseCore>
+#include <wpi/SmallVector.h>
 
 #include "sleipnir/autodiff/AdjointExpressionGraph.hpp"
 #include "sleipnir/autodiff/Jacobian.hpp"
@@ -10,7 +11,6 @@
 #include "sleipnir/autodiff/VariableMatrix.hpp"
 #include "sleipnir/util/SolveProfiler.hpp"
 #include "sleipnir/util/SymbolExports.hpp"
-#include "sleipnir/util/small_vector.hpp"
 
 namespace sleipnir {
 
@@ -51,7 +51,7 @@ class SLEIPNIR_DLLEXPORT Hessian {
   /**
    * Returns the profilers.
    */
-  const small_vector<SolveProfiler>& GetProfilers() const {
+  const wpi::SmallVector<SolveProfiler>& GetProfilers() const {
     return m_jacobian.GetProfilers();
   }
 
