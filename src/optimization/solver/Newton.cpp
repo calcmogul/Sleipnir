@@ -40,7 +40,7 @@ void Newton(
     const SolverConfig& config, Eigen::VectorXd& x, SolverStatus* status) {
   const auto solveStartTime = std::chrono::steady_clock::now();
 
-  small_vector<SetupProfiler> setupProfilers;
+  wpi::SmallVector<SetupProfiler> setupProfilers;
   setupProfilers.emplace_back("setup").Start();
 
   // Map decision variables and constraints to VariableMatrices for Lagrangian
@@ -123,7 +123,7 @@ void Newton(
 
   setupProfilers[0].Stop();
 
-  small_vector<SolveProfiler> solveProfilers;
+  wpi::SmallVector<SolveProfiler> solveProfilers;
   solveProfilers.emplace_back("solve");
   solveProfilers.emplace_back("  ↳ feasibility ✓");
   solveProfilers.emplace_back("  ↳ user callbacks");

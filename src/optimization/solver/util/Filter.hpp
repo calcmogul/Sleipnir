@@ -8,9 +8,9 @@
 #include <utility>
 
 #include <Eigen/Core>
+#include <wpi/SmallVector.h>
 
 #include "sleipnir/autodiff/Variable.hpp"
-#include "sleipnir/util/small_vector.hpp"
 
 // See docs/algorithms.md#Works_cited for citation definitions.
 
@@ -189,7 +189,7 @@ class Filter {
   static constexpr double γConstraint = 1e-5;
 
   Variable* m_f = nullptr;
-  small_vector<FilterEntry> m_filter;
+  wpi::SmallVector<FilterEntry> m_filter;
 };
 
 }  // namespace sleipnir

@@ -11,6 +11,7 @@
 #include <ranges>
 
 #include <Eigen/SparseCholesky>
+#include <wpi/SmallVector.h>
 
 #include "optimization/RegularizedLDLT.hpp"
 #include "optimization/solver/util/ErrorEstimate.hpp"
@@ -24,7 +25,6 @@
 #include "sleipnir/util/ScopedProfiler.hpp"
 #include "sleipnir/util/SetupProfiler.hpp"
 #include "sleipnir/util/SolveProfiler.hpp"
-#include "sleipnir/util/small_vector.hpp"
 #include "util/ScopeExit.hpp"
 
 #ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
@@ -44,7 +44,7 @@ void SQP(
     const SolverConfig& config, Eigen::VectorXd& x, SolverStatus* status) {
   const auto solveStartTime = std::chrono::steady_clock::now();
 
-  small_vector<SetupProfiler> setupProfilers;
+  wpi::SmallVector<SetupProfiler> setupProfilers;
   setupProfilers.emplace_back("setup").Start();
 
   setupProfilers.emplace_back("  ↳ y setup").Start();
@@ -167,7 +167,7 @@ void SQP(
   Filter filter{f};
 
   // Kept outside the loop so its storage can be reused
-  small_vector<Eigen::Triplet<double>> triplets;
+  wpi::SmallVector<Eigen::Triplet<double>> triplets;
 
   RegularizedLDLT solver;
 
@@ -183,7 +183,7 @@ void SQP(
 
   setupProfilers[0].Stop();
 
-  small_vector<SolveProfiler> solveProfilers;
+  wpi::SmallVector<SolveProfiler> solveProfilers;
   solveProfilers.emplace_back("solve");
   solveProfilers.emplace_back("  ↳ feasibility ✓");
   solveProfilers.emplace_back("  ↳ user callbacks");

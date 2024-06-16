@@ -6,11 +6,11 @@
 #include <utility>
 
 #include <Eigen/SparseCore>
+#include <wpi/SmallVector.h>
 
 #include "sleipnir/autodiff/ExpressionGraph.hpp"
 #include "sleipnir/autodiff/Variable.hpp"
 #include "sleipnir/autodiff/VariableMatrix.hpp"
-#include "sleipnir/util/small_vector.hpp"
 
 namespace sleipnir::detail {
 
@@ -101,7 +101,7 @@ class AdjointExpressionGraph {
    * @param wrt Vector of variables with respect to which to compute the
    *   Jacobian.
    */
-  void AppendAdjointTriplets(small_vector<Eigen::Triplet<double>>& triplets,
+  void AppendAdjointTriplets(wpi::SmallVector<Eigen::Triplet<double>>& triplets,
                              int row, const VariableMatrix& wrt) const {
     // Read docs/algorithms.md#Reverse_accumulation_automatic_differentiation
     // for background on reverse accumulation automatic differentiation.
@@ -165,10 +165,10 @@ class AdjointExpressionGraph {
 
  private:
   // Topological sort of graph from parent to child
-  small_vector<Expression*> m_topList;
+  wpi::SmallVector<Expression*> m_topList;
 
   // List that maps nodes to their respective column
-  small_vector<int> m_colList;
+  wpi::SmallVector<int> m_colList;
 };
 
 }  // namespace sleipnir::detail
