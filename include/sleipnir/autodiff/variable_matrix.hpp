@@ -1134,12 +1134,12 @@ class VariableMatrix : public SleipnirBase {
   /// Returns const begin iterator.
   ///
   /// @return Const begin iterator.
-  const_iterator cbegin() const { return const_iterator{m_storage.cbegin()}; }
+  const_iterator cbegin() const { return const_iterator{m_storage.begin()}; }
 
   /// Returns const end iterator.
   ///
   /// @return Const end iterator.
-  const_iterator cend() const { return const_iterator{m_storage.cend()}; }
+  const_iterator cend() const { return const_iterator{m_storage.end()}; }
 
   /// Returns reverse begin iterator.
   ///
