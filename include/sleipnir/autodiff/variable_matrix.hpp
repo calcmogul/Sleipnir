@@ -11,13 +11,13 @@
 #include <vector>
 
 #include <Eigen/Core>
+#include <wpi/SmallVector.h>
 
 #include "sleipnir/autodiff/slice.hpp"
 #include "sleipnir/autodiff/variable.hpp"
 #include "sleipnir/autodiff/variable_block.hpp"
 #include "sleipnir/util/assert.hpp"
 #include "sleipnir/util/function_ref.hpp"
-#include "sleipnir/util/small_vector.hpp"
 #include "sleipnir/util/symbol_exports.hpp"
 
 namespace sleipnir {
@@ -889,7 +889,8 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
 
     constexpr iterator() noexcept = default;
 
-    explicit constexpr iterator(small_vector<Variable>::iterator it) noexcept
+    explicit constexpr iterator(
+        wpi::SmallVector<Variable>::iterator it) noexcept
         : m_it{it} {}
 
     constexpr iterator& operator++() noexcept {
@@ -908,7 +909,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
     constexpr reference operator*() const noexcept { return *m_it; }
 
    private:
-    small_vector<Variable>::iterator m_it;
+    wpi::SmallVector<Variable>::iterator m_it;
   };
 
   class const_iterator {
@@ -922,7 +923,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
     constexpr const_iterator() noexcept = default;
 
     explicit constexpr const_iterator(
-        small_vector<Variable>::const_iterator it) noexcept
+        wpi::SmallVector<Variable>::const_iterator it) noexcept
         : m_it{it} {}
 
     constexpr const_iterator& operator++() noexcept {
@@ -941,7 +942,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
     constexpr const_reference operator*() const noexcept { return *m_it; }
 
    private:
-    small_vector<Variable>::const_iterator m_it;
+    wpi::SmallVector<Variable>::const_iterator m_it;
   };
 
 #endif  // DOXYGEN_SHOULD_SKIP_THIS
@@ -979,14 +980,14 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
    *
    * @return Begin iterator.
    */
-  const_iterator cbegin() const { return const_iterator{m_storage.cbegin()}; }
+  const_iterator cbegin() const { return const_iterator{m_storage.begin()}; }
 
   /**
    * Returns end iterator.
    *
    * @return End iterator.
    */
-  const_iterator cend() const { return const_iterator{m_storage.cend()}; }
+  const_iterator cend() const { return const_iterator{m_storage.end()}; }
 
   /**
    * Returns number of elements in matrix.
@@ -1030,7 +1031,7 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
   }
 
  private:
-  small_vector<Variable> m_storage;
+  wpi::SmallVector<Variable> m_storage;
   int m_rows = 0;
   int m_cols = 0;
 };

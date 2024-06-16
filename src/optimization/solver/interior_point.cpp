@@ -11,6 +11,7 @@
 #include <ranges>
 
 #include <Eigen/SparseCholesky>
+#include <wpi/SmallVector.h>
 
 #include "optimization/regularized_ldlt.hpp"
 #include "optimization/solver/util/error_estimate.hpp"
@@ -24,7 +25,6 @@
 #include "sleipnir/optimization/solver_exit_condition.hpp"
 #include "sleipnir/util/scoped_profiler.hpp"
 #include "sleipnir/util/setup_profiler.hpp"
-#include "sleipnir/util/small_vector.hpp"
 #include "sleipnir/util/solve_profiler.hpp"
 #include "util/scope_exit.hpp"
 
@@ -67,7 +67,7 @@ void interior_point(
     const SolverConfig& config, Eigen::VectorXd& x, SolverStatus* status) {
   const auto solve_start_time = std::chrono::steady_clock::now();
 
-  small_vector<SetupProfiler> setup_profilers;
+  wpi::SmallVector<SetupProfiler> setup_profilers;
   setup_profilers.emplace_back("setup").start();
 
   setup_profilers.emplace_back("  ↳ s,y,z setup").start();
@@ -259,7 +259,7 @@ void interior_point(
   };
 
   // Kept outside the loop so its storage can be reused
-  small_vector<Eigen::Triplet<double>> triplets;
+  wpi::SmallVector<Eigen::Triplet<double>> triplets;
 
   RegularizedLDLT solver;
 
@@ -276,7 +276,7 @@ void interior_point(
 
   setup_profilers[0].stop();
 
-  small_vector<SolveProfiler> solve_profilers;
+  wpi::SmallVector<SolveProfiler> solve_profilers;
   solve_profilers.emplace_back("solve");
   solve_profilers.emplace_back("  ↳ feasibility ✓");
   solve_profilers.emplace_back("  ↳ user callbacks");

@@ -5,11 +5,11 @@
 #include <utility>
 
 #include <Eigen/SparseCore>
+#include <wpi/SmallVector.h>
 
 #include "sleipnir/autodiff/jacobian.hpp"
 #include "sleipnir/autodiff/variable.hpp"
 #include "sleipnir/autodiff/variable_matrix.hpp"
-#include "sleipnir/util/small_vector.hpp"
 #include "sleipnir/util/solve_profiler.hpp"
 #include "sleipnir/util/symbol_exports.hpp"
 
@@ -69,7 +69,7 @@ class SLEIPNIR_DLLEXPORT Gradient {
    *
    * @return The profiler.
    */
-  const small_vector<SolveProfiler>& get_profilers() const {
+  const wpi::SmallVector<SolveProfiler>& get_profilers() const {
     return m_jacobian.get_profilers();
   }
 

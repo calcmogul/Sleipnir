@@ -11,6 +11,7 @@
 #include <ranges>
 
 #include <Eigen/SparseCholesky>
+#include <wpi/SmallVector.h>
 
 #include "optimization/regularized_ldlt.hpp"
 #include "optimization/solver/util/error_estimate.hpp"
@@ -40,7 +41,7 @@ void newton(
     const SolverConfig& config, Eigen::VectorXd& x, SolverStatus* status) {
   const auto solve_start_time = std::chrono::steady_clock::now();
 
-  small_vector<SetupProfiler> setup_profilers;
+  wpi::SmallVector<SetupProfiler> setup_profilers;
   setup_profilers.emplace_back("setup").start();
 
   // Map decision variables and constraints to VariableMatrices for Lagrangian
@@ -123,7 +124,7 @@ void newton(
 
   setup_profilers[0].stop();
 
-  small_vector<SolveProfiler> solve_profilers;
+  wpi::SmallVector<SolveProfiler> solve_profilers;
   solve_profilers.emplace_back("solve");
   solve_profilers.emplace_back("  ↳ feasibility ✓");
   solve_profilers.emplace_back("  ↳ user callbacks");
