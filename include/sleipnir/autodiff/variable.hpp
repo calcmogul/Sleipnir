@@ -47,7 +47,7 @@ class SLEIPNIR_DLLEXPORT Variable {
   /**
    * Constructs an empty Variable.
    */
-  explicit constexpr Variable(std::nullptr_t) : expr{nullptr} {}
+  explicit Variable(std::nullptr_t) : expr{nullptr} {}
 
   /**
    * Constructs a Variable from a floating point type.
@@ -77,8 +77,7 @@ class SLEIPNIR_DLLEXPORT Variable {
    *
    * @param expr The autodiff variable.
    */
-  explicit constexpr Variable(detail::ExpressionPtr&& expr)
-      : expr{std::move(expr)} {}
+  explicit Variable(detail::ExpressionPtr&& expr) : expr{std::move(expr)} {}
 
   /**
    * Assignment operator for double.
