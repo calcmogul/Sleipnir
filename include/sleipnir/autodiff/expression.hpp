@@ -29,7 +29,7 @@ inline constexpr bool USE_POOL_ALLOCATOR = true;
 struct Expression;
 
 inline constexpr void inc_ref_count(Expression* expr);
-inline constexpr void dec_ref_count(Expression* expr);
+inline void dec_ref_count(Expression* expr);
 
 /**
  * Typedef for intrusive shared pointer to Expression.
@@ -689,7 +689,7 @@ inline constexpr void inc_ref_count(Expression* expr) {
  *
  * @param expr The shared pointer's managed object.
  */
-inline constexpr void dec_ref_count(Expression* expr) {
+inline void dec_ref_count(Expression* expr) {
   // If a deeply nested tree is being deallocated all at once, calling the
   // Expression destructor when expr's refcount reaches zero can cause a stack
   // overflow. Instead, we iterate over its children to decrement their
