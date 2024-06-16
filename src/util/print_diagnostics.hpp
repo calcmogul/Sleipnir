@@ -12,10 +12,11 @@
 #include <string>
 #include <utility>
 
+#include <wpi/SmallVector.h>
+
 #include "sleipnir/optimization/solver_exit_condition.hpp"
 #include "sleipnir/util/print.hpp"
 #include "sleipnir/util/setup_profiler.hpp"
-#include "sleipnir/util/small_vector.hpp"
 #include "sleipnir/util/solve_profiler.hpp"
 
 namespace sleipnir {
@@ -61,7 +62,7 @@ inline std::string power_of_10(double value) {
     } else {
       // Gather exponent digits
       int n = std::abs(exponent);
-      small_vector<int> digits;
+      wpi::SmallVector<int> digits;
       do {
         digits.emplace_back(n % 10);
         n /= 10;
@@ -194,8 +195,8 @@ std::string histogram(double value) {
  */
 inline void print_final_diagnostics(
     int iterations, SolverExitCondition exit_condition,
-    const small_vector<SetupProfiler>& setup_profilers,
-    const small_vector<SolveProfiler>& solve_profilers) {
+    const wpi::SmallVector<SetupProfiler>& setup_profilers,
+    const wpi::SmallVector<SolveProfiler>& solve_profilers) {
   // Print bottom of iteration diagnostics table
   sleipnir::println("└{:─^105}┘", "");
 
