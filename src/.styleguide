@@ -1,4 +1,5 @@
 cppHeaderFileInclude {
+  \.h$
   \.hpp$
 }
 
@@ -8,4 +9,5 @@ cppSrcFileInclude {
 
 includeOtherLibs {
   ^Eigen/
+  ^rust/
 }
