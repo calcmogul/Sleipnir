@@ -74,6 +74,8 @@ option(BUILD_PYTHON "Build Python module" OFF)
 include(CompilerFlags)
 
 file(GLOB_RECURSE Sleipnir_src src/*.cpp)
+list(FILTER Sleipnir_src EXCLUDE REGEX sleipnirrust.cpp)
+
 add_library(Sleipnir ${Sleipnir_src})
 add_library(Sleipnir::Sleipnir ALIAS Sleipnir)
 compiler_flags(Sleipnir)
