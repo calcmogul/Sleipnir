@@ -23,7 +23,6 @@ template <typename T>
 concept SleipnirMatrixLike = requires(T t, int rows, int cols) {
   t.rows();
   t.cols();
-  t(rows, cols);
 } && !EigenMatrixLike<T>;
 
 template <typename T>

@@ -235,16 +235,67 @@ void bind_variable_matrix(nb::module_& autodiff,
       },
       nb::is_operator(), "rhs"_a);
   cls.def(
+      "__mul__",
+      [](const VariableMatrix& lhs, const VariableBlock<VariableMatrix>& rhs) {
+        return lhs * rhs;
+      },
+      nb::is_operator(), "rhs"_a);
+  cls.def(
+      "__mul__",
+      [](const VariableBlock<VariableMatrix>& lhs, const VariableMatrix& rhs) {
+        return lhs * rhs;
+      },
+      nb::is_operator(), "rhs"_a);
+  cls.def(
+      "__mul__",
+      [](const VariableBlock<VariableMatrix>& lhs,
+         const VariableBlock<VariableMatrix>& rhs) { return lhs * rhs; },
+      nb::is_operator(), "rhs"_a);
+  cls.def(
       "__rmul__",
       [](const VariableMatrix& rhs, const VariableMatrix& lhs) {
         return lhs * rhs;
       },
       nb::is_operator(), "lhs"_a);
   cls.def(
+      "__rmul__",
+      [](const VariableMatrix& rhs, const VariableBlock<VariableMatrix>& lhs) {
+        return lhs * rhs;
+      },
+      nb::is_operator(), "lhs"_a);
+  cls.def(
+      "__rmul__",
+      [](const VariableBlock<VariableMatrix>& rhs, const VariableMatrix& lhs) {
+        return lhs * rhs;
+      },
+      nb::is_operator(), "lhs"_a);
+  cls.def(
+      "__rmul__",
+      [](const VariableBlock<VariableMatrix>& rhs,
+         const VariableBlock<VariableMatrix>& lhs) { return lhs * rhs; },
+      nb::is_operator(), "lhs"_a);
+  cls.def(
       "__matmul__",
       [](const VariableMatrix& lhs, const VariableMatrix& rhs) {
         return lhs * rhs;
       },
+      nb::is_operator(), "rhs"_a);
+  cls.def(
+      "__matmul__",
+      [](const VariableMatrix& lhs, const VariableBlock<VariableMatrix>& rhs) {
+        return lhs * rhs;
+      },
+      nb::is_operator(), "rhs"_a);
+  cls.def(
+      "__matmul__",
+      [](const VariableBlock<VariableMatrix>& lhs, const VariableMatrix& rhs) {
+        return lhs * rhs;
+      },
+      nb::is_operator(), "rhs"_a);
+  cls.def(
+      "__matmul__",
+      [](const VariableBlock<VariableMatrix>& lhs,
+         const VariableBlock<VariableMatrix>& rhs) { return lhs * rhs; },
       nb::is_operator(), "rhs"_a);
 
   // https://numpy.org/doc/stable/user/basics.dispatch.html

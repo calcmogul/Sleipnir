@@ -9,6 +9,7 @@
 #include "sleipnir/autodiff/adjoint_expression_graph.hpp"
 #include "sleipnir/autodiff/variable.hpp"
 #include "sleipnir/autodiff/variable_matrix.hpp"
+#include "sleipnir/util/concepts.hpp"
 #include "sleipnir/util/scoped_profiler.hpp"
 #include "sleipnir/util/small_vector.hpp"
 #include "sleipnir/util/solve_profiler.hpp"
@@ -32,7 +33,7 @@ class SLEIPNIR_DLLEXPORT Jacobian {
    * @param wrt Vector of variables with respect to which to compute the
    *   Jacobian.
    */
-  Jacobian(VariableMatrix variables, VariableMatrix wrt) noexcept
+  Jacobian(VariableMatrix variables, SleipnirMatrixLike auto wrt) noexcept
       : m_variables{std::move(variables)}, m_wrt{std::move(wrt)} {
     // Initialize column each expression's adjoint occupies in the Jacobian
     for (size_t col = 0; col < m_wrt.size(); ++col) {

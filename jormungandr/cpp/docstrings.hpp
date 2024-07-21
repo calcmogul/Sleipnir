@@ -97,14 +97,7 @@ Parameter ``variable``:
 Parameter ``wrt``:
     Variable with respect to which to compute the gradient.)doc";
 
-static const char *__doc_sleipnir_Gradient_Gradient_2 =
-R"doc(Constructs a Gradient object.
-
-Parameter ``variable``:
-    Variable of which to compute the gradient.
-
-Parameter ``wrt``:
-    Vector of variables with respect to which to compute the gradient.)doc";
+static const char *__doc_sleipnir_Gradient_Gradient_2 = R"doc()doc";
 
 static const char *__doc_sleipnir_Gradient_get =
 R"doc(Returns the gradient as a VariableMatrix.
@@ -144,14 +137,7 @@ Template parameter ``UpLo``:
 
 static const char *__doc_sleipnir_Hessian_2 = R"doc()doc";
 
-static const char *__doc_sleipnir_Hessian_Hessian =
-R"doc(Constructs a Hessian object.
-
-Parameter ``variable``:
-    Variable of which to compute the Hessian.
-
-Parameter ``wrt``:
-    Vector of variables with respect to which to compute the Hessian.)doc";
+static const char *__doc_sleipnir_Hessian_Hessian = R"doc()doc";
 
 static const char *__doc_sleipnir_Hessian_get =
 R"doc(Returns the Hessian as a VariableMatrix.
@@ -230,14 +216,7 @@ quadratic or higher order.)doc";
 
 static const char *__doc_sleipnir_Jacobian_2 = R"doc()doc";
 
-static const char *__doc_sleipnir_Jacobian_Jacobian =
-R"doc(Constructs a Jacobian object.
-
-Parameter ``variables``:
-    Vector of variables of which to compute the Jacobian.
-
-Parameter ``wrt``:
-    Vector of variables with respect to which to compute the Jacobian.)doc";
+static const char *__doc_sleipnir_Jacobian_Jacobian = R"doc()doc";
 
 static const char *__doc_sleipnir_Jacobian_get =
 R"doc(Returns the Jacobian as a VariableMatrix.
@@ -1096,6 +1075,8 @@ static const char *__doc_sleipnir_VariableBlock_m_row_slice = R"doc()doc";
 
 static const char *__doc_sleipnir_VariableBlock_m_row_slice_length = R"doc()doc";
 
+static const char *__doc_sleipnir_VariableBlock_operator_Variable = R"doc(Implicit conversion operator from 1x1 VariableBlock to Variable.)doc";
+
 static const char *__doc_sleipnir_VariableBlock_operator_array =
 R"doc(Returns a scalar subblock at the given row.
 
@@ -1132,16 +1113,7 @@ Parameter ``values``:
 Returns:
     This VariableBlock.)doc";
 
-static const char *__doc_sleipnir_VariableBlock_operator_assign_3 =
-R"doc(Assigns a double to the block.
-
-This only works for blocks with one row and one column.
-
-Parameter ``value``:
-    Value to assign.
-
-Returns:
-    This VariableBlock.)doc";
+static const char *__doc_sleipnir_VariableBlock_operator_assign_3 = R"doc()doc";
 
 static const char *__doc_sleipnir_VariableBlock_operator_assign_4 =
 R"doc(Assigns an Eigen matrix to the block.
@@ -1260,62 +1232,21 @@ Parameter ``col_slice_length``:
 Returns:
     A slice of the variable matrix.)doc";
 
-static const char *__doc_sleipnir_VariableBlock_operator_iadd =
-R"doc(Compound addition-assignment operator.
+static const char *__doc_sleipnir_VariableBlock_operator_iadd = R"doc()doc";
 
-Parameter ``rhs``:
-    Variable to add.
+static const char *__doc_sleipnir_VariableBlock_operator_iadd_2 = R"doc()doc";
 
-Returns:
-    Result of addition.)doc";
+static const char *__doc_sleipnir_VariableBlock_operator_idiv = R"doc()doc";
 
-static const char *__doc_sleipnir_VariableBlock_operator_idiv =
-R"doc(Compound matrix division-assignment operator (only enabled when rhs is
-a scalar).
+static const char *__doc_sleipnir_VariableBlock_operator_idiv_2 = R"doc()doc";
 
-Parameter ``rhs``:
-    Variable to divide.
+static const char *__doc_sleipnir_VariableBlock_operator_imul = R"doc()doc";
 
-Returns:
-    Result of division.)doc";
+static const char *__doc_sleipnir_VariableBlock_operator_imul_2 = R"doc()doc";
 
-static const char *__doc_sleipnir_VariableBlock_operator_idiv_2 =
-R"doc(Compound matrix division-assignment operator (only enabled when rhs is
-a scalar).
+static const char *__doc_sleipnir_VariableBlock_operator_isub = R"doc()doc";
 
-Parameter ``rhs``:
-    Variable to divide.
-
-Returns:
-    Result of division.)doc";
-
-static const char *__doc_sleipnir_VariableBlock_operator_imul =
-R"doc(Compound matrix multiplication-assignment operator.
-
-Parameter ``rhs``:
-    Variable to multiply.
-
-Returns:
-    Result of multiplication.)doc";
-
-static const char *__doc_sleipnir_VariableBlock_operator_imul_2 =
-R"doc(Compound matrix multiplication-assignment operator (only enabled when
-lhs is a scalar).
-
-Parameter ``rhs``:
-    Variable to multiply.
-
-Returns:
-    Result of multiplication.)doc";
-
-static const char *__doc_sleipnir_VariableBlock_operator_isub =
-R"doc(Compound subtraction-assignment operator.
-
-Parameter ``rhs``:
-    Variable to subtract.
-
-Returns:
-    Result of subtraction.)doc";
+static const char *__doc_sleipnir_VariableBlock_operator_isub_2 = R"doc()doc";
 
 static const char *__doc_sleipnir_VariableBlock_row =
 R"doc(Returns a row slice of the variable matrix.
@@ -1709,6 +1640,8 @@ Parameter ``values``:
 Returns:
     This VariableMatrix.)doc";
 
+static const char *__doc_sleipnir_VariableMatrix_operator_assign_2 = R"doc()doc";
+
 static const char *__doc_sleipnir_VariableMatrix_operator_call =
 R"doc(Returns a block pointing to the given row and column.
 
@@ -1799,42 +1732,19 @@ Parameter ``col_slice_length``:
 Returns:
     A slice of the variable matrix.)doc";
 
-static const char *__doc_sleipnir_VariableMatrix_operator_iadd =
-R"doc(Compound addition-assignment operator.
+static const char *__doc_sleipnir_VariableMatrix_operator_iadd = R"doc()doc";
 
-Parameter ``rhs``:
-    Variable to add.
+static const char *__doc_sleipnir_VariableMatrix_operator_iadd_2 = R"doc()doc";
 
-Returns:
-    Result of addition.)doc";
+static const char *__doc_sleipnir_VariableMatrix_operator_idiv = R"doc()doc";
 
-static const char *__doc_sleipnir_VariableMatrix_operator_idiv =
-R"doc(Compound matrix division-assignment operator (only enabled when rhs is
-a scalar).
+static const char *__doc_sleipnir_VariableMatrix_operator_imul = R"doc()doc";
 
-Parameter ``rhs``:
-    Variable to divide.
+static const char *__doc_sleipnir_VariableMatrix_operator_imul_2 = R"doc()doc";
 
-Returns:
-    Result of division.)doc";
+static const char *__doc_sleipnir_VariableMatrix_operator_isub = R"doc()doc";
 
-static const char *__doc_sleipnir_VariableMatrix_operator_imul =
-R"doc(Compound matrix multiplication-assignment operator.
-
-Parameter ``rhs``:
-    Variable to multiply.
-
-Returns:
-    Result of multiplication.)doc";
-
-static const char *__doc_sleipnir_VariableMatrix_operator_isub =
-R"doc(Compound subtraction-assignment operator.
-
-Parameter ``rhs``:
-    Variable to subtract.
-
-Returns:
-    Result of subtraction.)doc";
+static const char *__doc_sleipnir_VariableMatrix_operator_isub_2 = R"doc()doc";
 
 static const char *__doc_sleipnir_VariableMatrix_row =
 R"doc(Returns a row slice of the variable matrix.

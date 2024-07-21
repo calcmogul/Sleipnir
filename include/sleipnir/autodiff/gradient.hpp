@@ -9,6 +9,7 @@
 #include "sleipnir/autodiff/jacobian.hpp"
 #include "sleipnir/autodiff/variable.hpp"
 #include "sleipnir/autodiff/variable_matrix.hpp"
+#include "sleipnir/util/concepts.hpp"
 #include "sleipnir/util/small_vector.hpp"
 #include "sleipnir/util/solve_profiler.hpp"
 #include "sleipnir/util/symbol_exports.hpp"
@@ -40,7 +41,7 @@ class SLEIPNIR_DLLEXPORT Gradient {
    * @param wrt Vector of variables with respect to which to compute the
    *   gradient.
    */
-  Gradient(Variable variable, VariableMatrix wrt) noexcept
+  Gradient(Variable variable, SleipnirMatrixLike auto wrt) noexcept
       : m_jacobian{std::move(variable), std::move(wrt)} {}
 
   /**
