@@ -230,21 +230,6 @@ void bind_variable_block(nb::class_<VariableBlock<VariableMatrix>>& cls) {
           "row"_a, DOC(sleipnir, VariableBlock, row));
   cls.def("col", nb::overload_cast<int>(&VariableBlock<VariableMatrix>::col),
           "col"_a, DOC(sleipnir, VariableBlock, col));
-  cls.def(
-      "__mul__",
-      [](const VariableBlock<VariableMatrix>& lhs,
-         const VariableBlock<VariableMatrix>& rhs) { return lhs * rhs; },
-      nb::is_operator(), "rhs"_a);
-  cls.def(
-      "__rmul__",
-      [](const VariableBlock<VariableMatrix>& rhs,
-         const VariableBlock<VariableMatrix>& lhs) { return lhs * rhs; },
-      nb::is_operator(), "lhs"_a);
-  cls.def(
-      "__matmul__",
-      [](const VariableBlock<VariableMatrix>& lhs,
-         const VariableBlock<VariableMatrix>& rhs) { return lhs * rhs; },
-      nb::is_operator(), "rhs"_a);
 
   // https://numpy.org/doc/stable/user/basics.dispatch.html
   cls.def(

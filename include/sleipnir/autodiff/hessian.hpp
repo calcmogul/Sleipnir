@@ -9,6 +9,7 @@
 #include "sleipnir/autodiff/adjoint_expression_graph.hpp"
 #include "sleipnir/autodiff/variable.hpp"
 #include "sleipnir/autodiff/variable_matrix.hpp"
+#include "sleipnir/util/concepts.hpp"
 #include "sleipnir/util/scoped_profiler.hpp"
 #include "sleipnir/util/small_vector.hpp"
 #include "sleipnir/util/solve_profiler.hpp"
@@ -36,7 +37,7 @@ class SLEIPNIR_DLLEXPORT Hessian {
    * @param wrt Vector of variables with respect to which to compute the
    *   Hessian.
    */
-  Hessian(Variable variable, VariableMatrix wrt) noexcept
+  Hessian(Variable variable, SleipnirMatrixLike auto wrt) noexcept
       : m_variables{detail::AdjointExpressionGraph{variable}
                         .generate_gradient_tree(wrt)},
         m_wrt{wrt} {
