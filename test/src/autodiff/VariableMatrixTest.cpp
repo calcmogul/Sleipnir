@@ -379,4 +379,19 @@ TEST_CASE("VariableMatrix - Solve() free function", "[VariableMatrix]") {
   CHECK(X_41.Cols() == 1);
   CHECK((A_44.Value() * X_41.Value() - B_41.Value()).norm() < 1e-12);
   CHECK((X_41.Value() - expected_41).norm() < 1e-12);
+
+  sleipnir::VariableMatrix A_55{{1.0, 2.0, 3.0, -4.0, 5.0},
+                                {-5.0, 6.0, 7.0, 8.0, 9.0},
+                                {9.0, 10.0, 11.0, 12.0, 13.0},
+                                {13.0, 14.0, 15.0, 16.0, 17.0},
+                                {17.0, 18.0, 19.0, 20.0, 21.0}};
+  sleipnir::VariableMatrix B_51{{21.0}, {22.0}, {23.0}, {24.0}, {25.0}};
+  sleipnir::VariableMatrix X_51 = sleipnir::Solve(A_55, B_51);
+
+  Eigen::Matrix<double, 5, 1> expected_51{
+      {4.44089e-16}, {-16.25}, {16.5}, {0.0}, {0.0}};
+  CHECK(X_51.Rows() == 5);
+  CHECK(X_51.Cols() == 1);
+  CHECK((A_55.Value() * X_51.Value() - B_51.Value()).norm() < 1e-12);
+  CHECK((X_51.Value() - expected_51).norm() < 1e-12);
 }
