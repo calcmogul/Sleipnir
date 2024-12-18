@@ -438,7 +438,7 @@ void InteriorPoint(std::span<Variable> decisionVariables,
 
       // Check whether filter accepts trial iterate
       auto entry = filter.MakeEntry(trial_s, trial_c_e, trial_c_i, μ);
-      if (filter.TryAdd(entry)) {
+      if (filter.TryAdd(entry, α)) {
         // Accept step
         break;
       }
@@ -507,7 +507,7 @@ void InteriorPoint(std::span<Variable> decisionVariables,
 
           // Check whether filter accepts trial iterate
           entry = filter.MakeEntry(trial_s, trial_c_e, trial_c_i, μ);
-          if (filter.TryAdd(entry)) {
+          if (filter.TryAdd(entry, α)) {
             p_x = p_x_cor;
             p_y = p_y_soc;
             p_z = p_z_soc;
@@ -622,7 +622,7 @@ void InteriorPoint(std::span<Variable> decisionVariables,
               // constraint violation has sufficiently reduced, stop
               // feasibility restoration
               auto entry = filter.MakeEntry(trial_s, trial_c_e, trial_c_i, μ);
-              if (filter.IsAcceptable(entry) &&
+              if (filter.IsAcceptable(entry, α) &&
                   entry.constraintViolation <
                       0.9 * initialEntry.constraintViolation) {
                 return true;
