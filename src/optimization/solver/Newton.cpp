@@ -183,7 +183,7 @@ void Newton(std::span<Variable> decisionVariables, Variable& f,
 
       // Check whether filter accepts trial iterate
       auto entry = filter.MakeEntry();
-      if (filter.TryAdd(entry)) {
+      if (filter.TryAdd(entry, α)) {
         // Accept step
         break;
       }

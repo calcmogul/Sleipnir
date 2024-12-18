@@ -136,9 +136,10 @@ class Filter {
    * Returns true if the given iterate is accepted by the filter.
    *
    * @param entry The entry to attempt adding to the filter.
+   * @param α The step size (0, 1].
    */
-  bool TryAdd(const FilterEntry& entry) {
-    if (IsAcceptable(entry)) {
+  bool TryAdd(const FilterEntry& entry, double α) {
+    if (IsAcceptable(entry, α)) {
       Add(entry);
       return true;
     } else {
@@ -150,9 +151,10 @@ class Filter {
    * Returns true if the given iterate is accepted by the filter.
    *
    * @param entry The entry to attempt adding to the filter.
+   * @param α The step size (0, 1].
    */
-  bool TryAdd(FilterEntry&& entry) {
-    if (IsAcceptable(entry)) {
+  bool TryAdd(FilterEntry&& entry, double α) {
+    if (IsAcceptable(entry, α)) {
       Add(std::move(entry));
       return true;
     } else {
@@ -164,19 +166,24 @@ class Filter {
    * Returns true if the given entry is acceptable to the filter.
    *
    * @param entry The entry to check.
+   * @param α The step size (0, 1].
    */
-  bool IsAcceptable(const FilterEntry& entry) {
+  bool IsAcceptable(const FilterEntry& entry, double α) {
     if (!std::isfinite(entry.cost) ||
         !std::isfinite(entry.constraintViolation)) {
       return false;
     }
 
+    double ϕ = std::pow(α, 1.5);
+
     // If current filter entry is better than all prior ones in some respect,
-    // accept it
+    // accept it.
+    //
+    // See equation (2.13) of [4].
     return std::all_of(m_filter.begin(), m_filter.end(), [&](const auto& elem) {
-      return entry.cost <= elem.cost - γCost * elem.constraintViolation ||
+      return entry.cost <= elem.cost - ϕ * γCost * elem.constraintViolation ||
              entry.constraintViolation <=
-                 (1.0 - γConstraint) * elem.constraintViolation;
+                 (1.0 - ϕ * γConstraint) * elem.constraintViolation;
     });
   }
 
