@@ -47,6 +47,7 @@ class Filter {
  public:
   static constexpr double γCost = 1e-8;
   static constexpr double γConstraint = 1e-5;
+  static constexpr int maxEntries = 40;
 
   double maxConstraintViolation = 1e4;
 
@@ -108,13 +109,16 @@ class Filter {
    * @param entry The entry to add to the filter.
    */
   void Add(const FilterEntry& entry) {
-    // Remove dominated entries
-    erase_if(m_filter, [&](const auto& elem) {
-      return entry.cost <= elem.cost &&
-             entry.constraintViolation <= elem.constraintViolation;
-    });
+    m_currentIterate = entry;
+    m_filter.push_back(m_currentIterate);
 
-    m_filter.push_back(entry);
+    if (m_filter.size() > maxEntries) {
+      m_filter.erase(std::max_element(m_filter.begin(), m_filter.end(),
+                                      [](const auto& lhs, const auto& rhs) {
+                                        return lhs.constraintViolation <
+                                               rhs.constraintViolation;
+                                      }));
+    }
   }
 
   /**
@@ -123,13 +127,16 @@ class Filter {
    * @param entry The entry to add to the filter.
    */
   void Add(FilterEntry&& entry) {
-    // Remove dominated entries
-    erase_if(m_filter, [&](const auto& elem) {
-      return entry.cost <= elem.cost &&
-             entry.constraintViolation <= elem.constraintViolation;
-    });
+    m_currentIterate = entry;
+    m_filter.push_back(m_currentIterate);
 
-    m_filter.push_back(entry);
+    if (m_filter.size() > maxEntries) {
+      m_filter.erase(std::max_element(m_filter.begin(), m_filter.end(),
+                                      [](const auto& lhs, const auto& rhs) {
+                                        return lhs.constraintViolation <
+                                               rhs.constraintViolation;
+                                      }));
+    }
   }
 
   /**
@@ -171,18 +178,37 @@ class Filter {
       return false;
     }
 
-    // If current filter entry is better than all prior ones in some respect,
-    // accept it
-    return std::all_of(m_filter.begin(), m_filter.end(), [&](const auto& elem) {
-      return entry.cost <= elem.cost - γCost * elem.constraintViolation ||
-             entry.constraintViolation <=
+    // See equations (2.7) to (2.11) of [4].
+
+    // If current filter entry isn't acceptable to current iterate, reject it
+    if (entry.cost >
+            m_currentIterate.cost - γCost * entry.constraintViolation &&
+        entry.constraintViolation >
+            (1.0 - γConstraint) * m_currentIterate.constraintViolation) {
+      return false;
+    }
+
+    size_t dominatedEntries =
+        std::count_if(m_filter.begin(), m_filter.end(), [&](const auto& elem) {
+          return entry.constraintViolation <=
                  (1.0 - γConstraint) * elem.constraintViolation;
-    });
+        });
+    // If trial iterate is infeasible, require at least two dominated filter
+    // entries. Otherwise, only require at least one.
+    if (m_currentIterate.constraintViolation > 1e-8) {
+      dominatedEntries +=
+          entry.constraintViolation <=
+          (1.0 - γConstraint) * m_currentIterate.constraintViolation;
+      return dominatedEntries >= 2;
+    } else {
+      return dominatedEntries >= 1;
+    }
   }
 
  private:
   Variable* m_f = nullptr;
   small_vector<FilterEntry> m_filter;
+  FilterEntry m_currentIterate;
 };
 
 }  // namespace sleipnir
