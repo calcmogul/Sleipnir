@@ -471,7 +471,7 @@ void SQP(std::span<Variable> decisionVariables,
             Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> yEstimator{lhs};
             Eigen::VectorXd sol = yEstimator.solve(rhs);
 
-            p_y = y - sol.block(0, 0, y.rows(), 1);
+            p_y = sol.block(0, 0, y.rows(), 1) - y;
           }
 
           α = 1.0;
