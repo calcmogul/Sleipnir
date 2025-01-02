@@ -679,8 +679,8 @@ void InteriorPoint(std::span<Variable> decisionVariables,
             Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> yzEstimator{lhs};
             Eigen::VectorXd sol = yzEstimator.solve(rhs);
 
-            p_y = y - sol.block(0, 0, y.rows(), 1);
-            p_z = z - sol.block(y.rows(), 0, z.rows(), 1);
+            p_y = sol.block(0, 0, y.rows(), 1) - y;
+            p_z = sol.block(y.rows(), 0, z.rows(), 1) - z;
           }
 
           α = 1.0;
