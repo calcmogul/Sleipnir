@@ -90,6 +90,8 @@ void BindOptimizationProblem(nb::class_<OptimizationProblem>& cls) {
           } else if (key_str == "timeout") {
             config.timeout =
                 std::chrono::duration<double>{nb::cast<double>(value)};
+          } else if (key_str == "num_threads") {
+            config.numThreads = nb::cast<int>(value);
           } else if (key_str == "feasible_ipm") {
             config.feasibleIPM = nb::cast<bool>(value);
           } else if (key_str == "diagnostics") {
@@ -135,6 +137,10 @@ Parameter ``max_acceptable_iterations``:
 Parameter ``timeout``:
     The maximum elapsed wall clock time before returning a solution.
     (default: infinity)
+
+Parameter ``num_threads``:
+    The number of threads to use for parallel backtracking line searches
+    (default: CPU core count).
 
 Parameter ``feasible_ipm``:
     Enables the feasible interior-point method. When the inequality
