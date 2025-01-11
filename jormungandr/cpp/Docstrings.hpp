@@ -897,6 +897,8 @@ this many iterations.)doc";
 
 static const char *__doc_sleipnir_SolverConfig_maxIterations = R"doc(The maximum number of solver iterations before returning a solution.)doc";
 
+static const char *__doc_sleipnir_SolverConfig_numThreads = R"doc(The number of threads to use for parallel backtracking line searches.)doc";
+
 static const char *__doc_sleipnir_SolverConfig_spy =
 R"doc(Enables writing sparsity patterns of H, Aₑ, and Aᵢ to files named
 H.spy, A_e.spy, and A_i.spy respectively during solve.
