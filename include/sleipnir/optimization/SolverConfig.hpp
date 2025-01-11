@@ -2,8 +2,10 @@
 
 #pragma once
 
+#include <algorithm>
 #include <chrono>
 #include <limits>
+#include <thread>
 
 #include "sleipnir/util/SymbolExports.hpp"
 
@@ -32,6 +34,9 @@ struct SLEIPNIR_DLLEXPORT SolverConfig {
   /// The maximum elapsed wall clock time before returning a solution.
   std::chrono::duration<double> timeout{
       std::numeric_limits<double>::infinity()};
+
+  /// The number of threads to use for parallel backtracking line searches.
+  int numThreads = std::min(1u, std::thread::hardware_concurrency());
 
   /// Enables the feasible interior-point method. When the inequality
   /// constraints are all feasible, step sizes are reduced when necessary to
