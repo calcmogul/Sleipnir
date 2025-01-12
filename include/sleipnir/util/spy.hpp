@@ -4,7 +4,10 @@
 
 #include <stdint.h>
 
+#include <algorithm>
+#include <array>
 #include <bit>
+#include <cstddef>
 #include <fstream>
 #include <string>
 #include <string_view>
@@ -113,7 +116,10 @@ class SLEIPNIR_DLLEXPORT Spy {
    */
   void write32le(int32_t num) {
     if constexpr (std::endian::native != std::endian::little) {
-      num = std::byteswap(num);
+      auto value_representation =
+          std::bit_cast<std::array<std::byte, sizeof(int32_t)>>(num);
+      std::ranges::reverse(value_representation);
+      num = std::bit_cast<int32_t>(value_representation);
     }
     m_file.write(reinterpret_cast<char*>(&num), sizeof(num));
   }
