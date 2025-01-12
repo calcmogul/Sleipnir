@@ -5,12 +5,12 @@
 #include <chrono>
 #include <concepts>
 #include <fstream>
-#include <print>
 #include <span>
 #include <string>
 #include <string_view>
 
 #include <casadi/casadi.hpp>
+#include <fmt/base.h>
 #include <sleipnir/optimization/OptimizationProblem.hpp>
 #include <sleipnir/util/FunctionRef.hpp>
 
@@ -102,7 +102,7 @@ int RunBenchmarksAndLog(
 
     auto dt = T / N;
 
-    std::print(stderr, "N = {}...", N);
+    fmt::print(stderr, "N = {}...", N);
     RunBenchmark<Problem>(
         results, [=] { return setup(dt, N); },
         [=](Problem& problem) {
@@ -118,11 +118,11 @@ int RunBenchmarksAndLog(
             auto status = problem.Solve({.diagnostics = diagnostics});
             if (status.exitCondition !=
                 sleipnir::SolverExitCondition::kSuccess) {
-              std::print(stderr, " FAIL ");
+              fmt::print(stderr, " FAIL ");
             }
           }
         });
-    std::println(stderr, " done.");
+    fmt::println(stderr, " done.");
 
     results << "\n";
     std::flush(results);

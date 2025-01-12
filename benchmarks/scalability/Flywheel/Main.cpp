@@ -1,8 +1,9 @@
 // Copyright (c) Sleipnir contributors
 
 #include <chrono>
-#include <print>
 #include <vector>
+
+#include <fmt/base.h>
 
 #include "CasADi.hpp"
 #include "CmdlineArguments.hpp"
@@ -33,7 +34,7 @@ int main(int argc, char* argv[]) {
   }
   sampleSizesToTest.emplace_back(5000);
 
-  std::println("Solving flywheel problem from N = {} to N = {}.",
+  fmt::println("Solving flywheel problem from N = {} to N = {}.",
                sampleSizesToTest.front(), sampleSizesToTest.back());
   if (runCasadi) {
     RunBenchmarksAndLog<casadi::Opti>("flywheel-scalability-results-casadi.csv",

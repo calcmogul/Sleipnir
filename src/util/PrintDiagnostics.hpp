@@ -10,7 +10,6 @@
 #include <cmath>
 #include <ranges>
 #include <string>
-#include <utility>
 
 #include "sleipnir/util/Print.hpp"
 #include "sleipnir/util/SetupProfiler.hpp"
@@ -144,8 +143,8 @@ void PrintIterationDiagnostics(int iterations, IterationType type,
   sleipnir::println(
       "│{:4} {:4} {:9.3f} {:12e} {:13e} {:12e} {:12e} {:<5} {:<5} {:.2e} "
       "{:.2e} {:2d}│",
-      iterations, kIterationTypes[std::to_underlying(type)], ToMs(time), error,
-      cost, infeasibility, complementarity, PowerOf10(μ), PowerOf10(δ),
+      iterations, kIterationTypes[static_cast<uint8_t>(type)], ToMs(time),
+      error, cost, infeasibility, complementarity, PowerOf10(μ), PowerOf10(δ),
       primal_α, dual_α, backtracks);
 }
 

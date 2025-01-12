@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include <ranges>
 #include <utility>
 
 #include <Eigen/SparseCore>
@@ -154,7 +153,10 @@ class AdjointExpressionGraph {
         }
       }
     } else {
-      for (const auto& [col, node] : std::views::zip(m_colList, m_topList)) {
+      for (size_t i = 0; i < m_topList.size(); ++i) {
+        const auto& col = m_colList[i];
+        const auto& node = m_topList[i];
+
         // Append adjoints of wrt to sparse matrix triplets
         if (col != -1 && node->adjoint != 0.0) {
           triplets.emplace_back(row, col, node->adjoint);
