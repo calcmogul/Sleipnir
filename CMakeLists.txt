@@ -124,6 +124,16 @@ endif()
 
 target_link_libraries(Sleipnir PUBLIC Eigen3::Eigen)
 
+# fmt dependency
+fetchcontent_declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+    GIT_TAG 11.1.2
+)
+fetchcontent_makeavailable(fmt)
+
+target_link_libraries(Sleipnir PUBLIC fmt::fmt)
+
 if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
     # Catch2 dependency
     fetchcontent_declare(
