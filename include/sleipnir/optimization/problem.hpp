@@ -303,7 +303,7 @@ class SLEIPNIR_DLLEXPORT Problem {
         slp::println("  ↳ executed {} iterations", options.max_iterations);
       }
       if (std::isfinite(options.timeout.count())) {
-        slp::println("  ↳ {} elapsed", options.timeout);
+        slp::println("  ↳ {} s elapsed", options.timeout.count());
       }
 
       if (m_decision_variables.size() == 1) {
@@ -316,11 +316,13 @@ class SLEIPNIR_DLLEXPORT Problem {
           [](const small_vector<Variable>& constraints) {
             std::array<size_t, 5> type_counts{};
             for (const auto& constraint : constraints) {
-              ++type_counts[std::to_underlying(constraint.type())];
+              ++type_counts[static_cast<uint8_t>(constraint.type())];
             }
-            for (const auto& [count, name] : std::views::zip(
-                     type_counts, std::array{"empty", "constant", "linear",
-                                             "quadratic", "nonlinear"})) {
+            for (size_t i = 0; i < type_counts.size(); ++i) {
+              constexpr std::array names{"empty", "constant", "linear",
+                                         "quadratic", "nonlinear"};
+              const auto& count = type_counts[i];
+              const auto& name = names[i];
               if (count > 0) {
                 slp::println("  ↳ {} {}", count, name);
               }

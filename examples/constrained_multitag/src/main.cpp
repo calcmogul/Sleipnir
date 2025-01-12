@@ -5,12 +5,11 @@
 // The robot pose is constrained to be on the floor (z = 0).
 
 #include <chrono>
-#include <print>
-#include <ranges>
 #include <utility>
 #include <vector>
 
 #include <Eigen/Core>
+#include <fmt/base.h>
 #include <sleipnir/autodiff/variable_matrix.hpp>
 #include <sleipnir/optimization/problem.hpp>
 
@@ -84,8 +83,10 @@ int main() {
   // field2camera * field2camera⁻¹ = I
   auto camera2field = slp::solve(field2camera, Eigen::Matrix4d::Identity());
 
-  for (const auto& [field2point, observation] :
-       std::views::zip(field2points, point_observations)) {
+  for (size_t i = 0; i < field2points.size(); ++i) {
+    const auto& field2point = field2points[i];
+    const auto& observation = point_observations[i];
+
     // camera2point = field2camera⁻¹ * field2point
     // field2camera * camera2point = field2point
     auto camera2point = camera2field * field2point;
@@ -95,7 +96,7 @@ int main() {
     auto& y = camera2point[1];
     auto& z = camera2point[2];
 
-    std::println("camera2point = {}, {}, {}", x.value(), y.value(), z.value());
+    fmt::println("camera2point = {}, {}, {}", x.value(), y.value(), z.value());
 
     // coordinates observed at
     auto [u_observed, v_observed] = observation;
@@ -106,8 +107,8 @@ int main() {
     auto u = fx * X + cx;
     auto v = fy * Y + cy;
 
-    std::println("Expected u {}, saw {}", u.value(), u_observed);
-    std::println("Expected v {}, saw {}", v.value(), v_observed);
+    fmt::println("Expected u {}, saw {}", u.value(), u_observed);
+    fmt::println("Expected v {}, saw {}", v.value(), v_observed);
 
     auto u_err = u - u_observed;
     auto v_err = v - v_observed;
@@ -124,10 +125,10 @@ int main() {
   problem.solve({.diagnostics = true});
   auto solve_end = std::chrono::steady_clock::now();
 
-  std::println("setup time = {} ms", to_ms(setup_end - setup_start));
-  std::println("solve time = {} ms", to_ms(solve_end - solve_start));
+  fmt::println("setup time = {} ms", to_ms(setup_end - setup_start));
+  fmt::println("solve time = {} ms", to_ms(solve_end - solve_start));
 
-  std::println("x = {} m", robot_x.value());
-  std::println("y = {} m", robot_y.value());
-  std::println("θ = {} rad", robot_θ.value());
+  fmt::println("x = {} m", robot_x.value());
+  fmt::println("y = {} m", robot_y.value());
+  fmt::println("θ = {} rad", robot_θ.value());
 }
