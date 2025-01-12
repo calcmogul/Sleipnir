@@ -2,9 +2,9 @@
 
 #include <chrono>
 #include <cmath>
-#include <print>
 
 #include <Eigen/Core>
+#include <fmt/base.h>
 #include <sleipnir/control/ocp_solver.hpp>
 
 #ifndef RUNNING_TESTS
@@ -47,9 +47,9 @@ int main() {
   solver.solve();
 
   // The first state
-  std::println("x₀ = {}", solver.X().value(0, 0));
+  fmt::println("x₀ = {}", solver.X().value(0, 0));
 
   // The first input
-  std::println("u₀ = {}", solver.U().value(0, 0));
+  fmt::println("u₀ = {}", solver.U().value(0, 0));
 }
 #endif
