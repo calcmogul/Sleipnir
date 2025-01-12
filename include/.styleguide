@@ -12,4 +12,5 @@ licenseUpdateExclude {
 
 includeOtherLibs {
   ^Eigen/
+  ^fmt/
 }
