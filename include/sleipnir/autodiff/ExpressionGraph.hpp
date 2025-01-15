@@ -5,9 +5,10 @@
 #include <ranges>
 #include <utility>
 
+#include <Eigen/SparseCore>
+
 #include "sleipnir/autodiff/Variable.hpp"
 #include "sleipnir/autodiff/VariableMatrix.hpp"
-#include "sleipnir/util/FunctionRef.hpp"
 #include "sleipnir/util/small_vector.hpp"
 
 namespace sleipnir::detail {
@@ -36,21 +37,17 @@ class ExpressionGraph {
     //
     // https://en.wikipedia.org/wiki/Breadth-first_search
 
-    // BFS list sorted from parent to child.
     small_vector<Expression*> stack;
-
-    stack.emplace_back(root.expr.Get());
 
     // Initialize the number of instances of each node in the tree
     // (Expression::duplications)
+    stack.emplace_back(root.expr.Get());
     while (!stack.empty()) {
       auto node = stack.back();
       stack.pop_back();
 
       for (auto& arg : node->args) {
-        // Only continue if the node is not a constant and hasn't already been
-        // explored.
-        if (arg != nullptr && arg->Type() != ExpressionType::kConstant) {
+        if (arg != nullptr) {
           // If this is the first instance of the node encountered (it hasn't
           // been explored yet), add it to stack so it's recursed upon
           if (arg->duplications == 0) {
@@ -61,14 +58,12 @@ class ExpressionGraph {
       }
     }
 
+    // Generate BFS lists sorted from parent to child
     stack.emplace_back(root.expr.Get());
-
     while (!stack.empty()) {
       auto node = stack.back();
       stack.pop_back();
 
-      // BFS lists sorted from parent to child.
-      m_rowList.emplace_back(node->row);
       m_adjointList.emplace_back(node);
       if (node->args[0] != nullptr) {
         // Constants (expressions with no arguments) are skipped because they
@@ -77,9 +72,7 @@ class ExpressionGraph {
       }
 
       for (auto& arg : node->args) {
-        // Only add node if it's not a constant and doesn't already exist in the
-        // tape.
-        if (arg != nullptr && arg->Type() != ExpressionType::kConstant) {
+        if (arg != nullptr) {
           // Once the number of node visitations equals the number of
           // duplications (the counter hits zero), add it to the stack. Note
           // that this means the node is only enqueued once.
@@ -122,10 +115,12 @@ class ExpressionGraph {
     // Read docs/algorithms.md#Reverse_accumulation_automatic_differentiation
     // for background on reverse accumulation automatic differentiation.
 
-    // Zero adjoints. The root node's adjoint is 1.0 as df/df is always 1.
-    if (m_adjointList.size() > 0) {
-      m_adjointList[0]->adjointExpr = MakeExpressionPtr<ConstExpression>(1.0);
+    if (m_adjointList.empty()) {
+      return VariableMatrix(wrt.size(), 1);
     }
+
+    // Set root node's adjoint to 1 since df/df is 1
+    m_adjointList[0]->adjointExpr = MakeExpressionPtr<ConstExpression>(1.0);
 
     // df/dx = (df/dy)(dy/dx). The adjoint of x is equal to the adjoint of y
     // multiplied by dy/dx. If there are multiple "paths" from the root node to
@@ -145,6 +140,7 @@ class ExpressionGraph {
       }
     }
 
+    // Move gradient tree to return value
     VariableMatrix grad(VariableMatrix::empty, wrt.size(), 1);
     for (int row = 0; row < grad.Rows(); ++row) {
       grad(row) = Variable{std::move(wrt(row).expr->adjointExpr)};
@@ -154,11 +150,6 @@ class ExpressionGraph {
     // parent expressions. This ensures all expressions are returned to the free
     // list.
     for (auto& node : m_adjointList) {
-      for (auto& arg : node->args) {
-        if (arg != nullptr) {
-          arg->adjointExpr = nullptr;
-        }
-      }
       node->adjointExpr = nullptr;
     }
 
@@ -166,25 +157,30 @@ class ExpressionGraph {
   }
 
   /**
-   * Updates the adjoints in the expression graph, effectively computing the
-   * gradient.
+   * Updates the adjoints in the expression graph (computes the gradient) then
+   * appends the adjoints of wrt to the sparse matrix triplets.
    *
-   * @param func A function that takes two arguments: an int for the gradient
-   *   row, and a double for the adjoint (gradient value).
+   * @param triplets The sparse matrix triplets.
+   * @param wrt Variables with respect to which to compute the gradient.
+   * @param row The row of wrt.
    */
-  void ComputeAdjoints(function_ref<void(int row, double adjoint)> func) {
-    // Zero adjoints. The root node's adjoint is 1.0 as df/df is always 1.
-    m_adjointList[0]->adjoint = 1.0;
-    for (auto& node : m_adjointList | std::views::drop(1)) {
-      node->adjoint = 0.0;
+  void AppendAdjointTriplets(small_vector<Eigen::Triplet<double>>& triplets,
+                             const VariableMatrix& wrt, int row) const {
+    // Read docs/algorithms.md#Reverse_accumulation_automatic_differentiation
+    // for background on reverse accumulation automatic differentiation.
+
+    if (m_adjointList.empty()) {
+      return;
     }
+
+    // Set root node's adjoint to 1 since df/df is 1
+    m_adjointList[0]->adjoint = 1.0;
 
     // df/dx = (df/dy)(dy/dx). The adjoint of x is equal to the adjoint of y
     // multiplied by dy/dx. If there are multiple "paths" from the root node to
     // variable; the variable's adjoint is the sum of each path's adjoint
     // contribution.
-    for (size_t col = 0; col < m_adjointList.size(); ++col) {
-      auto& node = m_adjointList[col];
+    for (auto& node : m_adjointList) {
       auto& lhs = node->args[0];
       auto& rhs = node->args[1];
 
@@ -199,19 +195,23 @@ class ExpressionGraph {
               node->GradientValueLhs(lhs->value, 0.0, node->adjoint);
         }
       }
+    }
 
-      // If variable is a leaf node, assign its adjoint to the gradient.
-      int row = m_rowList[col];
-      if (row != -1) {
-        func(row, node->adjoint);
+    // Append adjoints of wrt to sparse matrix triplets
+    for (int col = 0; col < wrt.Rows(); ++col) {
+      auto& adjoint = wrt(col).expr->adjoint;
+      if (adjoint != 0.0) [[unlikely]] {
+        triplets.emplace_back(row, col, adjoint);
       }
+    }
+
+    // Zero adjoints for next run
+    for (auto& node : m_adjointList) {
+      node->adjoint = 0.0;
     }
   }
 
  private:
-  // List that maps nodes to their respective row.
-  small_vector<int> m_rowList;
-
   // List for updating adjoints
   small_vector<Expression*> m_adjointList;
 

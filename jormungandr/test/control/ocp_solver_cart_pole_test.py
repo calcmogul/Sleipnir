@@ -1,5 +1,4 @@
 import math
-import platform
 
 import numpy as np
 import pytest
@@ -77,16 +76,9 @@ def test_ocp_solver_cart_pole():
     assert status.equality_constraint_type == ExpressionType.NONLINEAR
     assert status.inequality_constraint_type == ExpressionType.LINEAR
 
-    if platform.system() == "Darwin" and platform.machine() == "arm64":
-        # FIXME: Fails on macOS arm64 with "feasibility restoration failed"
-        assert (
-            status.exit_condition == SolverExitCondition.FEASIBILITY_RESTORATION_FAILED
-        )
-        return
-    else:
-        # FIXME: Fails on other platforms with "locally infeasible"
-        assert status.exit_condition == SolverExitCondition.LOCALLY_INFEASIBLE
-        return
+    # FIXME: Fails on other platforms with "locally infeasible"
+    assert status.exit_condition == SolverExitCondition.LOCALLY_INFEASIBLE
+    return
 
     # Verify initial state
     assert X.value(0, 0) == pytest.approx(x_initial[0, 0], abs=1e-8)

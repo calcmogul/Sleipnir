@@ -82,17 +82,10 @@ TEST_CASE("OCPSolver - Cart-pole", "[OCPSolver]") {
   CHECK(status.equalityConstraintType == sleipnir::ExpressionType::kNonlinear);
   CHECK(status.inequalityConstraintType == sleipnir::ExpressionType::kLinear);
 
-#if defined(__APPLE__) && defined(__aarch64__)
-  // FIXME: Fails on macOS arm64 with "feasibility restoration failed"
-  CHECK(status.exitCondition ==
-        sleipnir::SolverExitCondition::kFeasibilityRestorationFailed);
-  SKIP("Fails on macOS arm64 with \"feasibility restoration failed\"");
-#else
   // FIXME: Fails on other platforms with "locally infeasible"
   CHECK(status.exitCondition ==
         sleipnir::SolverExitCondition::kLocallyInfeasible);
   SKIP("Fails with \"locally infeasible\"");
-#endif
 
   // Verify initial state
   CHECK(X.Value(0, 0) == Catch::Approx(x_initial(0)).margin(1e-8));

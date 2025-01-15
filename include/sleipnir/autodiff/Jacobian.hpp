@@ -35,10 +35,6 @@ class SLEIPNIR_DLLEXPORT Jacobian {
       : m_variables{std::move(variables)}, m_wrt{std::move(wrt)} {
     m_profiler.StartSetup();
 
-    for (int row = 0; row < m_wrt.Rows(); ++row) {
-      m_wrt(row).expr->row = row;
-    }
-
     for (auto& variable : m_variables) {
       m_graphs.emplace_back(variable);
     }
@@ -48,18 +44,12 @@ class SLEIPNIR_DLLEXPORT Jacobian {
         // If the row is linear, compute its gradient once here and cache its
         // triplets. Constant rows are ignored because their gradients have no
         // nonzero triplets.
-        m_graphs[row].ComputeAdjoints([&](int col, double adjoint) {
-          m_cachedTriplets.emplace_back(row, col, adjoint);
-        });
+        m_graphs[row].AppendAdjointTriplets(m_cachedTriplets, m_wrt, row);
       } else if (m_variables(row).Type() > ExpressionType::kLinear) {
         // If the row is quadratic or nonlinear, add it to the list of nonlinear
         // rows to be recomputed in Value().
         m_nonlinearRows.emplace_back(row);
       }
-    }
-
-    for (int row = 0; row < m_wrt.Rows(); ++row) {
-      m_wrt(row).expr->row = -1;
     }
 
     if (m_nonlinearRows.empty()) {
@@ -76,17 +66,16 @@ class SLEIPNIR_DLLEXPORT Jacobian {
    * them.
    */
   VariableMatrix Get() const {
-    VariableMatrix result{m_variables.Rows(), m_wrt.Rows()};
+    VariableMatrix result{VariableMatrix::empty, m_variables.Rows(),
+                          m_wrt.Rows()};
 
     for (int row = 0; row < m_variables.Rows(); ++row) {
-      for (auto& node : m_wrt) {
-        node.expr->adjointExpr = nullptr;
-      }
-
       auto grad = m_graphs[row].GenerateGradientTree(m_wrt);
       for (int col = 0; col < m_wrt.Rows(); ++col) {
         if (grad(col).expr != nullptr) {
           result(row, col) = std::move(grad(col));
+        } else {
+          result(row, col) = Variable{0.0};
         }
       }
     }
@@ -115,12 +104,16 @@ class SLEIPNIR_DLLEXPORT Jacobian {
 
     // Compute each nonlinear row of the Jacobian
     for (int row : m_nonlinearRows) {
-      m_graphs[row].ComputeAdjoints([&](int col, double adjoint) {
-        triplets.emplace_back(row, col, adjoint);
-      });
+      m_graphs[row].AppendAdjointTriplets(triplets, m_wrt, row);
     }
 
-    m_J.setFromTriplets(triplets.begin(), triplets.end());
+    if (triplets.size() > 0) {
+      m_J.setFromTriplets(triplets.begin(), triplets.end());
+    } else {
+      // setFromTriplets() is a no-op on empty triplets, so explicitly zero out
+      // the storage
+      m_J.setZero();
+    }
 
     m_profiler.StopSolve();
 

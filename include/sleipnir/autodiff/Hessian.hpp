@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include <Eigen/Core>
 #include <Eigen/SparseCore>
 
 #include "sleipnir/autodiff/ExpressionGraph.hpp"
