@@ -313,7 +313,7 @@ class SLEIPNIR_DLLEXPORT Problem {
           [](const small_vector<Variable>& constraints) {
             std::array<size_t, 5> type_counts{};
             for (const auto& constraint : constraints) {
-              ++type_counts[std::to_underlying(constraint.type())];
+              ++type_counts[static_cast<uint8_t>(constraint.type())];
             }
             for (const auto& [count, name] : std::views::zip(
                      type_counts, std::array{"empty", "constant", "linear",
@@ -348,11 +348,11 @@ class SLEIPNIR_DLLEXPORT Problem {
                                  "nonlinear"};
 
       slp::println("\nUsing {} solver due to:", solver_name);
-      slp::println("  ↳ {} cost function", types[std::to_underlying(f_type)]);
+      slp::println("  ↳ {} cost function", types[static_cast<uint8_t>(f_type)]);
       slp::println("  ↳ {} equality constraints",
-                   types[std::to_underlying(c_e_type)]);
+                   types[static_cast<uint8_t>(c_e_type)]);
       slp::println("  ↳ {} inequality constraints",
-                   types[std::to_underlying(c_i_type)]);
+                   types[static_cast<uint8_t>(c_i_type)]);
       slp::println("");
     };
 #endif
