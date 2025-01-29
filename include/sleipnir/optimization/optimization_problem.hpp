@@ -291,7 +291,7 @@ class SLEIPNIR_DLLEXPORT OptimizationProblem {
           [](const wpi::SmallVector<Variable>& constraints) {
             std::array<size_t, 5> type_counts{};
             for (const auto& constraint : constraints) {
-              ++type_counts[std::to_underlying(constraint.type())];
+              ++type_counts[static_cast<uint8_t>(constraint.type())];
             }
             for (const auto& [count, name] : std::views::zip(
                      type_counts, std::array{"empty", "constant", "linear",
