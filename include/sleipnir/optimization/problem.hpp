@@ -665,11 +665,11 @@ class Problem {
     // Print problem structure
     slp::println("\nProblem structure:");
     slp::println("  ↳ {} cost function",
-                 types[std::to_underlying(cost_function_type())]);
+                 types[static_cast<uint8_t>(cost_function_type())]);
     slp::println("  ↳ {} equality constraints",
-                 types[std::to_underlying(equality_constraint_type())]);
+                 types[static_cast<uint8_t>(equality_constraint_type())]);
     slp::println("  ↳ {} inequality constraints",
-                 types[std::to_underlying(inequality_constraint_type())]);
+                 types[static_cast<uint8_t>(inequality_constraint_type())]);
 
     if (m_decision_variables.size() == 1) {
       slp::print("\n1 decision variable\n");
@@ -681,7 +681,7 @@ class Problem {
         [](const gch::small_vector<Variable<Scalar>>& constraints) {
           std::array<size_t, 5> counts{};
           for (const auto& constraint : constraints) {
-            ++counts[std::to_underlying(constraint.type())];
+            ++counts[static_cast<uint8_t>(constraint.type())];
           }
           for (const auto& [count, name] :
                std::views::zip(counts, std::array{"empty", "constant", "linear",
