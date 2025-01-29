@@ -20,4 +20,5 @@ includeOtherLibs {
   ^fmt/
   ^gch/
   ^nanobind/
+  ^wpi/
 }
