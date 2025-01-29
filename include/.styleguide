@@ -10,4 +10,5 @@ includeOtherLibs {
   ^Eigen/
   ^fmt/
   ^gch/
+  ^wpi/
 }
