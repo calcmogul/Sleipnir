@@ -9,7 +9,7 @@
 #include <cmath>
 #include <ranges>
 #include <string>
-#include <utility>
+#include <type_traits>
 
 #include <wpi/SmallVector.h>
 
@@ -30,6 +30,15 @@ enum class IterationType : uint8_t {
   /// Rejected second-order correction iteration.
   kRejectedSOC
 };
+
+/**
+ * Converts an enumeration to its underlying type.
+ */
+template <typename T>
+[[nodiscard]]
+constexpr std::underlying_type_t<T> to_underlying(T value) noexcept {
+  return static_cast<std::underlying_type_t<T>>(value);
+}
 
 /**
  * Converts std::chrono::duration to a number of milliseconds rounded to three
@@ -90,8 +99,8 @@ void PrintIterationDiagnostics(int iterations, IterationType type,
 
   constexpr const char* kIterationTypes[] = {"norm", "✓SOC", "XSOC"};
   sleipnir::print("│{:4} {:4} {:9.3f} {:12e} {:13e} {:12e} {:12e} ", iterations,
-                  kIterationTypes[std::to_underlying(type)], ToMs(time), error,
-                  cost, infeasibility, complementarity);
+                  kIterationTypes[to_underlying(type)], ToMs(time), error, cost,
+                  infeasibility, complementarity);
 
   // Print regularization
   if (δ == 0.0) {
