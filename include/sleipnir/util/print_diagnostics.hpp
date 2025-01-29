@@ -237,9 +237,9 @@ void print_iteration_diagnostics(int iterations, IterationType type,
   slp::println(
       "│{:4} {:4} {:9.3f} {:12e} {:13e} {:12e} {:12e} {:.2e} {:<5} {:.2e} "
       "{:.2e} {:2d}│",
-      iterations, ITERATION_TYPES[std::to_underlying(type)], to_ms(time), error,
-      cost, infeasibility, complementarity, μ, power_of_10(δ), primal_α, dual_α,
-      backtracks);
+      iterations, ITERATION_TYPES[static_cast<uint8_t>(type)], to_ms(time),
+      error, cost, infeasibility, complementarity, μ, power_of_10(δ), primal_α,
+      dual_α, backtracks);
 }
 #else
 #define print_iteration_diagnostics(...)
