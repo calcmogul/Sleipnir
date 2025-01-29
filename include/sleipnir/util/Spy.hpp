@@ -11,6 +11,7 @@
 
 #include <Eigen/SparseCore>
 #include <wpi/SmallVector.h>
+#include <wpi/bit.h>
 
 #include "sleipnir/util/SymbolExports.hpp"
 
@@ -113,7 +114,7 @@ class SLEIPNIR_DLLEXPORT Spy {
    */
   void Write32le(int32_t num) {
     if constexpr (std::endian::native != std::endian::little) {
-      num = std::byteswap(num);
+      num = wpi::byteswap(num);
     }
     m_file.write(reinterpret_cast<char*>(&num), sizeof(num));
   }
