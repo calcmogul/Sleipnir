@@ -12,6 +12,7 @@
 #include <string_view>
 
 #include <Eigen/SparseCore>
+#include <wpi/util/bit.hpp>
 
 namespace slp {
 
@@ -106,7 +107,7 @@ class Spy {
   /// @param num A 32-bit signed integer.
   void write32le(int32_t num) {
     if constexpr (std::endian::native != std::endian::little) {
-      num = std::byteswap(num);
+      num = wpi::util::byteswap(num);
     }
     m_file.write(reinterpret_cast<char*>(&num), sizeof(num));
   }
