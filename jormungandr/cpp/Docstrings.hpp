@@ -267,10 +267,6 @@ Parameter ``callbacks``:
 Parameter ``config``:
     Configuration options for the solver.
 
-Parameter ``feasibility_restoration``:
-    Whether to use feasibility restoration instead of the normal
-    algorithm.
-
 Parameter ``x``:
     The initial guess and output location for the decision variables.
 

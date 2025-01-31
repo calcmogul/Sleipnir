@@ -13,7 +13,6 @@
 
 #include "optimization/RegularizedLDLT.hpp"
 #include "optimization/solver/util/ErrorEstimate.hpp"
-#include "optimization/solver/util/FeasibilityRestoration.hpp"
 #include "optimization/solver/util/Filter.hpp"
 #include "optimization/solver/util/IsLocallyInfeasible.hpp"
 #include "optimization/solver/util/KKTError.hpp"
@@ -185,7 +184,6 @@ void SQP(
   solveProfilers.emplace_back("  ↳ linear system solve");
   solveProfilers.emplace_back("  ↳ line search");
   solveProfilers.emplace_back("    ↳ SOC");
-  solveProfilers.emplace_back("  ↳ feasibility restoration");
   solveProfilers.emplace_back("  ↳ next iter prep");
 
   auto& innerIterProf = solveProfilers[0];
@@ -196,8 +194,7 @@ void SQP(
   auto& linearSystemSolveProf = solveProfilers[5];
   auto& lineSearchProf = solveProfilers[6];
   auto& socProf = solveProfilers[7];
-  auto& feasibilityRestorationProf = solveProfilers[8];
-  auto& nextIterPrepProf = solveProfilers[9];
+  auto& nextIterPrepProf = solveProfilers[8];
 
   // Prints final diagnostics when the solver exits
   scope_exit exit{[&] {
@@ -320,7 +317,6 @@ void SQP(
     Eigen::VectorXd p_y;
     constexpr double α_max = 1.0;
     double α = 1.0;
-    bool callFeasibilityRestoration = false;
 
     // Solve the Newton-KKT system
     //
@@ -331,8 +327,8 @@ void SQP(
       // The regularization procedure failed due to a rank-deficient equality
       // constraint Jacobian with linearly dependent constraints. Invoke
       // feasibility restoration.
-      callFeasibilityRestoration = true;
-      linearSystemSolveProfiler.Stop();
+      status->exitCondition = SolverExitCondition::kLocallyInfeasible;
+      return;
     } else {
       Eigen::VectorXd step = solver.Solve(rhs);
 
@@ -462,12 +458,9 @@ void SQP(
         // Reduce step size
         α *= α_red_factor;
 
-        // Safety factor for the minimal step size
-        constexpr double α_min_frac = 0.05;
-
         // If step size hit a minimum, check if the KKT error was reduced. If it
-        // wasn't, invoke feasibility restoration.
-        if (α < α_min_frac * Filter::γConstraint) {
+        // wasn't, report infeasible.
+        if (α < 1e-20) {
           double currentKKTError = KKTError(g, A_e, c_e, y);
 
           trial_x = x + α_max * p_x;
@@ -490,100 +483,34 @@ void SQP(
             break;
           }
 
-          callFeasibilityRestoration = true;
-          break;
+          status->exitCondition = SolverExitCondition::kLocallyInfeasible;
+          return;
         }
       }
     }
 
-    if (callFeasibilityRestoration) {
-      ScopedProfiler feasibilityRestorationProfiler{feasibilityRestorationProf};
-
-      auto initialEntry = filter.MakeEntry(c_e);
-
-      // Feasibility restoration phase
-      Eigen::VectorXd fr_x = x;
-      SolverStatus fr_status;
-      FeasibilityRestoration(
-          decisionVariables, equalityConstraints,
-          [&](const SolverIterationInfo& info) {
-            Eigen::VectorXd trial_x =
-                info.x.segment(0, decisionVariables.size());
-            xAD.SetValue(trial_x);
-
-            Eigen::VectorXd trial_c_e = c_eAD.Value();
-
-            // If current iterate is acceptable to normal filter and
-            // constraint violation has sufficiently reduced, stop
-            // feasibility restoration
-            auto entry = filter.MakeEntry(trial_c_e);
-            if (filter.IsAcceptable(entry, α) &&
-                entry.constraintViolation <
-                    0.9 * initialEntry.constraintViolation) {
-              return true;
-            }
-
-            return false;
-          },
-          config, fr_x, &fr_status);
-
-      if (fr_status.exitCondition ==
-          SolverExitCondition::kCallbackRequestedStop) {
-        // Accept step
-        x = fr_x;
-
-        // Lagrange multiplier estimates
-        //
-        //   y = (AₑAₑᵀ)⁻¹Aₑ∇f
-        //
-        // See equation (19.37) of [1].
-        xAD.SetValue(fr_x);
-
-        A_e = jacobianCe.Value();
-        g = gradientF.Value();
-
-        // lhs = AₑAₑᵀ
-        Eigen::SparseMatrix<double> lhs = A_e * A_e.transpose();
-
-        // rhs = Aₑ∇f
-        Eigen::VectorXd rhs = A_e * g;
-
-        Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> yEstimator{lhs};
-        y = yEstimator.solve(rhs);
-      } else if (fr_status.exitCondition == SolverExitCondition::kSuccess) {
-        status->exitCondition = SolverExitCondition::kLocallyInfeasible;
-        x = fr_x;
-        return;
-      } else {
-        status->exitCondition =
-            SolverExitCondition::kFeasibilityRestorationFailed;
-        x = fr_x;
-        return;
-      }
-    } else {
-      // If full step was accepted, reset full-step rejected counter
-      if (α == α_max) {
-        fullStepRejectedCounter = 0;
-      }
-
-      // Handle very small search directions by letting αₖ = αₖᵐᵃˣ when
-      // max(|pₖˣ(i)|/(1 + |xₖ(i)|)) < 10ε_mach.
-      //
-      // See section 3.9 of [2].
-      double maxStepScaled = 0.0;
-      for (int row = 0; row < x.rows(); ++row) {
-        maxStepScaled = std::max(maxStepScaled,
-                                 std::abs(p_x(row)) / (1.0 + std::abs(x(row))));
-      }
-      if (maxStepScaled < 10.0 * std::numeric_limits<double>::epsilon()) {
-        α = α_max;
-      }
-
-      // xₖ₊₁ = xₖ + αₖpₖˣ
-      // yₖ₊₁ = yₖ + αₖpₖʸ
-      x += α * p_x;
-      y += α * p_y;
+    // If full step was accepted, reset full-step rejected counter
+    if (α == α_max) {
+      fullStepRejectedCounter = 0;
     }
+
+    // Handle very small search directions by letting αₖ = αₖᵐᵃˣ when
+    // max(|pₖˣ(i)|/(1 + |xₖ(i)|)) < 10ε_mach.
+    //
+    // See section 3.9 of [2].
+    double maxStepScaled = 0.0;
+    for (int row = 0; row < x.rows(); ++row) {
+      maxStepScaled = std::max(maxStepScaled,
+                               std::abs(p_x(row)) / (1.0 + std::abs(x(row))));
+    }
+    if (maxStepScaled < 10.0 * std::numeric_limits<double>::epsilon()) {
+      α = α_max;
+    }
+
+    // xₖ₊₁ = xₖ + αₖpₖˣ
+    // yₖ₊₁ = yₖ + αₖpₖʸ
+    x += α * p_x;
+    y += α * p_y;
 
     // Update autodiff for Jacobians and Hessian
     xAD.SetValue(x);

@@ -321,7 +321,7 @@ class SLEIPNIR_DLLEXPORT OptimizationProblem {
       Eigen::VectorXd s = Eigen::VectorXd::Ones(m_inequalityConstraints.size());
       InteriorPoint(m_decisionVariables, m_equalityConstraints,
                     m_inequalityConstraints, m_f.value(), m_callbacks, config,
-                    false, x, s, &status);
+                    x, s, &status);
     }
 
 #ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
