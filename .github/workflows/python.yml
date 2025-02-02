@@ -38,12 +38,6 @@ jobs:
       # https://github.com/actions/checkout/issues/882
       - run: git fetch --tags --force origin
 
-      - name: Make GCC 14 the default toolchain (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 200
-          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 200
-
       - name: Set up sccache
         uses: mozilla-actions/sccache-action@v0.0.10
         # sccache doesn't work with MSBuild
