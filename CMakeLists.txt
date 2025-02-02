@@ -128,6 +128,16 @@ endif()
 
 target_link_libraries(Sleipnir PUBLIC Eigen3::Eigen)
 
+# fmt dependency
+FetchContent_Declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+    GIT_TAG 11.2.0
+)
+FetchContent_MakeAvailable(fmt)
+
+target_link_libraries(Sleipnir PUBLIC fmt::fmt)
+
 # small_vector dependency
 FetchContent_Declare(
     small_vector
