@@ -10,6 +10,7 @@
 #include <ostream>
 
 #include <Eigen/Core>
+#include <fmt/format.h>
 
 /**
  * A scalar type not implicitly convertible from/to floating-point or integral
@@ -179,6 +180,22 @@ class ExplicitDouble {
 
  private:
   double m_value;
+};
+
+template <>
+struct fmt::formatter<ExplicitDouble> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return m_underlying.parse(ctx);
+  }
+
+  template <typename FmtContext>
+  auto format(const ExplicitDouble& d, FmtContext& ctx) const {
+    return m_underlying.format(d.value(), ctx);
+  }
+
+ private:
+  fmt::formatter<double> m_underlying;
 };
 
 template <>
