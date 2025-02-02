@@ -85,7 +85,7 @@ void bind_problem(nb::class_<Problem<double>>& cls) {
           // C++'s Problem<double>::solve() takes an Options object instead of
           // keyword arguments, so there's no compile-time checking that the
           // arguments match.
-          auto key_str = nb::cast<std::string>(key);
+          std::string_view key_str = nb::cast<nb::str>(key).c_str();
           if (key_str == "tolerance") {
             options.tolerance = nb::cast<double>(value);
           } else if (key_str == "max_iterations") {
