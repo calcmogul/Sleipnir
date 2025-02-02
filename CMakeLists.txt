@@ -84,6 +84,17 @@ endif()
 
 target_link_libraries(Sleipnir PUBLIC Eigen3::Eigen)
 
+# fmt dependency
+set(FMT_INSTALL ON)
+FetchContent_Declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+    GIT_TAG 12.1.0
+)
+FetchContent_MakeAvailable(fmt)
+
+target_link_libraries(Sleipnir PUBLIC fmt::fmt)
+
 # small_vector dependency
 FetchContent_Declare(
     small_vector
@@ -287,13 +298,15 @@ if(BUILD_PYTHON)
 
     # Build Sleipnir dependency directly into the wheel to avoid having to
     # configure RPATHs
-    nanobind_add_module(_sleipnir STABLE_ABI ${python_ext_src} ${Sleipnir_src})
+    set(fmt_src ${fmt_SOURCE_DIR}/src/format.cc ${fmt_SOURCE_DIR}/src/os.cc)
+    nanobind_add_module(_sleipnir STABLE_ABI ${python_ext_src} ${fmt_src} ${Sleipnir_src})
     compiler_flags(_sleipnir)
     target_compile_definitions(_sleipnir PRIVATE SLEIPNIR_PYTHON=1)
     target_include_directories(
         _sleipnir
         PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/include
+            ${fmt_SOURCE_DIR}/include
             ${CMAKE_CURRENT_SOURCE_DIR}/python/cpp
     )
     target_link_libraries(
