@@ -20,20 +20,20 @@ jobs:
             os: windows-11-arm
             cmake-args:
           - name: Linux x86_64
-            os: ubuntu-24.04
+            os: ubuntu-22.04
             cmake-args:
           - name: Linux aarch64
-            os: ubuntu-24.04-arm
+            os: ubuntu-22.04-arm
             cmake-args:
           - name: macOS universal
             os: macos-15
             cmake-args:
           - name: Linux x86_64 (enable bound projection)
-            os: ubuntu-24.04
+            os: ubuntu-22.04
             cmake-args: -DDISABLE_BOUND_PROJECTION=OFF
             skip-tests: true
           - name: Linux x86_64 (disable diagnostics)
-            os: ubuntu-24.04
+            os: ubuntu-22.04
             cmake-args: -DDISABLE_DIAGNOSTICS=ON
 
     name: ${{ matrix.name }}
@@ -41,11 +41,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Make GCC 14 the default toolchain (Linux)
+      - name: Make GCC 12 the default toolchain (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 200
-          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 200
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 200
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 200
 
       - name: Set up sccache
         uses: mozilla-actions/sccache-action@v0.0.9
