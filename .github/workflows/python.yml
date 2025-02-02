@@ -20,7 +20,7 @@ jobs:
             os: windows-11-arm
             cmake-env:
           - name: Linux x86_64
-            os: ubuntu-24.04
+            os: ubuntu-22.04
             cmake-env:
           - name: Linux aarch64
             os: ubuntu-24.04-arm
@@ -38,11 +38,11 @@ jobs:
       # https://github.com/actions/checkout/issues/882
       - run: git fetch --tags --force origin
 
-      - name: Make GCC 14 the default toolchain (Linux)
+      - name: Make GCC 12 the default toolchain (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 200
-          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 200
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 200
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 200
 
       - name: Set up sccache
         uses: mozilla-actions/sccache-action@v0.0.9
