@@ -83,6 +83,17 @@ endif()
 
 target_link_libraries(Sleipnir PUBLIC Eigen3::Eigen)
 
+# fmt dependency
+set(FMT_INSTALL ON)
+FetchContent_Declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+    GIT_TAG 12.1.0
+)
+FetchContent_MakeAvailable(fmt)
+
+target_link_libraries(Sleipnir PUBLIC fmt::fmt)
+
 # small_vector dependency
 FetchContent_Declare(
     small_vector
@@ -276,7 +287,8 @@ if(BUILD_PYTHON)
 
     # Build Sleipnir dependency directly into the wheel to avoid having to
     # configure RPATHs
-    nanobind_add_module(_jormungandr ${jormungandr_src} ${Sleipnir_src})
+    set(fmt_src ${fmt_SOURCE_DIR}/src/format.cc ${fmt_SOURCE_DIR}/src/os.cc)
+    nanobind_add_module(_jormungandr ${jormungandr_src} ${fmt_src} ${Sleipnir_src})
     compiler_flags(_jormungandr)
     target_compile_definitions(_jormungandr PRIVATE JORMUNGANDR=1)
     target_include_directories(
@@ -284,6 +296,7 @@ if(BUILD_PYTHON)
         PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/src
             ${CMAKE_CURRENT_SOURCE_DIR}/include
+            ${fmt_SOURCE_DIR}/include
             ${CMAKE_CURRENT_SOURCE_DIR}/jormungandr/cpp
     )
     target_link_libraries(
