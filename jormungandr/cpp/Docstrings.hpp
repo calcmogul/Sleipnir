@@ -197,11 +197,26 @@ Parameter ``variable``:
     Variable of which to compute the Hessian.
 
 Parameter ``wrt``:
-    Vector of variables with respect to which to compute the Hessian.)doc";
+    Vector of variables with respect to which to compute the Hessian.
+
+Parameter ``only_lower``:
+    Only compute lower triangle of Hessian.)doc";
 
 static const char *__doc_sleipnir_Hessian_Value = R"doc(Evaluates the Hessian at wrt's value.)doc";
 
-static const char *__doc_sleipnir_Hessian_m_jacobian = R"doc()doc";
+static const char *__doc_sleipnir_Hessian_m_H = R"doc()doc";
+
+static const char *__doc_sleipnir_Hessian_m_cachedTriplets = R"doc()doc";
+
+static const char *__doc_sleipnir_Hessian_m_graphs = R"doc()doc";
+
+static const char *__doc_sleipnir_Hessian_m_nonlinearRows = R"doc()doc";
+
+static const char *__doc_sleipnir_Hessian_m_profilers = R"doc()doc";
+
+static const char *__doc_sleipnir_Hessian_m_variables = R"doc()doc";
+
+static const char *__doc_sleipnir_Hessian_m_wrt = R"doc()doc";
 
 static const char *__doc_sleipnir_InequalityConstraints = R"doc(A vector of inequality constraints of the form cᵢ(x) ≥ 0.)doc";
 
