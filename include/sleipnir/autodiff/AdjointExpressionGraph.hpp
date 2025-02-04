@@ -24,10 +24,35 @@ class AdjointExpressionGraph {
    * Generates the adjoint graph for the given expression.
    *
    * @param root The root node of the expression.
+   * @param wrt Vector of variables with respect to which to compute the
+   *   adjoints.
    */
-  explicit AdjointExpressionGraph(const Variable& root)
+  explicit AdjointExpressionGraph(const Variable& root,
+                                  const VariableMatrix& wrt)
       : m_topList{TopologicalSort(root.expr)} {
+    // Mark nodes that are parents of wrt
+    for (auto& node : wrt) {
+      node.expr->visited = true;
+    }
+    for (auto& node : m_topList | std::views::reverse) {
+      for (auto& arg : node->args) {
+        node->visited |= arg != nullptr && arg->visited;
+      }
+    }
+
+    // Prune unnecessary nodes
+    // erase_if(m_topList, [](const auto& elem) { return !elem->visited; });
+
+    // Unmark nodes
+    for (auto& node : m_topList) {
+      node->visited = false;
+    }
+    for (auto& node : wrt) {
+      node.expr->visited = false;
+    }
+
     for (const auto& node : m_topList) {
+      // Build column index list
       m_colList.emplace_back(node->col);
     }
   }

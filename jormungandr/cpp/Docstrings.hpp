@@ -197,11 +197,26 @@ Parameter ``variable``:
     Variable of which to compute the Hessian.
 
 Parameter ``wrt``:
-    Vector of variables with respect to which to compute the Hessian.)doc";
+    Vector of variables with respect to which to compute the Hessian.
+
+Parameter ``only_lower``:
+    Only compute lower triangle of Hessian.)doc";
 
 static const char *__doc_sleipnir_Hessian_Value = R"doc(Evaluates the Hessian at wrt's value.)doc";
 
-static const char *__doc_sleipnir_Hessian_m_jacobian = R"doc()doc";
+static const char *__doc_sleipnir_Hessian_m_J = R"doc()doc";
+
+static const char *__doc_sleipnir_Hessian_m_cachedTriplets = R"doc()doc";
+
+static const char *__doc_sleipnir_Hessian_m_graphs = R"doc()doc";
+
+static const char *__doc_sleipnir_Hessian_m_nonlinearRows = R"doc()doc";
+
+static const char *__doc_sleipnir_Hessian_m_profilers = R"doc()doc";
+
+static const char *__doc_sleipnir_Hessian_m_variables = R"doc()doc";
+
+static const char *__doc_sleipnir_Hessian_m_wrt = R"doc()doc";
 
 static const char *__doc_sleipnir_InequalityConstraints = R"doc(A vector of inequality constraints of the form cᵢ(x) ≥ 0.)doc";
 
@@ -1952,7 +1967,10 @@ static const char *__doc_sleipnir_detail_AdjointExpressionGraph_AdjointExpressio
 R"doc(Generates the adjoint graph for the given expression.
 
 Parameter ``root``:
-    The root node of the expression.)doc";
+    The root node of the expression.
+
+Parameter ``wrt``:
+    Vector of variables with respect to which to compute the adjoints.)doc";
 
 static const char *__doc_sleipnir_detail_AdjointExpressionGraph_AppendAdjointTriplets =
 R"doc(Updates the adjoints in the expression graph (computes the gradient)
@@ -2318,6 +2336,8 @@ static const char *__doc_sleipnir_detail_Expression_incomingEdges = R"doc(Counts
 static const char *__doc_sleipnir_detail_Expression_refCount = R"doc(Reference count for intrusive shared pointer.)doc";
 
 static const char *__doc_sleipnir_detail_Expression_value = R"doc(The value of the expression node.)doc";
+
+static const char *__doc_sleipnir_detail_Expression_visited = R"doc(Whether the expression node has been visited.)doc";
 
 static const char *__doc_sleipnir_detail_HypotExpression = R"doc()doc";
 
