@@ -2144,7 +2144,10 @@ static const char *__doc_sleipnir_detail_AdjointExpressionGraph_AdjointExpressio
 R"doc(Generates the adjoint graph for the given expression.
 
 Parameter ``root``:
-    The root node of the expression.)doc";
+    The root node of the expression.
+
+Parameter ``wrt``:
+    Vector of variables with respect to which to compute the adjoints.)doc";
 
 static const char *__doc_sleipnir_detail_AdjointExpressionGraph_append_adjoint_triplets =
 R"doc(Updates the adjoints in the expression graph (computes the gradient)
