@@ -27,8 +27,33 @@ class GradientExpressionGraph {
   /// Generates the gradient graph for the given expression.
   ///
   /// @param root The root node of the expression.
-  explicit GradientExpressionGraph(const Variable<Scalar>& root)
+  /// @param wrt Vector of variables with respect to which to compute the
+  ///     gradients.
+  GradientExpressionGraph(const Variable<Scalar>& root,
+                          const VariableMatrix<Scalar>& wrt)
       : m_top_list{topological_sort(root.expr)} {
+    // Mark nodes that are parents of wrt
+    for (auto& node : wrt) {
+      node.expr->incoming_edges = 1;
+    }
+    for (auto& node : m_top_list | std::views::reverse) {
+      for (auto& arg : node->args) {
+        node->incoming_edges += arg != nullptr && arg->incoming_edges > 0;
+      }
+    }
+
+    // Prune unnecessary nodes
+    erase_if(m_top_list,
+             [](const auto& elem) { return elem->incoming_edges == 0; });
+
+    // Unmark nodes
+    for (auto& node : m_top_list) {
+      node->incoming_edges = 0;
+    }
+    for (auto& node : wrt) {
+      node.expr->incoming_edges = 0;
+    }
+
     for (const auto& node : m_top_list) {
       m_col_list.emplace_back(node->col);
     }

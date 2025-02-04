@@ -60,7 +60,7 @@ class Jacobian {
     }
 
     for (auto& variable : m_variables) {
-      m_graphs.emplace_back(variable);
+      m_graphs.emplace_back(variable, m_wrt);
     }
 
     // Reset col to -1
