@@ -40,18 +40,27 @@ class Hessian {
   /// @param wrt Vector of variables with respect to which to compute the
   ///     Hessian.
   Hessian(Variable<Scalar> variable, SleipnirMatrixLike<Scalar> auto wrt)
-      : m_variables{detail::GradientExpressionGraph<Scalar>{variable}
+      : m_variables{detail::GradientExpressionGraph<Scalar>{variable, wrt}
                         .generate_tree(wrt)},
         m_wrt{wrt} {
     slp_assert(m_wrt.cols() == 1);
 
-    // Initialize column each expression's adjoint occupies in the Jacobian
-    for (size_t col = 0; col < m_wrt.size(); ++col) {
-      m_wrt[col].expr->col = col;
-    }
+    if constexpr (UpLo == Eigen::Lower) {
+      for (size_t col = 0; col < m_wrt.size(); ++col) {
+        // Initialize column each expression's adjoint occupies in the Hessian
+        m_wrt[col].expr->col = col;
 
-    for (auto& variable : m_variables) {
-      m_graphs.emplace_back(variable);
+        m_graphs.emplace_back(m_variables[col], m_wrt.block(0, 0, col + 1, 1));
+      }
+    } else {
+      // Initialize column each expression's adjoint occupies in the Hessian
+      for (size_t col = 0; col < m_wrt.size(); ++col) {
+        m_wrt[col].expr->col = col;
+      }
+
+      for (size_t col = 0; col < m_wrt.size(); ++col) {
+        m_graphs.emplace_back(m_variables[col], m_wrt);
+      }
     }
 
     // Reset col to -1
@@ -68,7 +77,7 @@ class Hessian {
         // If the row is linear, compute its gradient once here and cache its
         // triplets. Constant rows are ignored because their gradients have no
         // nonzero triplets.
-        m_graphs[row].append_triplets(m_cached_triplets, row, m_wrt);
+        m_graphs[row].append_triplets(m_cached_triplets, row, wrt);
       } else if (m_variables[row].type() > ExpressionType::LINEAR) {
         // If the row is quadratic or nonlinear, add it to the list of nonlinear
         // rows to be recomputed in value().
@@ -78,9 +87,6 @@ class Hessian {
 
     if (m_nonlinear_rows.empty()) {
       m_H.setFromTriplets(m_cached_triplets.begin(), m_cached_triplets.end());
-      if constexpr (UpLo == Eigen::Lower) {
-        m_H = m_H.template triangularView<Eigen::Lower>();
-      }
     }
   }
 
@@ -130,9 +136,6 @@ class Hessian {
     }
 
     m_H.setFromTriplets(triplets.begin(), triplets.end());
-    if constexpr (UpLo == Eigen::Lower) {
-      m_H = m_H.template triangularView<Eigen::Lower>();
-    }
 
     return m_H;
   }
