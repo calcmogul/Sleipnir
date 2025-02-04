@@ -72,7 +72,7 @@ void Newton(
   // Hessian of the Lagrangian H
   //
   // Hₖ = ∇²ₓₓL(xₖ, yₖ)
-  Hessian hessianL{L, xAD};
+  Hessian hessianL{L, xAD, true};
 
   setupProfilers.back().Stop();
   setupProfilers.emplace_back("  ↳ ∇²ₓₓL init solve").Start();
