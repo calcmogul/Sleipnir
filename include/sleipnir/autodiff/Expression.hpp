@@ -86,12 +86,15 @@ struct Expression {
   /// This expression's column in a Jacobian, or -1 otherwise.
   int32_t col = -1;
 
+  /// Reference count for intrusive shared pointer.
+  uint32_t refCount = 0;
+
+  /// Whether the expression node has been visited.
+  bool visited = false;
+
   /// The adjoint of the expression node used during gradient expression tree
   /// generation.
   ExpressionPtr adjointExpr;
-
-  /// Reference count for intrusive shared pointer.
-  uint32_t refCount = 0;
 
   /// Expression arguments.
   std::array<ExpressionPtr, 2> args{nullptr, nullptr};

@@ -101,7 +101,7 @@ void SQP(
   // Hessian of the Lagrangian H
   //
   // Hₖ = ∇²ₓₓL(xₖ, yₖ)
-  Hessian hessianL{L, xAD};
+  Hessian hessianL{L, xAD, true};
 
   setupProfilers.back().Stop();
   setupProfilers.emplace_back("  ↳ ∇²ₓₓL init solve").Start();
@@ -297,14 +297,11 @@ void SQP(
     //       [Aₑ   0 ]
     //
     // Don't assign upper triangle because solver only uses lower triangle.
-    const Eigen::SparseMatrix<double> topLeft =
-        H.triangularView<Eigen::Lower>();
     triplets.clear();
-    triplets.reserve(topLeft.nonZeros() + A_e.nonZeros());
+    triplets.reserve(H.nonZeros() + A_e.nonZeros());
     for (int col = 0; col < H.cols(); ++col) {
       // Append column of H lower triangle in top-left quadrant
-      for (Eigen::SparseMatrix<double>::InnerIterator it{topLeft, col}; it;
-           ++it) {
+      for (Eigen::SparseMatrix<double>::InnerIterator it{H, col}; it; ++it) {
         triplets.emplace_back(it.row(), it.col(), it.value());
       }
       // Append column of Aₑ in bottom-left quadrant
