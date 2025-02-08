@@ -700,9 +700,11 @@ class Problem {
           for (const auto& constraint : constraints) {
             ++counts[slp::to_underlying(constraint.type())];
           }
-          for (const auto& [count, name] :
-               std::views::zip(counts, std::array{"empty", "constant", "linear",
-                                                  "quadratic", "nonlinear"})) {
+          for (size_t i = 0; i < counts.size(); ++i) {
+            constexpr std::array names{"empty", "constant", "linear",
+                                       "quadratic", "nonlinear"};
+            const auto& count = counts[i];
+            const auto& name = names[i];
             if (count > 0) {
               slp::println("  ↳ {} {}", count, name);
             }
