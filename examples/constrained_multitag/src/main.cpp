@@ -4,7 +4,6 @@
 //
 // The robot pose is constrained to be on the floor (z = 0).
 
-#include <ranges>
 #include <utility>
 #include <vector>
 
@@ -69,8 +68,10 @@ int main() {
 
   // Cost
   slp::Variable J = 0.0;
-  for (const auto& [field2point, observation] :
-       std::views::zip(field2points, point_observations)) {
+  for (size_t i = 0; i < field2points.size(); ++i) {
+    const auto& field2point = field2points[i];
+    const auto& observation = point_observations[i];
+
     // camera2point = field2camera⁻¹ * field2point
     // field2camera * camera2point = field2point
     auto camera2point = camera2field * field2point;
