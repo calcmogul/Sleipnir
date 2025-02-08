@@ -315,9 +315,11 @@ class SLEIPNIR_DLLEXPORT Problem {
             for (const auto& constraint : constraints) {
               ++type_counts[static_cast<uint8_t>(constraint.type())];
             }
-            for (const auto& [count, name] : std::views::zip(
-                     type_counts, std::array{"empty", "constant", "linear",
-                                             "quadratic", "nonlinear"})) {
+            for (size_t i = 0; i < type_counts.size(); ++i) {
+              constexpr std::array names{"empty", "constant", "linear",
+                                         "quadratic", "nonlinear"};
+              const auto& count = type_counts[i];
+              const auto& name = names[i];
               if (count > 0) {
                 slp::println("  ↳ {} {}", count, name);
               }
