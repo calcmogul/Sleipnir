@@ -636,7 +636,7 @@ struct SLEIPNIR_DLLEXPORT InequalityConstraints {
    * @param inequalityConstraints The list of InequalityConstraints to
    * concatenate.
    */
-  InequalityConstraints(
+  InequalityConstraints(  // NOLINT
       std::initializer_list<InequalityConstraints> inequalityConstraints) {
     for (const auto& elem : inequalityConstraints) {
       constraints.insert(constraints.end(), elem.constraints.begin(),
