@@ -835,7 +835,7 @@ struct InequalityConstraints {
   ///
   /// @param inequality_constraints The list of InequalityConstraints to
   ///     concatenate.
-  InequalityConstraints(
+  InequalityConstraints(  // NOLINT
       std::initializer_list<InequalityConstraints> inequality_constraints) {
     for (const auto& elem : inequality_constraints) {
       constraints.insert(constraints.end(), elem.constraints.begin(),
