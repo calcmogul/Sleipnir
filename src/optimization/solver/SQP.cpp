@@ -252,7 +252,7 @@ void SQP(
     ScopedProfiler feasibilityCheckProfiler{feasibilityCheckProf};
 
     // Check for local equality constraint infeasibility
-    if (IsEqualityLocallyInfeasible(A_e, c_e)) {
+    if (IsEqualityLocallyInfeasible(A_e, c_e, y)) {
 #ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
       if (config.diagnostics) {
         sleipnir::println(
