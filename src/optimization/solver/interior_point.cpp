@@ -355,7 +355,7 @@ void interior_point(
     ScopedProfiler feasibility_check_profiler{feasibility_check_prof};
 
     // Check for local equality constraint infeasibility
-    if (is_equality_locally_infeasible(A_e, c_e)) {
+    if (is_equality_locally_infeasible(A_e, c_e, y)) {
 #ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
       if (config.diagnostics) {
         sleipnir::println(
@@ -376,7 +376,7 @@ void interior_point(
     }
 
     // Check for local inequality constraint infeasibility
-    if (is_inequality_locally_infeasible(A_i, c_i)) {
+    if (is_inequality_locally_infeasible(A_i, c_i, s, z)) {
 #ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
       if (config.diagnostics) {
         sleipnir::println(
