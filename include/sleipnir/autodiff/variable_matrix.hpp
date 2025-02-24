@@ -578,6 +578,10 @@ class VariableMatrix : public SleipnirBase {
 
     VariableMatrix<Scalar> result(detail::empty, lhs.rows(), rhs.cols());
 
+#if __GNUC__ >= 12
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
     for (int i = 0; i < lhs.rows(); ++i) {
       for (int j = 0; j < rhs.cols(); ++j) {
         Variable sum{Scalar(0)};
@@ -637,6 +641,9 @@ class VariableMatrix : public SleipnirBase {
         result[i, j] = sum;
       }
     }
+#if __GNUC__ >= 12
+#pragma GCC diagnostic pop
+#endif
 
     return result;
   }
