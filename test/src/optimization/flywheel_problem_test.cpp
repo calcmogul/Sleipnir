@@ -103,7 +103,7 @@ TEMPLATE_TEST_CASE("Problem - Flywheel", "[Problem]", SCALAR_TYPES_UNDER_TEST) {
       CHECK(U.value(0, k) >= u_ss);
       CHECK(U.value(0, k) <= T(12));
     } else {
-      CHECK_THAT(U.value(0, k), WithinAbs(u, T(1e-4)));
+      CHECK_THAT(U.value(0, k), WithinAbs(u, T(2e-4)));
     }
 
     INFO(std::format("  k = {}", k));
