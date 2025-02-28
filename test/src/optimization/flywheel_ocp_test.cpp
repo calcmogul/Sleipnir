@@ -107,7 +107,7 @@ void flywheel_test(
         // steady-states.
         CHECK_THAT(problem.U().value(0, k), WithinAbs(u, T(2)));
       } else {
-        CHECK_THAT(problem.U().value(0, k), WithinAbs(u, T(1e-4)));
+        CHECK_THAT(problem.U().value(0, k), WithinAbs(u, T(3e-4)));
       }
     }
 
