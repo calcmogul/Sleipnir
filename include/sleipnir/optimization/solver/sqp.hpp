@@ -22,6 +22,7 @@
 #include "sleipnir/optimization/solver/util/filter.hpp"
 #include "sleipnir/optimization/solver/util/is_locally_infeasible.hpp"
 #include "sleipnir/optimization/solver/util/kkt_error.hpp"
+#include "sleipnir/optimization/solver/util/lagrange_multiplier_estimate.hpp"
 #include "sleipnir/optimization/solver/util/regularized_ldlt.hpp"
 #include "sleipnir/util/assert.hpp"
 #include "sleipnir/util/print_diagnostics.hpp"
@@ -60,8 +61,13 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
                const Options& options,
                Eigen::Vector<Scalar, Eigen::Dynamic>& x) {
   using DenseVector = Eigen::Vector<Scalar, Eigen::Dynamic>;
+  using SparseMatrix = Eigen::SparseMatrix<Scalar>;
+  using SparseVector = Eigen::SparseVector<Scalar>;
 
-  DenseVector y = DenseVector::Zero(matrix_callbacks.num_equality_constraints);
+  SparseVector g = matrix_callbacks.g(x);
+  SparseMatrix A_e = matrix_callbacks.A_e(x);
+
+  DenseVector y = lagrange_multiplier_estimate(g, A_e);
 
   return sqp(matrix_callbacks, iteration_callbacks, options, x, y);
 }
