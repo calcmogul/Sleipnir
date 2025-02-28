@@ -1527,9 +1527,16 @@ class small_vector_data_base {
       default;
   ~small_vector_data_base() = default;
 
+#if __GNUC__ >= 14
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
   constexpr ptr data_ptr() const noexcept { return m_data_ptr; }
   constexpr size_ty capacity() const noexcept { return m_capacity; }
   constexpr size_ty size() const noexcept { return m_size; }
+#if __GNUC__ >= 14
+#pragma GCC diagnostic pop
+#endif
 
   constexpr void set_data_ptr(ptr data_ptr) noexcept { m_data_ptr = data_ptr; }
   constexpr void set_capacity(size_ty capacity) noexcept {
