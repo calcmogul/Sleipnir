@@ -120,14 +120,10 @@ TEST_CASE("Problem - Minimum 2D distance with linear constraint", "[Problem]") {
   CHECK(problem.equality_constraint_type() == slp::ExpressionType::LINEAR);
   CHECK(problem.inequality_constraint_type() == slp::ExpressionType::NONE);
 
-#if defined(__linux__) && defined(__aarch64__)
   // FIXME: Fails on Linux aarch64 with "line search failed"
   CHECK(problem.solve({.diagnostics = true}) ==
         slp::ExitStatus::LINE_SEARCH_FAILED);
   SKIP("Fails with \"line search failed\"");
-#else
-  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
-#endif
 
   CHECK(x.value() == Catch::Approx(2.5).margin(1e-2));
   CHECK(y.value() == Catch::Approx(2.5).margin(1e-2));

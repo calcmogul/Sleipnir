@@ -18,6 +18,7 @@
 #include "optimization/solver/util/filter.hpp"
 #include "optimization/solver/util/is_locally_infeasible.hpp"
 #include "optimization/solver/util/kkt_error.hpp"
+#include "optimization/solver/util/lagrange_multiplier_estimate.hpp"
 #include "sleipnir/autodiff/gradient.hpp"
 #include "sleipnir/autodiff/hessian.hpp"
 #include "sleipnir/autodiff/jacobian.hpp"
@@ -99,7 +100,7 @@ ExitStatus sqp(
   setup_profilers.emplace_back("  ↳ y setup").start();
 
   // Create autodiff variables for y for Lagrangian
-  Eigen::VectorXd y = Eigen::VectorXd::Zero(equality_constraints.size());
+  Eigen::VectorXd y = lagrange_multiplier_estimate(g, A_e);
   VariableMatrix y_ad(equality_constraints.size());
   y_ad.set_value(y);
 
