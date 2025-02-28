@@ -24,6 +24,7 @@
 #include "sleipnir/optimization/solver/util/fraction_to_the_boundary_rule.hpp"
 #include "sleipnir/optimization/solver/util/is_locally_infeasible.hpp"
 #include "sleipnir/optimization/solver/util/kkt_error.hpp"
+#include "sleipnir/optimization/solver/util/lagrange_multiplier_estimate.hpp"
 #include "sleipnir/optimization/solver/util/regularized_ldlt.hpp"
 #include "sleipnir/util/assert.hpp"
 #include "sleipnir/util/print_diagnostics.hpp"
@@ -71,13 +72,26 @@ ExitStatus interior_point(
 #endif
     Eigen::Vector<Scalar, Eigen::Dynamic>& x) {
   using DenseVector = Eigen::Vector<Scalar, Eigen::Dynamic>;
+  using SparseMatrix = Eigen::SparseMatrix<Scalar>;
+  using SparseVector = Eigen::SparseVector<Scalar>;
 
-  DenseVector s =
-      DenseVector::Ones(matrix_callbacks.num_inequality_constraints);
-  DenseVector y = DenseVector::Zero(matrix_callbacks.num_equality_constraints);
-  DenseVector z =
-      DenseVector::Ones(matrix_callbacks.num_inequality_constraints);
+  SparseVector g = matrix_callbacks.g(x);
+  SparseMatrix A_e = matrix_callbacks.A_e(x);
+  DenseVector c_i = matrix_callbacks.c_i(x);
+  SparseMatrix A_i = matrix_callbacks.A_i(x);
+
+  DenseVector s{matrix_callbacks.num_inequality_constraints};
+  for (int i = 0; i < matrix_callbacks.num_inequality_constraints; ++i) {
+    if (c_i[i] > Scalar(0)) {
+      s[i] = c_i[i];
+    } else {
+      s[i] = Scalar(1);
+    }
+  }
+
   Scalar μ(0.1);
+
+  auto [y, z] = lagrange_multiplier_estimate(g, A_e, A_i, s, μ);
 
   return interior_point(matrix_callbacks, iteration_callbacks, options, false,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
