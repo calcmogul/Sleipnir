@@ -16,6 +16,7 @@
 #include "optimization/solver/util/filter.hpp"
 #include "optimization/solver/util/is_locally_infeasible.hpp"
 #include "optimization/solver/util/kkt_error.hpp"
+#include "optimization/solver/util/lagrange_multiplier_estimate.hpp"
 #include "sleipnir/optimization/solver/exit_status.hpp"
 #include "sleipnir/optimization/solver/iteration_info.hpp"
 #include "sleipnir/optimization/solver/options.hpp"
@@ -134,14 +135,16 @@ ExitStatus sqp(const SQPMatrixCallbacks& matrix_callbacks,
   Eigen::SparseVector<double> g = matrices.g(x);
   Eigen::SparseMatrix<double> A_e = matrices.A_e(x);
 
-  Eigen::VectorXd y = Eigen::VectorXd::Zero(num_equality_constraints);
-
-  Eigen::SparseMatrix<double> H = matrices.H(x, y);
-
   // Ensure matrix callback dimensions are consistent
   slp_assert(g.rows() == num_decision_variables);
   slp_assert(A_e.rows() == num_equality_constraints);
   slp_assert(A_e.cols() == num_decision_variables);
+
+  Eigen::VectorXd y = lagrange_multiplier_estimate(g, A_e);
+
+  Eigen::SparseMatrix<double> H = matrices.H(x, y);
+
+  // Ensure matrix callback dimensions are consistent
   slp_assert(H.rows() == num_decision_variables);
   slp_assert(H.cols() == num_decision_variables);
 
