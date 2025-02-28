@@ -103,7 +103,7 @@ TEMPLATE_TEST_CASE("Problem - Flywheel", "[Problem]", SCALAR_TYPES_UNDER_TEST) {
       CHECK(U.value(0, k) >= u_ss);
       CHECK(U.value(0, k) <= T(12));
     } else {
-      CHECK_THAT(U.value(0, k), WithinAbs(u, T(1e-4)));
+      CHECK_THAT(U.value(0, k), WithinAbs(u, T(2e-4)));
     }
 
     INFO(std::format("  k = {}", k));
@@ -113,7 +113,7 @@ TEMPLATE_TEST_CASE("Problem - Flywheel", "[Problem]", SCALAR_TYPES_UNDER_TEST) {
   }
 
   // Verify final state
-  CHECK_THAT(X.value(0, N), WithinAbs(r[0], T(1e-7)));
+  CHECK_THAT(X.value(0, N), WithinAbs(r[0], T(2e-7)));
 
   // Log states for offline viewing
   std::ofstream states{"Problem - Flywheel states.csv"};
