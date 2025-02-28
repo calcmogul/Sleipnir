@@ -20,6 +20,7 @@
 #include "sleipnir/optimization/solver/util/filter.hpp"
 #include "sleipnir/optimization/solver/util/is_locally_infeasible.hpp"
 #include "sleipnir/optimization/solver/util/kkt_error.hpp"
+#include "sleipnir/optimization/solver/util/lagrange_multiplier_estimate.hpp"
 #include "sleipnir/optimization/solver/util/regularized_ldlt.hpp"
 #include "sleipnir/util/assert.hpp"
 #include "sleipnir/util/print_diagnostics.hpp"
@@ -163,15 +164,17 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
   Eigen::SparseVector<Scalar> g = matrices.g(x);
   Eigen::SparseMatrix<Scalar> A_e = matrices.A_e(x);
 
-  Eigen::Vector<Scalar, Eigen::Dynamic> y =
-      Eigen::Vector<Scalar, Eigen::Dynamic>::Zero(num_equality_constraints);
-
-  Eigen::SparseMatrix<Scalar> H = matrices.H(x, y);
-
   // Ensure matrix callback dimensions are consistent
   slp_assert(g.rows() == num_decision_variables);
   slp_assert(A_e.rows() == num_equality_constraints);
   slp_assert(A_e.cols() == num_decision_variables);
+
+  Eigen::Vector<Scalar, Eigen::Dynamic> y =
+      lagrange_multiplier_estimate(g, A_e);
+
+  Eigen::SparseMatrix<Scalar> H = matrices.H(x, y);
+
+  // Ensure matrix callback dimensions are consistent
   slp_assert(H.rows() == num_decision_variables);
   slp_assert(H.cols() == num_decision_variables);
 

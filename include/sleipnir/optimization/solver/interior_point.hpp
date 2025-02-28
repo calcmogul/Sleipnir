@@ -8,6 +8,7 @@
 #include <functional>
 #include <limits>
 #include <span>
+#include <utility>
 
 #include <Eigen/Core>
 #include <Eigen/SparseCore>
@@ -22,6 +23,7 @@
 #include "sleipnir/optimization/solver/util/fraction_to_the_boundary_rule.hpp"
 #include "sleipnir/optimization/solver/util/is_locally_infeasible.hpp"
 #include "sleipnir/optimization/solver/util/kkt_error.hpp"
+#include "sleipnir/optimization/solver/util/lagrange_multiplier_estimate.hpp"
 #include "sleipnir/optimization/solver/util/regularized_ldlt.hpp"
 #include "sleipnir/util/assert.hpp"
 #include "sleipnir/util/print_diagnostics.hpp"
@@ -196,25 +198,26 @@ ExitStatus interior_point(
   Eigen::SparseMatrix<Scalar> A_e = matrices.A_e(x);
   Eigen::SparseMatrix<Scalar> A_i = matrices.A_i(x);
 
-  Eigen::Vector<Scalar, Eigen::Dynamic> s =
-      Eigen::Vector<Scalar, Eigen::Dynamic>::Ones(num_inequality_constraints);
-#ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
-  // We set sʲ = cᵢʲ(x) for each bound inequality constraint index j
-  s = bound_constraint_mask.select(c_i, s);
-#endif
-  Eigen::Vector<Scalar, Eigen::Dynamic> y =
-      Eigen::Vector<Scalar, Eigen::Dynamic>::Zero(num_equality_constraints);
-  Eigen::Vector<Scalar, Eigen::Dynamic> z =
-      Eigen::Vector<Scalar, Eigen::Dynamic>::Ones(num_inequality_constraints);
-
-  Eigen::SparseMatrix<Scalar> H = matrices.H(x, y, z);
-
   // Ensure matrix callback dimensions are consistent
   slp_assert(g.rows() == num_decision_variables);
   slp_assert(A_e.rows() == num_equality_constraints);
   slp_assert(A_e.cols() == num_decision_variables);
   slp_assert(A_i.rows() == num_inequality_constraints);
   slp_assert(A_i.cols() == num_decision_variables);
+
+  Eigen::Vector<Scalar, Eigen::Dynamic> s =
+      Eigen::Vector<Scalar, Eigen::Dynamic>::Ones(num_inequality_constraints);
+#ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
+  // We set sʲ = cᵢʲ(x) for each bound inequality constraint index j
+  s = bound_constraint_mask.select(c_i, s);
+#endif
+  auto estimate = lagrange_multiplier_estimate(g, A_e, A_i, s, Scalar(0.1));
+  Eigen::Vector<Scalar, Eigen::Dynamic> y = std::move(estimate.y);
+  Eigen::Vector<Scalar, Eigen::Dynamic> z = std::move(estimate.z);
+
+  Eigen::SparseMatrix<Scalar> H = matrices.H(x, y, z);
+
+  // Ensure matrix callback dimensions are consistent
   slp_assert(H.rows() == num_decision_variables);
   slp_assert(H.cols() == num_decision_variables);
 
