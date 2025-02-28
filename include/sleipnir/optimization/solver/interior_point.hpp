@@ -22,6 +22,7 @@
 #include "sleipnir/optimization/solver/util/fraction_to_the_boundary_rule.hpp"
 #include "sleipnir/optimization/solver/util/is_locally_infeasible.hpp"
 #include "sleipnir/optimization/solver/util/kkt_error.hpp"
+#include "sleipnir/optimization/solver/util/lagrange_multiplier_estimate.hpp"
 #include "sleipnir/optimization/solver/util/regularized_ldlt.hpp"
 #include "sleipnir/util/assert.hpp"
 #include "sleipnir/util/print_diagnostics.hpp"
@@ -188,22 +189,28 @@ ExitStatus interior_point(
   SparseMatrix A_e = matrices.A_e(x);
   SparseMatrix A_i = matrices.A_i(x);
 
-  DenseVector s = DenseVector::Ones(num_inequality_constraints);
-#ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
-  // We set sʲ = cᵢʲ(x) for each bound inequality constraint index j
-  s = bound_constraint_mask.select(c_i, s);
-#endif
-  DenseVector y = DenseVector::Zero(num_equality_constraints);
-  DenseVector z = DenseVector::Ones(num_inequality_constraints);
-
-  SparseMatrix H = matrices.H(x, y, z);
-
   // Ensure matrix callback dimensions are consistent
   slp_assert(g.rows() == num_decision_variables);
   slp_assert(A_e.rows() == num_equality_constraints);
   slp_assert(A_e.cols() == num_decision_variables);
   slp_assert(A_i.rows() == num_inequality_constraints);
   slp_assert(A_i.cols() == num_decision_variables);
+
+  DenseVector s = DenseVector::Ones(num_inequality_constraints);
+  for (int i = 0; i < num_inequality_constraints; ++i) {
+    if (c_i[i] > Scalar(0)) {
+      s[i] = c_i[i];
+    }
+  }
+#ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
+  // We set sʲ = cᵢʲ(x) for each bound inequality constraint index j
+  s = bound_constraint_mask.select(c_i, s);
+#endif
+  auto [y, z] = lagrange_multiplier_estimate(g, A_e, A_i, s, Scalar(0.1));
+
+  SparseMatrix H = matrices.H(x, y, z);
+
+  // Ensure matrix callback dimensions are consistent
   slp_assert(H.rows() == num_decision_variables);
   slp_assert(H.cols() == num_decision_variables);
 
