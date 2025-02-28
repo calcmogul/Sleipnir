@@ -46,16 +46,7 @@ ExitStatus newton(
   small_vector<SetupProfiler> setup_profilers;
   setup_profilers.emplace_back("setup").start();
 
-  // Map decision variables and constraints to VariableMatrices for Lagrangian
   VariableMatrix x_ad{decision_variables};
-
-  setup_profilers.back().stop();
-  setup_profilers.emplace_back("  ↳ L setup").start();
-
-  // Lagrangian L
-  //
-  // L(xₖ, yₖ) = f(xₖ)
-  auto L = f;
 
   setup_profilers.back().stop();
   setup_profilers.emplace_back("  ↳ ∇f(x) setup").start();
@@ -67,6 +58,14 @@ ExitStatus newton(
   setup_profilers.emplace_back("  ↳ ∇f(x) init solve").start();
 
   Eigen::SparseVector<double> g = gradient_f.value();
+
+  setup_profilers.back().stop();
+  setup_profilers.emplace_back("  ↳ L setup").start();
+
+  // Lagrangian L
+  //
+  // L(xₖ, yₖ) = f(xₖ)
+  auto L = f;
 
   setup_profilers.back().stop();
   setup_profilers.emplace_back("  ↳ ∇²ₓₓL setup").start();
