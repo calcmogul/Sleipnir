@@ -7,6 +7,7 @@
 #include <cmath>
 #include <functional>
 #include <limits>
+#include <utility>
 
 #include <Eigen/Core>
 #include <Eigen/SparseCore>
@@ -17,6 +18,7 @@
 #include "optimization/solver/util/fraction_to_the_boundary_rule.hpp"
 #include "optimization/solver/util/is_locally_infeasible.hpp"
 #include "optimization/solver/util/kkt_error.hpp"
+#include "optimization/solver/util/lagrange_multiplier_estimate.hpp"
 #include "sleipnir/optimization/solver/exit_status.hpp"
 #include "sleipnir/optimization/solver/iteration_info.hpp"
 #include "sleipnir/optimization/solver/options.hpp"
@@ -92,8 +94,10 @@ ExitStatus interior_point(
   slp_assert(A_i.cols() == num_decision_variables);
 
   Eigen::VectorXd s = Eigen::VectorXd::Ones(num_inequality_constraints);
-  Eigen::VectorXd y = Eigen::VectorXd::Zero(num_equality_constraints);
-  Eigen::VectorXd z = Eigen::VectorXd::Ones(num_inequality_constraints);
+
+  auto estimate = lagrange_multiplier_estimate(g, A_e, A_i, s, 0.1);
+  Eigen::VectorXd y = std::move(estimate.y);
+  Eigen::VectorXd z = std::move(estimate.z);
 
   Eigen::SparseMatrix<double> H = matrix_callbacks.H(x, y, z);
 
