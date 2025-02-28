@@ -9,6 +9,7 @@
 #include <limits>
 #include <memory>
 #include <ranges>
+#include <utility>
 
 #include <Eigen/Core>
 #include <Eigen/SparseCore>
@@ -19,6 +20,7 @@
 #include "optimization/solver/util/fraction_to_the_boundary_rule.hpp"
 #include "optimization/solver/util/is_locally_infeasible.hpp"
 #include "optimization/solver/util/kkt_error.hpp"
+#include "optimization/solver/util/lagrange_multiplier_estimate.hpp"
 #include "sleipnir/autodiff/gradient.hpp"
 #include "sleipnir/autodiff/hessian.hpp"
 #include "sleipnir/autodiff/jacobian.hpp"
@@ -131,14 +133,13 @@ ExitStatus interior_point(
   VariableMatrix s_ad(inequality_constraints.size());
   s_ad.set_value(s);
 
-  // Create autodiff variables for y for Lagrangian
-  Eigen::VectorXd y = Eigen::VectorXd::Zero(equality_constraints.size());
+  // Create autodiff variables for y,z for Lagrangian
+  auto estimate = lagrange_multiplier_estimate(g, A_e, A_i, s, 0.1);
+  Eigen::VectorXd y = std::move(estimate.y);
+  Eigen::VectorXd z = std::move(estimate.z);
   VariableMatrix y_ad(equality_constraints.size());
-  y_ad.set_value(y);
-
-  // Create autodiff variables for z for Lagrangian
-  Eigen::VectorXd z = Eigen::VectorXd::Ones(inequality_constraints.size());
   VariableMatrix z_ad(inequality_constraints.size());
+  y_ad.set_value(y);
   z_ad.set_value(z);
 
   setup_profilers.back().stop();

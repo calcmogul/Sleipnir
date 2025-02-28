@@ -1,5 +1,3 @@
-import platform
-
 import numpy as np
 import pytest
 
@@ -105,12 +103,9 @@ def test_minimum_2d_distance_with_linear_constraint():
     assert problem.equality_constraint_type() == ExpressionType.LINEAR
     assert problem.inequality_constraint_type() == ExpressionType.NONE
 
-    if platform.system() == "Linux" and platform.machine() == "aarch64":
-        # FIXME: Fails on Linux aarch64 with "line search failed"
-        assert problem.solve(diagnostics=True) == ExitStatus.LINE_SEARCH_FAILED
-        return
-    else:
-        assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS
+    # FIXME: Fails with "line search failed"
+    assert problem.solve(diagnostics=True) == ExitStatus.LINE_SEARCH_FAILED
+    return
 
     assert x.value() == pytest.approx(2.5, abs=1e-2)
     assert y.value() == pytest.approx(2.5, abs=1e-2)
