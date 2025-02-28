@@ -7,6 +7,7 @@
 #include <cmath>
 #include <functional>
 #include <limits>
+#include <utility>
 
 #include <Eigen/Core>
 #include <Eigen/SparseCore>
@@ -18,6 +19,7 @@
 #include "optimization/solver/util/fraction_to_the_boundary_rule.hpp"
 #include "optimization/solver/util/is_locally_infeasible.hpp"
 #include "optimization/solver/util/kkt_error.hpp"
+#include "optimization/solver/util/lagrange_multiplier_estimate.hpp"
 #include "sleipnir/optimization/solver/exit_status.hpp"
 #include "sleipnir/optimization/solver/iteration_info.hpp"
 #include "sleipnir/optimization/solver/options.hpp"
@@ -163,22 +165,26 @@ ExitStatus interior_point(
   Eigen::SparseMatrix<double> A_e = matrices.A_e(x);
   Eigen::SparseMatrix<double> A_i = matrices.A_i(x);
 
-  Eigen::VectorXd s = Eigen::VectorXd::Ones(num_inequality_constraints);
-#ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
-  // We set sʲ = cᵢʲ(x) for each bound inequality constraint index j
-  s = bound_constraint_mask.select(c_i, s);
-#endif
-  Eigen::VectorXd y = Eigen::VectorXd::Zero(num_equality_constraints);
-  Eigen::VectorXd z = Eigen::VectorXd::Ones(num_inequality_constraints);
-
-  Eigen::SparseMatrix<double> H = matrices.H(x, y, z);
-
   // Ensure matrix callback dimensions are consistent
   slp_assert(g.rows() == num_decision_variables);
   slp_assert(A_e.rows() == num_equality_constraints);
   slp_assert(A_e.cols() == num_decision_variables);
   slp_assert(A_i.rows() == num_inequality_constraints);
   slp_assert(A_i.cols() == num_decision_variables);
+
+  Eigen::VectorXd s = Eigen::VectorXd::Ones(num_inequality_constraints);
+#ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
+  // We set sʲ = cᵢʲ(x) for each bound inequality constraint index j
+  s = bound_constraint_mask.select(c_i, s);
+#endif
+
+  auto estimate = lagrange_multiplier_estimate(g, A_e, A_i, s, 0.1);
+  Eigen::VectorXd y = std::move(estimate.y);
+  Eigen::VectorXd z = std::move(estimate.z);
+
+  Eigen::SparseMatrix<double> H = matrices.H(x, y, z);
+
+  // Ensure matrix callback dimensions are consistent
   slp_assert(H.rows() == num_decision_variables);
   slp_assert(H.cols() == num_decision_variables);
 
