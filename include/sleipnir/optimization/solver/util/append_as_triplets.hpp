@@ -42,3 +42,19 @@ void append_as_triplets(
     }
   }
 }
+
+/// Append diagonal matrix to list of triplets at the given offset.
+///
+/// @tparam Scalar Scalar type.
+/// @param triplets List of triplets.
+/// @param row_offset Row offset for first matrix.
+/// @param col_offset Column offset for first matrix.
+/// @param diag Diagonal of matrix.
+template <typename Scalar>
+void append_diagonal_as_triplets(
+    gch::small_vector<Eigen::Triplet<Scalar>>& triplets, int row_offset,
+    int col_offset, const Eigen::Vector<Scalar, Eigen::Dynamic>& diag) {
+  for (int row = 0; row < diag.rows(); ++row) {
+    triplets.emplace_back(row_offset + row, col_offset + row, diag[row]);
+  }
+}
