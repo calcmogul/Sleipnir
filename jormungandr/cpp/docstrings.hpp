@@ -1822,6 +1822,12 @@ R"doc(Sets the VariableMatrix's internal values.
 Parameter ``values``:
     Eigen matrix of values.)doc";
 
+static const char *__doc_slp_VariableMatrix_set_value_2 =
+R"doc(Sets the VariableMatrix's internal values.
+
+Parameter ``values``:
+    Diagonal matrix of values.)doc";
+
 static const char *__doc_slp_VariableMatrix_size =
 R"doc(Returns number of elements in matrix.
 
@@ -1989,6 +1995,41 @@ Parameter ``y``:
 
 Parameter ``x``:
     The x argument.)doc";
+
+static const char *__doc_slp_augmented_lagrangian =
+R"doc(Finds the optimal solution to a nonlinear program using the augmented
+Lagrangian method.
+
+A nonlinear program has the form:
+
+@verbatim min_x f(x) subject to cₑ(x) = 0 cᵢ(x) ≥ 0 @endverbatim
+
+where f(x) is the cost function, cₑ(x) are the equality constraints,
+and cᵢ(x) are the inequality constraints.
+
+Parameter ``decision_variables``:
+    The list of decision variables.
+
+Parameter ``equality_constraints``:
+    The list of equality constraints.
+
+Parameter ``inequality_constraints``:
+    The list of inequality constraints.
+
+Parameter ``f``:
+    The cost function.
+
+Parameter ``callbacks``:
+    The list of user callbacks.
+
+Parameter ``options``:
+    Solver options.
+
+Parameter ``x``:
+    The initial guess and output location for the decision variables.
+
+Returns:
+    The exit status.)doc";
 
 static const char *__doc_slp_block =
 R"doc(Assemble a VariableMatrix from a nested list of blocks.

@@ -387,14 +387,14 @@ ExitStatus sqp(
 #ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
             if (options.diagnostics) {
               double E = error_estimate(g, A_e, trial_c_e, trial_y);
-              print_iteration_diagnostics(iterations,
-                                          step_acceptable
-                                              ? IterationType::ACCEPTED_SOC
-                                              : IterationType::REJECTED_SOC,
-                                          soc_profiler.current_duration(), E,
-                                          f.value(), trial_c_e.lpNorm<1>(), 0.0,
-                                          0.0, solver.hessian_regularization(),
-                                          α_soc, 1.0, α_reduction_factor, 1.0);
+              print_ipm_iteration_diagnostics(
+                  iterations,
+                  step_acceptable ? IterationType::ACCEPTED_SOC
+                                  : IterationType::REJECTED_SOC,
+                  soc_profiler.current_duration(), E, f.value(),
+                  trial_c_e.lpNorm<1>(), 0.0, 0.0,
+                  solver.hessian_regularization(), α_soc, 1.0,
+                  α_reduction_factor, 1.0);
             }
 #endif
           }};
@@ -552,11 +552,11 @@ ExitStatus sqp(
 
 #ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
     if (options.diagnostics) {
-      print_iteration_diagnostics(iterations, IterationType::NORMAL,
-                                  inner_iter_profiler.current_duration(), E_0,
-                                  f.value(), c_e.lpNorm<1>(), 0.0, 0.0,
-                                  solver.hessian_regularization(), α, α_max,
-                                  α_reduction_factor, α);
+      print_ipm_iteration_diagnostics(iterations, IterationType::NORMAL,
+                                      inner_iter_profiler.current_duration(),
+                                      E_0, f.value(), c_e.lpNorm<1>(), 0.0, 0.0,
+                                      solver.hessian_regularization(), α, α_max,
+                                      α_reduction_factor, α);
     }
 #endif
 
