@@ -18,12 +18,10 @@
 #include "sleipnir/autodiff/expression_type.hpp"
 #include "sleipnir/autodiff/variable.hpp"
 #include "sleipnir/autodiff/variable_matrix.hpp"
+#include "sleipnir/optimization/solver/augmented_lagrangian.hpp"
 #include "sleipnir/optimization/solver/exit_status.hpp"
-#include "sleipnir/optimization/solver/interior_point.hpp"
 #include "sleipnir/optimization/solver/iteration_info.hpp"
-#include "sleipnir/optimization/solver/newton.hpp"
 #include "sleipnir/optimization/solver/options.hpp"
-#include "sleipnir/optimization/solver/sqp.hpp"
 #include "sleipnir/util/small_vector.hpp"
 #include "sleipnir/util/symbol_exports.hpp"
 
@@ -376,49 +374,20 @@ class SLEIPNIR_DLLEXPORT Problem {
 
     // Solve the optimization problem
     ExitStatus status;
-    if (m_equality_constraints.empty() && m_inequality_constraints.empty()) {
 #ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
-      if (options.diagnostics) {
-        print_chosen_solver("Newton", f_type, c_e_type, c_i_type);
-      }
+    if (options.diagnostics) {
+      print_chosen_solver("Augmented Lagrangian", f_type, c_e_type, c_i_type);
+    }
 #endif
-      if (m_f) {
-        status =
-            newton(m_decision_variables, m_f.value(), m_callbacks, options, x);
-      } else {
-        Variable zero = 0.0;
-        status = newton(m_decision_variables, zero, m_callbacks, options, x);
-      }
-    } else if (m_inequality_constraints.empty()) {
-#ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
-      if (options.diagnostics) {
-        print_chosen_solver("SQP", f_type, c_e_type, c_i_type);
-      }
-#endif
-      if (m_f) {
-        status = sqp(m_decision_variables, m_equality_constraints, m_f.value(),
-                     m_callbacks, options, x);
-      } else {
-        Variable zero = 0.0;
-        status = sqp(m_decision_variables, m_equality_constraints, zero,
-                     m_callbacks, options, x);
-      }
+    if (m_f) {
+      status = augmented_lagrangian(
+          m_decision_variables, m_equality_constraints,
+          m_inequality_constraints, m_f.value(), m_callbacks, options, x);
     } else {
-#ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
-      if (options.diagnostics) {
-        print_chosen_solver("IPM", f_type, c_e_type, c_i_type);
-      }
-#endif
-      if (m_f) {
-        status = interior_point(m_decision_variables, m_equality_constraints,
-                                m_inequality_constraints, m_f.value(),
-                                m_callbacks, options, x);
-      } else {
-        Variable zero = 0.0;
-        status = interior_point(m_decision_variables, m_equality_constraints,
-                                m_inequality_constraints, zero, m_callbacks,
-                                options, x);
-      }
+      Variable zero = 0.0;
+      status = augmented_lagrangian(
+          m_decision_variables, m_equality_constraints,
+          m_inequality_constraints, zero, m_callbacks, options, x);
     }
 
 #ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
