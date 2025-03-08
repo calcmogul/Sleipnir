@@ -280,7 +280,7 @@ ExitStatus sqp(const SQPMatrixCallbacks& matrix_callbacks,
             soc_profiler.stop();
 
             if (options.diagnostics) {
-              print_iteration_diagnostics(
+              print_ipm_iteration_diagnostics(
                   iterations,
                   step_acceptable ? IterationType::ACCEPTED_SOC
                                   : IterationType::REJECTED_SOC,
@@ -425,11 +425,11 @@ ExitStatus sqp(const SQPMatrixCallbacks& matrix_callbacks,
     inner_iter_profiler.stop();
 
     if (options.diagnostics) {
-      print_iteration_diagnostics(iterations, IterationType::NORMAL,
-                                  inner_iter_profiler.current_duration(), E_0,
-                                  f, c_e.lpNorm<1>(), 0.0, 0.0,
-                                  solver.hessian_regularization(), α, α_max,
-                                  α_reduction_factor, α);
+      print_ipm_iteration_diagnostics(iterations, IterationType::NORMAL,
+                                      inner_iter_profiler.current_duration(),
+                                      E_0, f, c_e.lpNorm<1>(), 0.0, 0.0,
+                                      solver.hessian_regularization(), α, α_max,
+                                      α_reduction_factor, α);
     }
 
     ++iterations;
