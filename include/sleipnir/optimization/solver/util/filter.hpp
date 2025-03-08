@@ -57,6 +57,15 @@ struct FilterEntry {
       : FilterEntry{f - μ * s.array().log().sum(),
                     slp::constraint_violation(c_e, c_i, s)} {}
 
+  /// Constructs an augmented Lagrangian method filter entry.
+  ///
+  /// @param f The cost function value.
+  /// @param c_e The equality constraint values (nonzero means violation).
+  /// @param c_i The inequality constraint values (negative means violation).
+  FilterEntry(Scalar f, const Eigen::Vector<Scalar, Eigen::Dynamic>& c_e,
+              const Eigen::Vector<Scalar, Eigen::Dynamic>& c_i)
+      : FilterEntry{f, slp::constraint_violation(c_e, c_i)} {}
+
   /// Returns true if this filter entry is dominated by another.
   ///
   /// @param entry The other entry.
