@@ -235,6 +235,101 @@ Scalar kkt_error_one_norm(const IPMIterates<Scalar>& iterates,
          (c_i - s).template lpNorm<1>();
 }
 
+/// Returns the ∞-norm of the scaled KKT condition errors for the augmented
+/// Lagrangian method.
+///
+/// If ρ is zero, this returns the KKT error of the original problem. Otherwise,
+/// it returns the stationarity error of the augmented Lagrangian subproblem.
+///
+/// @tparam Scalar Scalar type.
+/// @param iterates The iterates.
+/// @param function_values Cost function and constraint values.
+/// @param first_derivatives Cost function gradient and constraint Jacobians.
+/// @param ρ The penalty parameter.
+/// @param a The inequality constraint active set.
+template <typename Scalar>
+Scalar kkt_error_inf_norm(const ALIterates<Scalar>& iterates,
+                          const ALFunctionValues<Scalar>& function_values,
+                          const ALFirstDerivatives<Scalar>& first_derivatives,
+                          Scalar ρ, const Eigen::VectorX<Scalar>& a) {
+  using std::abs;
+
+  const auto& [x, y, z] = iterates;
+  const auto& [f, c_e, c_i] = function_values;
+  const auto& [g, A_e, A_i] = first_derivatives;
+
+  // The KKT conditions from docs/algorithms.md:
+  //
+  //   ∇f − Aₑᵀy − Aᵢᵀz = 0
+  //   zᵀcᵢ = 0
+  //   cₑ = 0
+  //   cᵢ ≥ 0
+
+  // See equation (5) of [2].
+
+  // s_d = max(sₘₐₓ, (‖y‖₁ + ‖z‖₁) / (m + n)) / sₘₐₓ
+  constexpr Scalar s_max(100);
+  Scalar s_d =
+      std::max(s_max, (y.template lpNorm<1>() + z.template lpNorm<1>()) /
+                          Scalar(y.rows() + z.rows())) /
+      s_max;
+
+  if (ρ == Scalar(0)) {
+    // s_c = max(sₘₐₓ, ‖z‖₁ / n) / sₘₐₓ
+    Scalar s_c =
+        std::max(s_max, z.template lpNorm<1>() / Scalar(z.rows())) / s_max;
+
+    // ‖∇f − Aₑᵀy − Aᵢᵀz‖_∞ / s_d
+    // ‖zᵀcᵢ‖_∞ / s_c
+    // ‖cₑ‖_∞
+    // ‖min(cᵢ, 0)‖_∞
+    return std::max(
+        {(g - A_e.transpose() * y - A_i.transpose() * z)
+                 .toDense()
+                 .template lpNorm<Eigen::Infinity>() /
+             s_d,
+         abs(z.dot(c_i)) / s_c, c_e.template lpNorm<Eigen::Infinity>(),
+         c_i.cwiseMin(Scalar(0)).template lpNorm<Eigen::Infinity>()});
+  } else {
+    // ‖∇f − Aₑᵀ(y − ρcₑ) − Aᵢᵀdiag(a)(z − ρcᵢ)‖_∞ / s_d
+    return (g - A_e.transpose() * (y - ρ * c_e) -
+            A_i.transpose() * (a.asDiagonal() * (z - ρ * c_i)))
+               .toDense()
+               .template lpNorm<Eigen::Infinity>() /
+           s_d;
+  }
+}
+
+/// Returns the 1-norm of the KKT condition errors for the augmented Lagrangian
+/// method.
+///
+/// @tparam Scalar Scalar type.
+/// @param iterates The iterates.
+/// @param function_values Cost function and constraint values.
+/// @param first_derivatives Cost function gradient and constraint Jacobians.
+template <typename Scalar>
+Scalar kkt_error_one_norm(const ALIterates<Scalar>& iterates,
+                          const ALFunctionValues<Scalar>& function_values,
+                          const ALFirstDerivatives<Scalar>& first_derivatives) {
+  using std::abs;
+
+  const auto& [x, y, z] = iterates;
+  const auto& [f, c_e, c_i] = function_values;
+  const auto& [g, A_e, A_i] = first_derivatives;
+
+  // The KKT conditions from docs/algorithms.md:
+  //
+  //   ∇f − Aₑᵀy − Aᵢᵀz = 0
+  //   zᵀcᵢ = 0
+  //   cₑ = 0
+  //   cᵢ ≥ 0
+  return (g - A_e.transpose() * y - A_i.transpose() * z)
+             .toDense()
+             .template lpNorm<1>() +
+         abs(z.dot(c_i)) + c_e.template lpNorm<1>() +
+         c_i.cwiseMin(Scalar(0)).template lpNorm<1>();
+}
+
 /// Returns the ∞-norm of the unscaled KKT condition errors for Newton's method.
 ///
 /// @tparam Scalar Scalar type.
@@ -335,6 +430,49 @@ Scalar unscaled_kkt_error_inf_norm(
   return kkt_error_inf_norm<Scalar>(iterates_unscaled, function_values_unscaled,
                                     first_derivatives_unscaled, μ_unscaled,
                                     tolerance);
+}
+
+/// Returns the ∞-norm of the unscaled KKT condition errors for the augmented
+/// Lagrangian method.
+///
+/// @tparam Scalar Scalar type.
+/// @param scaling Problem scaling.
+/// @param iterates Scaled iterates.
+/// @param function_values Scaled cost function and constraint values.
+/// @param first_derivatives Scaled cost function gradient and constraint
+///     Jacobians.
+/// @param ρ The penalty parameter.
+/// @param a The inequality constraint active set.
+template <typename Scalar>
+Scalar unscaled_kkt_error_inf_norm(
+    const ProblemScaling<Scalar>& scaling, const ALIterates<Scalar>& iterates,
+    const ALFunctionValues<Scalar>& function_values,
+    const ALFirstDerivatives<Scalar>& first_derivatives, Scalar ρ,
+    const Eigen::VectorX<Scalar>& a) {
+  using DenseVector = Eigen::VectorX<Scalar>;
+
+  if (scaling.is_identity()) {
+    return kkt_error_inf_norm<Scalar>(iterates, function_values,
+                                      first_derivatives, ρ, a);
+  }
+
+  const Scalar inv_d_f = Scalar(1) / scaling.f;
+  const DenseVector inv_d_c_e = scaling.c_e.cwiseInverse();
+  const DenseVector inv_d_c_i = scaling.c_i.cwiseInverse();
+
+  const ALFunctionValues<Scalar> function_values_unscaled{
+      inv_d_f * function_values.f, inv_d_c_e.cwiseProduct(function_values.c_e),
+      inv_d_c_i.cwiseProduct(function_values.c_i)};
+  const ALFirstDerivatives<Scalar> first_derivatives_unscaled{
+      inv_d_f * first_derivatives.g,
+      inv_d_c_e.asDiagonal() * first_derivatives.A_e,
+      inv_d_c_i.asDiagonal() * first_derivatives.A_i};
+  const ALIterates<Scalar> iterates_unscaled{
+      iterates.x, scaling.c_e.cwiseProduct(iterates.y) * inv_d_f,
+      scaling.c_i.cwiseProduct(iterates.z) * inv_d_f};
+
+  return kkt_error_inf_norm<Scalar>(iterates_unscaled, function_values_unscaled,
+                                    first_derivatives_unscaled, ρ, a);
 }
 
 }  // namespace slp

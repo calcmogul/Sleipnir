@@ -49,4 +49,27 @@ struct IPMFirstDerivatives {
   }
 };
 
+/// The cost function gradient and constraint Jacobians evaluated at an
+/// augmented Lagrangian method iterate's decision variables.
+///
+/// @tparam Scalar Scalar type.
+template <typename Scalar>
+struct ALFirstDerivatives {
+  /// The cost function gradient ∇f(x).
+  Eigen::SparseVector<Scalar> g;
+
+  /// The equality constraint Jacobian Aₑ(x).
+  Eigen::SparseMatrix<Scalar> A_e;
+
+  /// The inequality constraint Jacobian Aᵢ(x).
+  Eigen::SparseMatrix<Scalar> A_i;
+
+  /// Returns whether every value is finite.
+  ///
+  /// @return Whether every value is finite.
+  bool all_finite() const {
+    return slp::all_finite(g) && slp::all_finite(A_e) && slp::all_finite(A_i);
+  }
+};
+
 }  // namespace slp

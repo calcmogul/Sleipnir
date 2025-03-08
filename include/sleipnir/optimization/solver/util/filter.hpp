@@ -58,6 +58,14 @@ struct FilterEntry {
                     slp::constraint_violation(function_values.c_e,
                                               function_values.c_i, s)} {}
 
+  /// Constructs an augmented Lagrangian method filter entry.
+  ///
+  /// @param function_values The cost function and constraint values.
+  explicit FilterEntry(const ALFunctionValues<Scalar>& function_values)
+      : FilterEntry{function_values.f,
+                    slp::constraint_violation(function_values.c_e,
+                                              function_values.c_i)} {}
+
   /// Returns true if this filter entry is dominated by another.
   ///
   /// @param entry The other entry.
