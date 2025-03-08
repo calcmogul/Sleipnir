@@ -24,6 +24,8 @@
 #include "sleipnir/autodiff/jacobian.hpp"
 #include "sleipnir/autodiff/variable.hpp"
 #include "sleipnir/autodiff/variable_matrix.hpp"
+#include "sleipnir/optimization/solver/augmented_lagrangian.hpp"
+#include "sleipnir/optimization/solver/augmented_lagrangian_matrix_callbacks.hpp"
 #include "sleipnir/optimization/solver/exit_status.hpp"
 #include "sleipnir/optimization/solver/ipm.hpp"
 #include "sleipnir/optimization/solver/ipm_matrix_callbacks.hpp"
@@ -320,10 +322,10 @@ class Problem {
       status = solve_sqp(options, spy, x);
     } else {
       if (options.diagnostics) {
-        slp::println("\nInvoking IPM solver\n");
+        slp::println("\nInvoking augmented Lagrangian solver\n");
       }
 
-      status = solve_ipm(options, spy, x);
+      status = solve_augmented_lagrangian(options, spy, x);
     }
 
     if (options.diagnostics) {
@@ -796,6 +798,177 @@ class Problem {
                        bound_constraint_mask,
 #endif
                        x);
+  }
+
+  ExitStatus solve_augmented_lagrangian(const Options& options,
+                                        [[maybe_unused]] bool spy,
+                                        DenseVector& x) {
+    using SparseMatrix = Eigen::SparseMatrix<Scalar>;
+    using SparseVector = Eigen::SparseVector<Scalar>;
+
+    VariableMatrix<Scalar> x_ad{m_decision_variables};
+
+    // Set up cost function
+    Variable f = m_f.value_or(Scalar(0));
+
+    int num_decision_variables = m_decision_variables.size();
+    int num_equality_constraints = m_equality_constraints.size();
+    int num_inequality_constraints = m_inequality_constraints.size();
+
+    gch::small_vector<std::function<bool(const IterationInfo<Scalar>& info)>>
+        iteration_callbacks;
+    for (const auto& callback : m_iteration_callbacks) {
+      iteration_callbacks.emplace_back(callback);
+    }
+    for (const auto& callback : m_persistent_iteration_callbacks) {
+      iteration_callbacks.emplace_back(callback);
+    }
+
+    VariableMatrix<Scalar> c_e_ad{m_equality_constraints};
+    VariableMatrix<Scalar> c_i_ad{m_inequality_constraints};
+
+    // Set up Lagrangian
+    //
+    //   L(xₖ, yₖ, zₖ) = f(xₖ) − yₖᵀcₑ(xₖ) − zₖᵀcᵢ(xₖ)
+    //     + 1/2ρcₑᵀcₑ + 1/2ρcᵢᵀdiag(a)cᵢ
+    //
+    // where diag(a) = diag(if cᵢ[i] > 0 and z[i] = 0 { 0 } else { 1 })
+    // denotes the inequality constraint active set.
+    Variable<Scalar> ρ_ad;
+    VariableMatrix<Scalar> diag_a_ad(num_inequality_constraints,
+                                     num_inequality_constraints);
+    VariableMatrix<Scalar> y_ad(num_equality_constraints);
+    VariableMatrix<Scalar> z_ad(num_inequality_constraints);
+    Variable L = f - y_ad.T() * c_e_ad - z_ad.T() * c_i_ad +
+                 Scalar(0.5) * ρ_ad * c_e_ad.T() * c_e_ad +
+                 Scalar(0.5) * ρ_ad * c_i_ad.T() * diag_a_ad * c_i_ad;
+
+    gch::small_vector<SetupProfiler> ad_setup_profilers;
+    ad_setup_profilers.emplace_back("setup");
+    ad_setup_profilers.emplace_back("↳ ∇f(x)");
+    ad_setup_profilers.emplace_back("↳ ∇²ₓₓL");
+    ad_setup_profilers.emplace_back("↳ ∂cₑ/∂x");
+    ad_setup_profilers.emplace_back("↳ ∂cᵢ/∂x");
+
+    ad_setup_profilers[0].start();
+
+    // Set up gradient autodiff
+    ad_setup_profilers[1].start();
+    Gradient g{f, x_ad};
+    ad_setup_profilers[1].stop();
+
+    // Set up Lagrangian Hessian autodiff
+    ad_setup_profilers[2].start();
+    Hessian<Scalar, Eigen::Lower> H{L, x_ad};
+    ad_setup_profilers[2].stop();
+
+    // Set up equality constraint Jacobian autodiff
+    ad_setup_profilers[3].start();
+    Jacobian A_e{c_e_ad, x_ad};
+    ad_setup_profilers[3].stop();
+
+    // Set up inequality constraint Jacobian autodiff
+    ad_setup_profilers[4].start();
+    Jacobian A_i{c_i_ad, x_ad};
+    ad_setup_profilers[4].stop();
+
+    ad_setup_profilers[0].stop();
+
+    if (options.diagnostics) {
+      print_setup_diagnostics(ad_setup_profilers);
+    }
+
+#ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
+    // Sparsity pattern files written when spy flag is set
+    std::unique_ptr<Spy<Scalar>> H_spy;
+    std::unique_ptr<Spy<Scalar>> A_e_spy;
+    std::unique_ptr<Spy<Scalar>> A_i_spy;
+
+    if (spy) {
+      H_spy = std::make_unique<Spy<Scalar>>(
+          "H.spy", "Hessian", "Decision variables", "Decision variables",
+          num_decision_variables, num_decision_variables);
+      A_e_spy = std::make_unique<Spy<Scalar>>(
+          "A_e.spy", "Equality constraint Jacobian", "Constraints",
+          "Decision variables", num_equality_constraints,
+          num_decision_variables);
+      A_i_spy = std::make_unique<Spy<Scalar>>(
+          "A_i.spy", "Inequality constraint Jacobian", "Constraints",
+          "Decision variables", num_inequality_constraints,
+          num_decision_variables);
+      iteration_callbacks.push_back(
+          [&](const IterationInfo<Scalar>& info) -> bool {
+            H_spy->add(info.H);
+            A_e_spy->add(info.A_e);
+            A_i_spy->add(info.A_i);
+            return false;
+          });
+    }
+#endif
+
+    const auto [bound_constraint_mask, bounds, conflicting_bound_indices] =
+        get_bounds<Scalar>(m_decision_variables, m_inequality_constraints,
+                           A_i.value());
+    if (!conflicting_bound_indices.empty()) {
+      if (options.diagnostics) {
+        print_bound_constraint_global_infeasibility_error(
+            conflicting_bound_indices);
+      }
+      return ExitStatus::GLOBALLY_INFEASIBLE;
+    }
+
+#ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
+    project_onto_bounds(x, bounds);
+#endif
+
+    // Automatically scale the cost and constraints. The problem scaling
+    // procedure is described in more detail in
+    // docs/algorithms.md#problem-scaling.
+    x_ad.set_value(x);
+    const ProblemScaling<Scalar> scaling{g.value(), A_e.value(), A_i.value()};
+
+    AugmentedLagrangianMatrixCallbacks<Scalar> matrix_callbacks{
+        num_decision_variables,
+        num_equality_constraints,
+        num_inequality_constraints,
+        [&](const DenseVector& x) -> Scalar {
+          x_ad.set_value(x);
+          return scaling.f * f.value();
+        },
+        [&](const DenseVector& x) -> SparseVector {
+          x_ad.set_value(x);
+          return scaling.f * g.value();
+        },
+        [&](const DenseVector& x, const DenseVector& y, const DenseVector& z,
+            Scalar ρ, const DenseVector& a) -> SparseMatrix {
+          x_ad.set_value(x);
+          y_ad.set_value(scaling.c_e.cwiseProduct(y));
+          z_ad.set_value(scaling.c_i.cwiseProduct(z));
+          ρ_ad.set_value(ρ);
+          diag_a_ad.set_value(a.asDiagonal());
+          return scaling.f * H.value();
+        },
+        [&](const DenseVector& x) -> DenseVector {
+          x_ad.set_value(x);
+          return scaling.c_e.cwiseProduct(c_e_ad.value());
+        },
+        [&](const DenseVector& x) -> SparseMatrix {
+          x_ad.set_value(x);
+          return scaling.c_e.asDiagonal() * A_e.value();
+        },
+        [&](const DenseVector& x) -> DenseVector {
+          x_ad.set_value(x);
+          return scaling.c_i.cwiseProduct(c_i_ad.value());
+        },
+        [&](const DenseVector& x) -> SparseMatrix {
+          x_ad.set_value(x);
+          return scaling.c_i.asDiagonal() * A_i.value();
+        },
+        scaling};
+
+    // Invoke augmented Lagrangian solver
+    return augmented_lagrangian<Scalar>(matrix_callbacks, iteration_callbacks,
+                                        options, x);
   }
 
   void print_exit_conditions(const Options& options) {
