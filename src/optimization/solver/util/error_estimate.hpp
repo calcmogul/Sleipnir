@@ -120,4 +120,73 @@ inline double error_estimate(const Eigen::VectorXd& g,
                    (c_i - s).lpNorm<Eigen::Infinity>()});
 }
 
+/**
+ * Returns the error estimate using the KKT conditions for the augmented
+ * Lagrangian method.
+ *
+ * @param g Gradient of the cost function ∇f.
+ * @param A_e The problem's equality constraint Jacobian Aₑ(x) evaluated at the
+ *   current iterate.
+ * @param c_e The problem's equality constraints cₑ(x) evaluated at the current
+ *   iterate.
+ * @param A_i The problem's inequality constraint Jacobian Aᵢ(x) evaluated at
+ *   the current iterate.
+ * @param c_i The problem's inequality constraints cᵢ(x) evaluated at the
+ *   current iterate.
+ * @param y Equality constraint dual variables.
+ * @param z Inequality constraint dual variables.
+ * @param ρ The penalty parameter.
+ * @param a The inequality constraint active set.
+ */
+inline double error_estimate(const Eigen::VectorXd& g,
+                             const Eigen::SparseMatrix<double>& A_e,
+                             const Eigen::VectorXd& c_e,
+                             const Eigen::SparseMatrix<double>& A_i,
+                             const Eigen::VectorXd& c_i,
+                             const Eigen::VectorXd& y, const Eigen::VectorXd& z,
+                             double ρ, const Eigen::VectorXd& a) {
+  int num_equality_constraints = A_e.rows();
+  int num_inequality_constraints = A_i.rows();
+
+  // Update the error estimate using the KKT conditions.
+  //
+  //   ∇f − Aₑᵀ(y − ρcₑ) − Aᵢᵀ(z − ρdiag(a)cᵢ)
+  //   zᵀcᵢ = 0
+  //   cₑ = 0
+  //   cᵢ ≥ 0
+  //
+  // The error tolerance is the max of the following infinity norms scaled by
+  // s_d and s_c (see equation (5) of [2]).
+  //
+  //   ‖∇f − Aₑᵀ(y − ρcₑ) − Aᵢᵀ(z − ρdiag(a)cᵢ)‖_∞ / s_d
+  //   ‖zᵀcᵢ‖_∞ / s_c
+  //   ‖cₑ‖_∞
+  //   ‖min(cᵢ, 0)‖_∞
+
+  // s_d = max(sₘₐₓ, (‖y‖₁ + ‖z‖₁) / (m + n)) / sₘₐₓ
+  constexpr double s_max = 100.0;
+  double s_d = std::max(s_max, (y.lpNorm<1>() + z.lpNorm<1>()) /
+                                   (num_equality_constraints +
+                                    num_inequality_constraints)) /
+               s_max;
+
+  if (ρ == 0.0) {
+    // s_c = max(sₘₐₓ, ‖z‖₁ / n) / sₘₐₓ
+    double s_c =
+        std::max(s_max, z.lpNorm<1>() / num_inequality_constraints) / s_max;
+
+    return std::max({(g - A_e.transpose() * y - A_i.transpose() * z)
+                             .lpNorm<Eigen::Infinity>() /
+                         s_d,
+                     (z.transpose() * c_i).lpNorm<Eigen::Infinity>() / s_c,
+                     c_e.lpNorm<Eigen::Infinity>(),
+                     c_i.cwiseMin(0.0).lpNorm<Eigen::Infinity>()});
+  } else {
+    return (g - A_e.transpose() * (y - ρ * c_e) -
+            A_i.transpose() * (z - ρ * a.asDiagonal() * c_i))
+               .lpNorm<Eigen::Infinity>() /
+           s_d;
+  }
+}
+
 }  // namespace slp
