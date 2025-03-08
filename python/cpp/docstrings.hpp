@@ -2124,6 +2124,12 @@ R"doc(Sets the VariableMatrix's internal values.
 Parameter ``values``:
     Eigen matrix of values.)doc";
 
+static const char *__doc_slp_VariableMatrix_set_value_2 =
+R"doc(Sets the VariableMatrix's internal values.
+
+Parameter ``values``:
+    Diagonal matrix of values.)doc";
+
 static const char *__doc_slp_VariableMatrix_size =
 R"doc(Returns number of elements in matrix.
 
