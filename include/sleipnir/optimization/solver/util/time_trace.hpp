@@ -100,6 +100,15 @@ inline constexpr std::array ipm_setup_time_trace{
     TimeTraceEntry{SetupTimeTracerID::INEQUALITY_JACOBIAN, "∂cᵢ/∂x", 1},
 };
 
+/// Autodiff setup time trace for the augmented Lagrangian method.
+inline constexpr std::array al_setup_time_trace{
+    TimeTraceEntry{SetupTimeTracerID::SETUP, "setup", 0},
+    TimeTraceEntry{SetupTimeTracerID::GRADIENT, "∇f(x)", 1},
+    TimeTraceEntry{SetupTimeTracerID::HESSIAN, "∇²ₓₓL", 1},
+    TimeTraceEntry{SetupTimeTracerID::EQUALITY_JACOBIAN, "∂cₑ/∂x", 1},
+    TimeTraceEntry{SetupTimeTracerID::INEQUALITY_JACOBIAN, "∂cᵢ/∂x", 1},
+};
+
 /// Newton's method time trace.
 inline constexpr std::array newton_time_trace{
     TimeTraceEntry{SolveTimeTracerID::SOLVER, "solver", 0},
@@ -155,6 +164,26 @@ inline constexpr std::array ipm_time_trace{
     TimeTraceEntry{SolveTimeTracerID::GRADIENT, "∇f(x)", 2},
     TimeTraceEntry{SolveTimeTracerID::HESSIAN, "∇²ₓₓL", 2},
     TimeTraceEntry{SolveTimeTracerID::HESSIAN_CONSTRAINTS, "∇²ₓₓL_c", 2},
+    TimeTraceEntry{SolveTimeTracerID::EQUALITY_CONSTRAINTS, "cₑ(x)", 2},
+    TimeTraceEntry{SolveTimeTracerID::EQUALITY_JACOBIAN, "∂cₑ/∂x", 2},
+    TimeTraceEntry{SolveTimeTracerID::INEQUALITY_CONSTRAINTS, "cᵢ(x)", 2},
+    TimeTraceEntry{SolveTimeTracerID::INEQUALITY_JACOBIAN, "∂cᵢ/∂x", 2},
+};
+
+/// Augmented Lagrangian method time trace.
+inline constexpr std::array al_time_trace{
+    TimeTraceEntry{SolveTimeTracerID::SOLVER, "solver", 0},
+    TimeTraceEntry{SolveTimeTracerID::SETUP, "setup", 1},
+    TimeTraceEntry{SolveTimeTracerID::ITERATION, "iteration", 1},
+    TimeTraceEntry{SolveTimeTracerID::CALLBACKS, "callbacks", 2},
+    TimeTraceEntry{SolveTimeTracerID::KKT_MATRIX_BUILD, "KKT matrix build", 2},
+    TimeTraceEntry{SolveTimeTracerID::KKT_MATRIX_DECOMP, "KKT matrix decomp",
+                   2},
+    TimeTraceEntry{SolveTimeTracerID::KKT_SYSTEM_SOLVE, "KKT system solve", 2},
+    TimeTraceEntry{SolveTimeTracerID::LINE_SEARCH, "line search", 2},
+    TimeTraceEntry{SolveTimeTracerID::COST, "f(x)", 2},
+    TimeTraceEntry{SolveTimeTracerID::GRADIENT, "∇f(x)", 2},
+    TimeTraceEntry{SolveTimeTracerID::HESSIAN, "∇²ₓₓL", 2},
     TimeTraceEntry{SolveTimeTracerID::EQUALITY_CONSTRAINTS, "cₑ(x)", 2},
     TimeTraceEntry{SolveTimeTracerID::EQUALITY_JACOBIAN, "∂cₑ/∂x", 2},
     TimeTraceEntry{SolveTimeTracerID::INEQUALITY_CONSTRAINTS, "cᵢ(x)", 2},
