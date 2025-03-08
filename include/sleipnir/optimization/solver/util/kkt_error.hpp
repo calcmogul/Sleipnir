@@ -145,6 +145,76 @@ Scalar kkt_error(const Eigen::Vector<Scalar, Eigen::Dynamic>& g,
   }
 }
 
+/// Returns the KKT error for the augmented Lagrangian method.
+///
+/// @tparam Scalar Scalar type.
+/// @tparam T The type of KKT error to compute.
+/// @param g Cost function gradient ∇f.
+/// @param A_e Equality constraint Jacobian Aₑ(x).
+/// @param c_e Equality constraints cₑ(x).
+/// @param A_i Inequality constraint Jacobian Aᵢ(x).
+/// @param c_i Inequality constraints cᵢ(x).
+/// @param y Equality constraint dual variables.
+/// @param z Inequality constraint dual variables.
+/// @param ρ The penalty parameter.
+/// @param a The inequality constraint active set.
+template <typename Scalar, KKTErrorType T>
+Scalar kkt_error(const Eigen::Vector<Scalar, Eigen::Dynamic>& g,
+                 const Eigen::SparseMatrix<Scalar>& A_e,
+                 const Eigen::Vector<Scalar, Eigen::Dynamic>& c_e,
+                 const Eigen::SparseMatrix<Scalar>& A_i,
+                 const Eigen::Vector<Scalar, Eigen::Dynamic>& c_i,
+                 const Eigen::Vector<Scalar, Eigen::Dynamic>& y,
+                 const Eigen::Vector<Scalar, Eigen::Dynamic>& z, Scalar ρ,
+                 const Eigen::Vector<Scalar, Eigen::Dynamic>& a) {
+  // The KKT conditions from docs/algorithms.md:
+  //
+  //   ∇f − Aₑᵀy − Aᵢᵀz = 0
+  //   zᵀcᵢ = 0
+  //   cₑ = 0
+  //   cᵢ ≥ 0
+
+  if constexpr (T == KKTErrorType::INF_NORM_SCALED) {
+    // See equation (5) of [2].
+
+    // s_d = max(sₘₐₓ, (‖y‖₁ + ‖z‖₁) / (m + n)) / sₘₐₓ
+    constexpr Scalar s_max(100);
+    Scalar s_d =
+        std::max(s_max, (y.template lpNorm<1>() + z.template lpNorm<1>()) /
+                            Scalar(y.rows() + z.rows())) /
+        s_max;
+
+    if (ρ == Scalar(0)) {
+      // s_c = max(sₘₐₓ, ‖z‖₁ / n) / sₘₐₓ
+      Scalar s_c =
+          std::max(s_max, z.template lpNorm<1>() / Scalar(z.rows())) / s_max;
+
+      // ‖∇f − Aₑᵀ(y − ρcₑ) − Aᵢᵀ(z − ρdiag(a)cᵢ)‖_∞ / s_d
+      // ‖zᵀcᵢ‖_∞ / s_c
+      // ‖cₑ‖_∞
+      // ‖min(cᵢ, 0)‖_∞
+      return std::max(
+          {(g - A_e.transpose() * y - A_i.transpose() * z)
+                   .template lpNorm<Eigen::Infinity>() /
+               s_d,
+           (z.transpose() * c_i).template lpNorm<Eigen::Infinity>() / s_c,
+           c_e.template lpNorm<Eigen::Infinity>(),
+           c_i.cwiseMin(Scalar(0)).template lpNorm<Eigen::Infinity>()});
+    } else {
+      return (g - A_e.transpose() * (y - ρ * c_e) -
+              A_i.transpose() * (z - ρ * a.asDiagonal() * c_i))
+                 .template lpNorm<Eigen::Infinity>() /
+             s_d;
+    }
+  } else if constexpr (T == KKTErrorType::ONE_NORM) {
+    return (g - A_e.transpose() * y - A_i.transpose() * z)
+               .template lpNorm<1>() +
+           (z.transpose() * c_i).template lpNorm<1>() +
+           c_e.template lpNorm<1>() +
+           c_i.cwiseMin(Scalar(0)).template lpNorm<1>();
+  }
+}
+
 /// Returns the unscaled KKT error for Newton's method.
 ///
 /// @tparam Scalar Scalar type.
@@ -248,6 +318,58 @@ Scalar unscaled_kkt_error(const ProblemScaling<Scalar>& scaling,
   return kkt_error<Scalar, T>(g_unscaled, A_e_unscaled, c_e_unscaled,
                               A_i_unscaled, c_i_unscaled, s_unscaled,
                               y_unscaled, z_unscaled, μ_unscaled);
+}
+
+/// Returns the unscaled KKT error for the augmented Lagrangian method.
+///
+/// @tparam Scalar Scalar type.
+/// @tparam T Type of KKT error to compute.
+/// @param scaling Problem scaling.
+/// @param g Gradient of the cost function ∇f.
+/// @param A_e The problem's equality constraint Jacobian Aₑ(x) evaluated at the
+///     current iterate.
+/// @param c_e The problem's equality constraints cₑ(x) evaluated at the current
+///     iterate.
+/// @param A_i The problem's inequality constraint Jacobian Aᵢ(x) evaluated at
+///     the current iterate.
+/// @param c_i The problem's inequality constraints cᵢ(x) evaluated at the
+///     current iterate.
+/// @param y Equality constraint dual variables.
+/// @param z Inequality constraint dual variables.
+/// @param ρ The penalty parameter.
+/// @param a The inequality constraint active set.
+template <typename Scalar, KKTErrorType T>
+Scalar unscaled_kkt_error(const ProblemScaling<Scalar>& scaling,
+                          const Eigen::Vector<Scalar, Eigen::Dynamic>& g,
+                          const Eigen::SparseMatrix<Scalar>& A_e,
+                          const Eigen::Vector<Scalar, Eigen::Dynamic>& c_e,
+                          const Eigen::SparseMatrix<Scalar>& A_i,
+                          const Eigen::Vector<Scalar, Eigen::Dynamic>& c_i,
+                          const Eigen::Vector<Scalar, Eigen::Dynamic>& y,
+                          const Eigen::Vector<Scalar, Eigen::Dynamic>& z,
+                          Scalar ρ, Scalar a) {
+  using DenseVector = Eigen::Vector<Scalar, Eigen::Dynamic>;
+  using SparseMatrix = Eigen::SparseMatrix<Scalar>;
+
+  if (scaling.is_identity()) {
+    return kkt_error<Scalar, T>(g, A_e, c_e, A_i, c_i, y, z, ρ, a);
+  }
+
+  const Scalar inv_d_f = Scalar(1) / scaling.f;
+  const DenseVector inv_d_c_e = scaling.c_e.cwiseInverse();
+  const DenseVector inv_d_c_i = scaling.c_i.cwiseInverse();
+
+  const DenseVector g_unscaled = inv_d_f * g;
+  const SparseMatrix A_e_unscaled = inv_d_c_e.asDiagonal() * A_e;
+  const DenseVector c_e_unscaled = inv_d_c_e.cwiseProduct(c_e);
+  const SparseMatrix A_i_unscaled = inv_d_c_i.asDiagonal() * A_i;
+  const DenseVector c_i_unscaled = inv_d_c_i.cwiseProduct(c_i);
+  const DenseVector y_unscaled = scaling.c_e.cwiseProduct(y) * inv_d_f;
+  const DenseVector z_unscaled = scaling.c_i.cwiseProduct(z) * inv_d_f;
+
+  return kkt_error<Scalar, T>(g_unscaled, A_e_unscaled, c_e_unscaled,
+                              A_i_unscaled, c_i_unscaled, y_unscaled,
+                              z_unscaled, ρ, a);
 }
 
 }  // namespace slp

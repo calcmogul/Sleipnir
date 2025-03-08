@@ -568,7 +568,7 @@ ExitStatus interior_point(
             soc_profiler.stop();
 
             if (options.diagnostics && step_acceptable) {
-              print_iteration_diagnostics(
+              print_ipm_iteration_diagnostics(
                   iterations, IterationType::SECOND_ORDER_CORRECTION,
                   soc_profiler.current_duration(),
                   unscaled_kkt_error<Scalar, KKTErrorType::INF_NORM_SCALED>(
@@ -813,7 +813,7 @@ ExitStatus interior_point(
     inner_iter_profiler.stop();
 
     if (options.diagnostics) {
-      print_iteration_diagnostics(
+      print_ipm_iteration_diagnostics(
           iterations,
           in_feasibility_restoration ? IterationType::FEASIBILITY_RESTORATION
                                      : IterationType::NORMAL,

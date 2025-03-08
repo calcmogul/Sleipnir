@@ -394,7 +394,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
             soc_profiler.stop();
 
             if (options.diagnostics && step_acceptable) {
-              print_iteration_diagnostics(
+              print_ipm_iteration_diagnostics(
                   iterations, IterationType::SECOND_ORDER_CORRECTION,
                   soc_profiler.current_duration(),
                   kkt_error<Scalar, KKTErrorType::INF_NORM_SCALED>(
@@ -567,14 +567,15 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
     inner_iter_profiler.stop();
 
     if (options.diagnostics) {
-      print_iteration_diagnostics(iterations, IterationType::NORMAL,
-                                  inner_iter_profiler.current_duration(), E_0,
-                                  f, c_e.template lpNorm<1>(), Scalar(0),
-                                  Scalar(0), solver.hessian_regularization(),
-                                  solver.constraint_jacobian_regularization(),
-                                  step.p_x.template lpNorm<Eigen::Infinity>(),
-                                  step.p_y.template lpNorm<Eigen::Infinity>(),
-                                  α, α_max, α_reduction_factor, α);
+      print_ipm_iteration_diagnostics(
+          iterations, IterationType::NORMAL,
+          inner_iter_profiler.current_duration(), E_0, f,
+          c_e.template lpNorm<1>(), Scalar(0), Scalar(0),
+          solver.hessian_regularization(),
+          solver.constraint_jacobian_regularization(),
+          step.p_x.template lpNorm<Eigen::Infinity>(),
+          step.p_y.template lpNorm<Eigen::Infinity>(), α, α_max,
+          α_reduction_factor, α);
     }
 
     ++iterations;
