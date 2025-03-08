@@ -9,6 +9,7 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <concepts>
 #include <format>
 #include <ranges>
 #include <ratio>
@@ -208,6 +209,35 @@ void print_initial_iterate_diagnostics(Scalar error, Scalar cost,
 #endif
 
 #ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
+/// Prints diagnostics for the augmented Lagrangian method initial iterate.
+///
+/// @tparam Scalar Scalar type.
+/// @param error The error.
+/// @param cost The cost.
+/// @param infeasibility The infeasibility.
+/// @param complementarity The complementarity.
+/// @param ρ The penalty parameter.
+template <typename Scalar>
+void print_al_initial_iterate_diagnostics(Scalar error, Scalar cost,
+                                          Scalar infeasibility,
+                                          Scalar complementarity, Scalar ρ) {
+  slp::println("┏{:━^119}┓", "");
+  slp::println(
+      "┃{:^4}   {:^9} {:^10} {:^11} {:^10} {:^8} {:^8} {:^5} {:^5} {:^8} {:^8} "
+      "{:^8} {:^8} {:^2}┃",
+      "iter", "duration", "error", "cost", "infeas.", "complem.", "ρ", "δ", "γ",
+      "|p_pr|", "|p_du|", "α_pr", "α_du", "↩");
+  slp::println("┡{:━^119}┩", "");
+
+  slp::println(
+      "│init   {:^9} {:10.4e} {:11.4e} {:10.4e} {:8.2e} {:8.2e} {:^50}│", "",
+      error, cost, infeasibility, complementarity, ρ, "");
+}
+#else
+#define print_al_initial_iterate_diagnostics(...)
+#endif
+
+#ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
 /// Prints diagnostics for the current iterate.
 ///
 /// @tparam Scalar Scalar type.
@@ -272,6 +302,71 @@ void print_iterate_diagnostics(int iterations, IterationType type,
 #define print_iterate_diagnostics(...)
 #endif
 
+#ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
+/// Prints diagnostics for the current augmented Lagrangian method iterate.
+///
+/// @tparam Scalar Scalar type.
+/// @param iterations Number of iterations.
+/// @param type The iteration's type.
+/// @param time The iteration duration.
+/// @param error The error.
+/// @param cost The cost.
+/// @param infeasibility The infeasibility.
+/// @param complementarity The complementarity.
+/// @param ρ The penalty parameter.
+/// @param δ The Hessian regularization factor.
+/// @param full_primal_step_inf_norm The infinity norm of the full primal step.
+/// @param full_dual_step_inf_norm The infinity norm of the full dual step.
+/// @param primal_α The primal step size.
+/// @param primal_α_max The max primal step size.
+/// @param α_reduction_factor Factor by which primal_α is reduced during
+///     backtracking.
+/// @param dual_α The dual step size.
+template <typename Scalar, typename Rep, typename Period = std::ratio<1>>
+void print_al_iterate_diagnostics(
+    int iterations, IterationType type,
+    const std::chrono::duration<Rep, Period>& time, Scalar error, Scalar cost,
+    Scalar infeasibility, Scalar complementarity, Scalar ρ, Scalar δ,
+    Scalar full_primal_step_inf_norm, Scalar full_dual_step_inf_norm,
+    Scalar primal_α, Scalar primal_α_max, Scalar α_reduction_factor,
+    Scalar dual_α) {
+  if (iterations > 0 && iterations % 20 == 0) {
+    slp::println("┢{:━^119}┪", "");
+    slp::println(
+        "┃{:^4}   {:^9} {:^10} {:^11} {:^10} {:^8} {:^8} {:^5} {:^5} {:^8} "
+        "{:^8} {:^8} {:^8} {:^2}┃",
+        "iter", "duration", "error", "cost", "infeas.", "complem.", "ρ", "δ",
+        "γ", "|p_pr|", "|p_du|", "α_pr", "α_du", "↩");
+    slp::println("┡{:━^119}┩", "");
+  }
+
+  // For the number of backtracks, we want x such that:
+  //
+  //   αᵐᵃˣrˣ = α
+  //
+  // where r ∈ (0, 1) is the reduction factor.
+  //
+  //   rˣ = α/αᵐᵃˣ
+  //   ln(rˣ) = ln(α/αᵐᵃˣ)
+  //   x ln(r) = ln(α/αᵐᵃˣ)
+  //   x = ln(α/αᵐᵃˣ)/ln(r)
+  using std::log;
+  int backtracks =
+      static_cast<int>(log(primal_α / primal_α_max) / log(α_reduction_factor));
+
+  constexpr std::array ITERATION_TYPES{" ", "s", "r"};
+  slp::println(
+      "│{:4} {:1} {:9.3f} {:10.4e} {:11.4e} {:10.4e} {:8.2e} {:8.2e} {:<5} "
+      "{:<5} {:8.2e} {:8.2e} {:8.2e} {:8.2e} {:2d}│",
+      iterations, ITERATION_TYPES[std::to_underlying(type)], to_ms(time), error,
+      cost, infeasibility, complementarity, ρ, power_of_10(δ),
+      power_of_10(Scalar(0)), full_primal_step_inf_norm,
+      full_dual_step_inf_norm, primal_α, dual_α, backtracks);
+}
+#else
+#define print_al_iterate_diagnostics(...)
+#endif
+
 /// Prints the iterate diagnostics table's heading and initial iterate on
 /// construction and the table's bottom on destruction.
 ///
@@ -298,6 +393,20 @@ class IterateDiagnosticsTable {
     if (m_print) {
       print_initial_iterate_diagnostics(error, cost, infeasibility,
                                         complementarity, μ);
+    }
+  }
+
+  /// Prints the table heading and initial iterate diagnostics with the given
+  /// function if requested.
+  ///
+  /// @param print Whether to print the table.
+  /// @param print_initial_iterate Prints the table heading and initial iterate
+  ///     diagnostics.
+  template <std::invocable F>
+  IterateDiagnosticsTable(bool print, F&& print_initial_iterate)
+      : m_print{print} {
+    if (m_print) {
+      print_initial_iterate();
     }
   }
 
