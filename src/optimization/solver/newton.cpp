@@ -301,7 +301,7 @@ ExitStatus newton(
 
 #ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
     if (options.diagnostics) {
-      print_iteration_diagnostics(
+      print_ipm_iteration_diagnostics(
           iterations, IterationType::NORMAL,
           inner_iter_profiler.current_duration(), E_0, f.value(), 0.0, 0.0, 0.0,
           solver.hessian_regularization(), α, α_max, α_reduction_factor, 1.0);
