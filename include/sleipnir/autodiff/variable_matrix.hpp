@@ -298,6 +298,19 @@ class VariableMatrix : public SleipnirBase {
     }
   }
 
+  /// Sets the VariableMatrix's internal values.
+  ///
+  /// @param values Diagonal matrix of values.
+  template <typename Derived>
+    requires std::same_as<typename Derived::Scalar, Scalar>
+  void set_value(const Eigen::DiagonalBase<Derived>& values) {
+    slp_assert(rows() == values.rows() && cols() == values.cols());
+
+    for (int row = 0; row < std::min(values.rows(), values.cols()); ++row) {
+      (*this)[row, row].set_value(values.diagonal()[row]);
+    }
+  }
+
   /// Returns the element at the given row and column.
   ///
   /// @param row The row.

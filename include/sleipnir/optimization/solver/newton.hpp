@@ -263,7 +263,7 @@ ExitStatus newton(
     inner_iter_profiler.stop();
 
     if (options.diagnostics) {
-      print_iteration_diagnostics(
+      print_ipm_iteration_diagnostics(
           iterations, IterationType::NORMAL,
           inner_iter_profiler.current_duration(), E_0, f, Scalar(0), Scalar(0),
           Scalar(0), solver.hessian_regularization(),
