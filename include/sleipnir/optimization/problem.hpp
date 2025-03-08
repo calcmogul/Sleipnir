@@ -23,8 +23,8 @@
 #include "sleipnir/autodiff/jacobian.hpp"
 #include "sleipnir/autodiff/variable.hpp"
 #include "sleipnir/autodiff/variable_matrix.hpp"
+#include "sleipnir/optimization/solver/augmented_lagrangian.hpp"
 #include "sleipnir/optimization/solver/exit_status.hpp"
-#include "sleipnir/optimization/solver/interior_point.hpp"
 #include "sleipnir/optimization/solver/iteration_info.hpp"
 #include "sleipnir/optimization/solver/newton.hpp"
 #include "sleipnir/optimization/solver/options.hpp"
@@ -477,7 +477,7 @@ class Problem {
           callbacks, options, x);
     } else {
       if (options.diagnostics) {
-        slp::println("\nInvoking IPM solver...\n");
+        slp::println("\nInvoking augmented Lagrangian solver...\n");
       }
 
       VariableMatrix<Scalar> c_e_ad{m_equality_constraints};
@@ -494,9 +494,20 @@ class Problem {
       ad_setup_profilers.back().stop();
 
       // Set up Lagrangian
+      //
+      //   L(xₖ, yₖ, zₖ) = f(xₖ) − yₖᵀcₑ(xₖ) − zₖᵀcᵢ(xₖ)
+      //     + 1/2ρcₑᵀcₑ + 1/2ρcᵢᵀdiag(a)cᵢ
+      //
+      // where diag(a) = diag(if cᵢ[i] > 0 and z[i] = 0 { 0 } else { 1 })
+      // denotes the inequality constraint active set.
+      Variable<Scalar> ρ_ad;
+      VariableMatrix<Scalar> diag_a_ad(num_inequality_constraints,
+                                       num_inequality_constraints);
       VariableMatrix<Scalar> y_ad(num_equality_constraints);
       VariableMatrix<Scalar> z_ad(num_inequality_constraints);
-      Variable L = f - (y_ad.T() * c_e_ad)[0] - (z_ad.T() * c_i_ad)[0];
+      Variable L = f - (y_ad.T() * c_e_ad)[0] - (z_ad.T() * c_i_ad)[0] +
+                   Scalar(0.5) * ρ_ad * c_e_ad.T() * c_e_ad +
+                   Scalar(0.5) * ρ_ad * c_i_ad.T() * diag_a_ad * c_i_ad;
 
       // Set up Lagrangian Hessian autodiff
       ad_setup_profilers.emplace_back("  ↳ ∇²ₓₓL").start();
@@ -546,9 +557,9 @@ class Problem {
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
       project_onto_bounds(x, bounds);
 #endif
-      // Invoke interior-point method solver
-      status = interior_point<Scalar>(
-          InteriorPointMatrixCallbacks<Scalar>{
+      // Invoke augmented Lagrangian solver
+      status = augmented_lagrangian<Scalar>(
+          AugmentedLagrangianMatrixCallbacks<Scalar>{
               [&](const Eigen::Vector<Scalar, Eigen::Dynamic>& x) -> Scalar {
                 x_ad.set_value(x);
                 return f.value();
@@ -560,11 +571,14 @@ class Problem {
               },
               [&](const Eigen::Vector<Scalar, Eigen::Dynamic>& x,
                   const Eigen::Vector<Scalar, Eigen::Dynamic>& y,
-                  const Eigen::Vector<Scalar, Eigen::Dynamic>& z)
+                  const Eigen::Vector<Scalar, Eigen::Dynamic>& z, Scalar ρ,
+                  const Eigen::Vector<Scalar, Eigen::Dynamic>& a)
                   -> Eigen::SparseMatrix<Scalar> {
                 x_ad.set_value(x);
                 y_ad.set_value(y);
                 z_ad.set_value(z);
+                ρ_ad.set_value(ρ);
+                diag_a_ad.set_value(a.asDiagonal());
                 return H.value();
               },
               [&](const Eigen::Vector<Scalar, Eigen::Dynamic>& x)
@@ -587,11 +601,7 @@ class Problem {
                 x_ad.set_value(x);
                 return A_i.value();
               }},
-          callbacks, options,
-#ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
-          bound_constraint_mask,
-#endif
-          x);
+          callbacks, options, x);
     }
 
     if (options.diagnostics) {
