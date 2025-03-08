@@ -478,7 +478,7 @@ ExitStatus interior_point(
             soc_profiler.stop();
 
             if (options.diagnostics) {
-              print_iteration_diagnostics(
+              print_ipm_iteration_diagnostics(
                   iterations,
                   step_acceptable ? IterationType::ACCEPTED_SOC
                                   : IterationType::REJECTED_SOC,
@@ -668,7 +668,7 @@ ExitStatus interior_point(
     inner_iter_profiler.stop();
 
     if (options.diagnostics) {
-      print_iteration_diagnostics(
+      print_ipm_iteration_diagnostics(
           iterations, IterationType::NORMAL,
           inner_iter_profiler.current_duration(), E_0, f,
           c_e.template lpNorm<1>() + (c_i - s).template lpNorm<1>(), s.dot(z),

@@ -61,6 +61,15 @@ struct FilterEntry {
       : FilterEntry{f - μ * s.array().log().sum(),
                     c_e.template lpNorm<1>() + (c_i - s).template lpNorm<1>()} {
   }
+
+  /// Constructs an augmented Lagrangian method filter entry.
+  ///
+  /// @param f The cost function value.
+  /// @param c_e The equality constraint values (nonzero means violation).
+  /// @param c_i The inequality constraint values (negative means violation).
+  FilterEntry(Scalar f, const Eigen::Vector<Scalar, Eigen::Dynamic>& c_e,
+              const Eigen::Vector<Scalar, Eigen::Dynamic>& c_i)
+      : FilterEntry{f, c_e.template lpNorm<1>() + c_i.template lpNorm<1>()} {}
 };
 
 /// Step filter.
