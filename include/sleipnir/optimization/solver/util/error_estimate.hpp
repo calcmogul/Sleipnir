@@ -127,4 +127,72 @@ Scalar error_estimate(const Eigen::Vector<Scalar, Eigen::Dynamic>& g,
                    (c_i - s).template lpNorm<Eigen::Infinity>()});
 }
 
+/// Returns the error estimate using the KKT conditions for the augmented
+/// Lagrangian method.
+///
+/// @tparam Scalar Scalar type.
+/// @param g Gradient of the cost function ∇f.
+/// @param A_e The problem's equality constraint Jacobian Aₑ(x) evaluated at the
+///     current iterate.
+/// @param c_e The problem's equality constraints cₑ(x) evaluated at the current
+///     iterate.
+/// @param A_i The problem's inequality constraint Jacobian Aᵢ(x) evaluated at
+///     the current iterate.
+/// @param c_i The problem's inequality constraints cᵢ(x) evaluated at the
+///     current iterate.
+/// @param y Equality constraint dual variables.
+/// @param z Inequality constraint dual variables.
+/// @param ρ The penalty parameter.
+/// @param a The inequality constraint active set.
+template <typename Scalar>
+Scalar error_estimate(const Eigen::Vector<Scalar, Eigen::Dynamic>& g,
+                      const Eigen::SparseMatrix<Scalar>& A_e,
+                      const Eigen::Vector<Scalar, Eigen::Dynamic>& c_e,
+                      const Eigen::SparseMatrix<Scalar>& A_i,
+                      const Eigen::Vector<Scalar, Eigen::Dynamic>& c_i,
+                      const Eigen::Vector<Scalar, Eigen::Dynamic>& y,
+                      const Eigen::Vector<Scalar, Eigen::Dynamic>& z, Scalar ρ,
+                      const Eigen::Vector<Scalar, Eigen::Dynamic>& a) {
+  // Update the error estimate using the KKT conditions.
+  //
+  //   ∇f − Aₑᵀ(y − ρcₑ) − Aᵢᵀ(z − ρdiag(a)cᵢ)
+  //   zᵀcᵢ = 0
+  //   cₑ = 0
+  //   cᵢ ≥ 0
+  //
+  // The error tolerance is the max of the following infinity norms scaled by
+  // s_d and s_c (see equation (5) of [2]).
+  //
+  //   ‖∇f − Aₑᵀ(y − ρcₑ) − Aᵢᵀ(z − ρdiag(a)cᵢ)‖_∞ / s_d
+  //   ‖zᵀcᵢ‖_∞ / s_c
+  //   ‖cₑ‖_∞
+  //   ‖min(cᵢ, 0)‖_∞
+
+  // s_d = max(sₘₐₓ, (‖y‖₁ + ‖z‖₁) / (m + n)) / sₘₐₓ
+  constexpr Scalar s_max(100);
+  Scalar s_d =
+      std::max(s_max, (y.template lpNorm<1>() + z.template lpNorm<1>()) /
+                          Scalar(y.rows() + z.rows())) /
+      s_max;
+
+  if (ρ == Scalar(0)) {
+    // s_c = max(sₘₐₓ, ‖z‖₁ / n) / sₘₐₓ
+    Scalar s_c =
+        std::max(s_max, z.template lpNorm<1>() / Scalar(z.rows())) / s_max;
+
+    return std::max(
+        {(g - A_e.transpose() * y - A_i.transpose() * z)
+                 .template lpNorm<Eigen::Infinity>() /
+             s_d,
+         (z.transpose() * c_i).template lpNorm<Eigen::Infinity>() / s_c,
+         c_e.template lpNorm<Eigen::Infinity>(),
+         c_i.cwiseMin(Scalar(0)).template lpNorm<Eigen::Infinity>()});
+  } else {
+    return (g - A_e.transpose() * (y - ρ * c_e) -
+            A_i.transpose() * (z - ρ * a.asDiagonal() * c_i))
+               .template lpNorm<Eigen::Infinity>() /
+           s_d;
+  }
+}
+
 }  // namespace slp
