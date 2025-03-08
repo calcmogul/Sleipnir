@@ -168,7 +168,7 @@ inline void print_bound_constraint_global_infeasibility_error(
 #endif
 
 #ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
-/// Prints diagnostics for the current iteration.
+/// Prints diagnostics for the current interior-point method iteration.
 ///
 /// @tparam Scalar Scalar type.
 /// @param iterations Number of iterations.
@@ -186,13 +186,12 @@ inline void print_bound_constraint_global_infeasibility_error(
 ///     backtracking.
 /// @param dual_α The dual step size.
 template <typename Scalar, typename Rep, typename Period = std::ratio<1>>
-void print_iteration_diagnostics(int iterations, IterationType type,
-                                 const std::chrono::duration<Rep, Period>& time,
-                                 Scalar error, Scalar cost,
-                                 Scalar infeasibility, Scalar complementarity,
-                                 Scalar μ, Scalar δ, Scalar primal_α,
-                                 Scalar primal_α_max, Scalar α_reduction_factor,
-                                 Scalar dual_α) {
+void print_ipm_iteration_diagnostics(
+    int iterations, IterationType type,
+    const std::chrono::duration<Rep, Period>& time, Scalar error, Scalar cost,
+    Scalar infeasibility, Scalar complementarity, Scalar μ, Scalar δ,
+    Scalar primal_α, Scalar primal_α_max, Scalar α_reduction_factor,
+    Scalar dual_α) {
   if (iterations % 20 == 0) {
     if (iterations == 0) {
       slp::print("┏");
@@ -242,16 +241,93 @@ void print_iteration_diagnostics(int iterations, IterationType type,
       backtracks);
 }
 #else
-#define print_iteration_diagnostics(...)
+#define print_ipm_iteration_diagnostics(...)
 #endif
 
 #ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
 /// Prints bottom of iteration diagnostics table.
 inline void print_bottom_iteration_diagnostics() {
-  slp::println("└{:─^108}┘", "");
+  slp::println("└{:─^106}┘", "");
 }
 #else
 #define print_bottom_iteration_diagnostics(...)
+#endif
+
+#ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
+/// Prints diagnostics for the current augmented Lagrangian method iteration.
+///
+/// @tparam Scalar Scalar type.
+/// @param iterations Number of iterations.
+/// @param type The iteration's type.
+/// @param time The iteration duration.
+/// @param error The error.
+/// @param cost The cost.
+/// @param infeasibility The infeasibility.
+/// @param complementarity The complementarity.
+/// @param ρ The penalty parameter.
+/// @param δ The Hessian regularization factor.
+/// @param primal_α The primal step size.
+/// @param primal_α_max The max primal step size.
+/// @param α_reduction_factor Factor by which primal_α is reduced during
+///     backtracking.
+/// @param dual_α The dual step size.
+template <typename Scalar, typename Rep, typename Period = std::ratio<1>>
+void print_augmented_lagrangian_iteration_diagnostics(
+    int iterations, IterationType type,
+    const std::chrono::duration<Rep, Period>& time, Scalar error, Scalar cost,
+    Scalar infeasibility, Scalar complementarity, Scalar ρ, Scalar δ,
+    Scalar primal_α, Scalar primal_α_max, Scalar α_reduction_factor,
+    Scalar dual_α) {
+  if (iterations % 20 == 0) {
+    if (iterations == 0) {
+      slp::print("┏");
+    } else {
+      slp::print("┢");
+    }
+    slp::print(
+        "{:━^4}┯{:━^4}┯{:━^9}┯{:━^12}┯{:━^13}┯{:━^12}┯{:━^13}┯{:━^5}┯{:━^5}┯"
+        "{:━^8}┯{:━^8}┯{:━^2}",
+        "", "", "", "", "", "", "", "", "", "", "", "");
+    if (iterations == 0) {
+      slp::println("┓");
+    } else {
+      slp::println("┪");
+    }
+    slp::println(
+        "┃{:^4}│{:^4}│{:^9}│{:^12}│{:^13}│{:^12}│{:^13}│{:^5}│{:^5}│{:^8}│{:^8}"
+        "│{:^2}┃",
+        "iter", "type", "time (ms)", "error", "cost", "infeas.", "complement.",
+        "ρ", "reg", "primal α", "dual α", "↩");
+    slp::println(
+        "┡{:━^4}┷{:━^4}┷{:━^9}┷{:━^12}┷{:━^13}┷{:━^12}┷{:━^13}┷{:━^5}┷{:━^5}┷"
+        "{:━^8}┷{:━^8}┷{:━^2}┩",
+        "", "", "", "", "", "", "", "", "", "", "", "");
+  }
+
+  // For the number of backtracks, we want x such that:
+  //
+  //   αᵐᵃˣrˣ = α
+  //
+  // where r ∈ (0, 1) is the reduction factor.
+  //
+  //   rˣ = α/αᵐᵃˣ
+  //   ln(rˣ) = ln(α/αᵐᵃˣ)
+  //   x ln(r) = ln(α/αᵐᵃˣ)
+  //   x = ln(α/αᵐᵃˣ)/ln(r)
+  using std::log;
+  int backtracks =
+      static_cast<int>(log(primal_α / primal_α_max) / log(α_reduction_factor));
+
+  constexpr std::array ITERATION_TYPES = {"norm", "✓SOC", "XSOC"};
+  slp::println(
+      "│{:4} {:4} {:9.3f} {:12e} {:13e} {:12e} {:13e} {:<5} {:<5} {:.2e} "
+      "{:.2e} {:2d}│",
+      iterations, ITERATION_TYPES[std::to_underlying(type)], to_ms(time), error,
+      cost, infeasibility, complementarity, power_of_10(ρ), power_of_10(δ),
+      primal_α, dual_α, backtracks);
+}
+#else
+#define print_augmented_lagrangian_iteration_diagnostics(...)
 #endif
 
 /// Renders histogram of the given normalized value.
