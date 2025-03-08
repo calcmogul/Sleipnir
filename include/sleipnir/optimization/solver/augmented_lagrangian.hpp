@@ -12,12 +12,10 @@
 #include <Eigen/SparseCore>
 #include <gch/small_vector.hpp>
 
+#include "sleipnir/optimization/solver/augmented_lagrangian_matrix_callbacks.hpp"
 #include "sleipnir/optimization/solver/exit_status.hpp"
 #include "sleipnir/optimization/solver/iteration_info.hpp"
 #include "sleipnir/optimization/solver/options.hpp"
-#include "sleipnir/optimization/solver/sqp_matrix_callbacks.hpp"
-#include "sleipnir/optimization/solver/util/all_finite.hpp"
-#include "sleipnir/optimization/solver/util/append_as_triplets.hpp"
 #include "sleipnir/optimization/solver/util/error_estimate.hpp"
 #include "sleipnir/optimization/solver/util/filter.hpp"
 #include "sleipnir/optimization/solver/util/is_locally_infeasible.hpp"
@@ -33,17 +31,19 @@
 
 namespace slp {
 
-/// Finds the optimal solution to a nonlinear program using Sequential Quadratic
-/// Programming (SQP).
+/// Finds the optimal solution to a nonlinear program using the augmented
+/// Lagrangian method.
 ///
 /// A nonlinear program has the form:
 ///
 /// ```
 ///      min_x f(x)
 /// subject to cₑ(x) = 0
+///            cᵢ(x) ≥ 0
 /// ```
 ///
-/// where f(x) is the cost function and cₑ(x) are the equality constraints.
+/// where f(x) is the cost function, cₑ(x) are the equality constraints, and
+/// cᵢ(x) are the inequality constraints.
 ///
 /// @tparam Scalar Scalar type.
 /// @param[in] matrix_callbacks Matrix callbacks.
@@ -54,56 +54,22 @@ namespace slp {
 ///     variables.
 /// @return The exit status.
 template <typename Scalar>
-ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
-               std::span<std::function<bool(const IterationInfo<Scalar>& info)>>
-                   iteration_callbacks,
-               const Options& options,
-               Eigen::Vector<Scalar, Eigen::Dynamic>& x) {
+ExitStatus augmented_lagrangian(
+    const AugmentedLagrangianMatrixCallbacks<Scalar>& matrix_callbacks,
+    std::span<std::function<bool(const IterationInfo<Scalar>& info)>>
+        iteration_callbacks,
+    const Options& options, Eigen::Vector<Scalar, Eigen::Dynamic>& x) {
+  /// Type alias for dense vector.
   using DenseVector = Eigen::Vector<Scalar, Eigen::Dynamic>;
-
-  DenseVector y = DenseVector::Zero(matrix_callbacks.num_equality_constraints);
-
-  return sqp(matrix_callbacks, iteration_callbacks, options, x, y);
-}
-
-/// Finds the optimal solution to a nonlinear program using Sequential Quadratic
-/// Programming (SQP).
-///
-/// A nonlinear program has the form:
-///
-/// ```
-///      min_x f(x)
-/// subject to cₑ(x) = 0
-/// ```
-///
-/// where f(x) is the cost function and cₑ(x) are the equality constraints.
-///
-/// @tparam Scalar Scalar type.
-/// @param[in] matrix_callbacks Matrix callbacks.
-/// @param[in] iteration_callbacks The list of callbacks to call at the
-///     beginning of each iteration.
-/// @param[in] options Solver options.
-/// @param[in,out] x The initial guess and output location for the decision
-///     variables.
-/// @param[in,out] y The initial guess and output location for the equality
-///     constraint dual variables.
-/// @return The exit status.
-template <typename Scalar>
-ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
-               std::span<std::function<bool(const IterationInfo<Scalar>& info)>>
-                   iteration_callbacks,
-               const Options& options, Eigen::Vector<Scalar, Eigen::Dynamic>& x,
-               Eigen::Vector<Scalar, Eigen::Dynamic>& y) {
-  using DenseVector = Eigen::Vector<Scalar, Eigen::Dynamic>;
+  /// Type alias for sparse matrix.
   using SparseMatrix = Eigen::SparseMatrix<Scalar>;
+  /// Type alias for sparse vector.
   using SparseVector = Eigen::SparseVector<Scalar>;
 
-  /// SQP step direction.
+  /// Augmented Lagrangian method step direction.
   struct Step {
-    /// Decision variable primal step.
+    /// Primal step.
     DenseVector p_x;
-    /// Equality constraint dual step.
-    DenseVector p_y;
   };
 
   using std::isfinite;
@@ -127,6 +93,8 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
   solve_profilers.emplace_back("    ↳ ∇²ₓₓL");
   solve_profilers.emplace_back("    ↳ cₑ(x)");
   solve_profilers.emplace_back("    ↳ ∂cₑ/∂x");
+  solve_profilers.emplace_back("    ↳ cᵢ(x)");
+  solve_profilers.emplace_back("    ↳ ∂cᵢ/∂x");
 
   auto& solver_prof = solve_profilers[0];
   auto& setup_prof = solve_profilers[1];
@@ -137,6 +105,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
   auto& kkt_matrix_decomp_prof = solve_profilers[6];
   auto& kkt_system_solve_prof = solve_profilers[7];
   auto& line_search_prof = solve_profilers[8];
+  [[maybe_unused]]
   auto& soc_prof = solve_profilers[9];
   auto& next_iter_prep_prof = solve_profilers[10];
 
@@ -147,10 +116,13 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
   auto& H_prof = solve_profilers[13];
   auto& c_e_prof = solve_profilers[14];
   auto& A_e_prof = solve_profilers[15];
+  auto& c_i_prof = solve_profilers[16];
+  auto& A_i_prof = solve_profilers[17];
 
-  SQPMatrixCallbacks<Scalar> matrices{
+  AugmentedLagrangianMatrixCallbacks<Scalar> matrices{
       matrix_callbacks.num_decision_variables,
       matrix_callbacks.num_equality_constraints,
+      matrix_callbacks.num_inequality_constraints,
       [&](const DenseVector& x) -> Scalar {
         ScopedProfiler prof{f_prof};
         return matrix_callbacks.f(x);
@@ -159,9 +131,10 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
         ScopedProfiler prof{g_prof};
         return matrix_callbacks.g(x);
       },
-      [&](const DenseVector& x, const DenseVector& y) -> SparseMatrix {
+      [&](const DenseVector& x, const DenseVector& y, const DenseVector& z,
+          Scalar ρ, const DenseVector& a) -> SparseMatrix {
         ScopedProfiler prof{H_prof};
-        return matrix_callbacks.H(x, y);
+        return matrix_callbacks.H(x, y, z, ρ, a);
       },
       [&](const DenseVector& x) -> DenseVector {
         ScopedProfiler prof{c_e_prof};
@@ -170,6 +143,14 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
       [&](const DenseVector& x) -> SparseMatrix {
         ScopedProfiler prof{A_e_prof};
         return matrix_callbacks.A_e(x);
+      },
+      [&](const DenseVector& x) -> DenseVector {
+        ScopedProfiler prof{c_i_prof};
+        return matrix_callbacks.c_i(x);
+      },
+      [&](const DenseVector& x) -> SparseMatrix {
+        ScopedProfiler prof{A_i_prof};
+        return matrix_callbacks.A_i(x);
       }};
 #else
   const auto& matrices = matrix_callbacks;
@@ -178,11 +159,30 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
   solver_prof.start();
   setup_prof.start();
 
+  DenseVector x_0 = x;
+
   Scalar f = matrices.f(x);
   SparseVector g = matrices.g(x);
-  SparseMatrix H = matrices.H(x, y);
   DenseVector c_e = matrices.c_e(x);
   SparseMatrix A_e = matrices.A_e(x);
+  DenseVector c_i = matrices.c_i(x);
+  SparseMatrix A_i = matrices.A_i(x);
+
+  DenseVector y = DenseVector::Zero(matrices.num_equality_constraints);
+  DenseVector z = DenseVector::Zero(matrices.num_inequality_constraints);
+
+  // Penalty parameter
+  constexpr Scalar ρ_max(1e10);
+  Scalar ρ(1);
+
+  // Inequality constraint active set
+  DenseVector a(matrices.num_inequality_constraints);
+  for (int row = 0; row < matrices.num_inequality_constraints; ++row) {
+    a[row] =
+        c_i[row] <= Scalar(0) && z[row] == Scalar(0) ? Scalar(1) : Scalar(0);
+  }
+
+  SparseMatrix H = matrices.H(x, y, z, ρ, a);
 
   // Ensure matrix callback dimensions are consistent
   slp_assert(g.rows() == matrices.num_decision_variables);
@@ -191,6 +191,9 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
   slp_assert(c_e.rows() == matrices.num_equality_constraints);
   slp_assert(A_e.rows() == matrices.num_equality_constraints);
   slp_assert(A_e.cols() == matrices.num_decision_variables);
+  slp_assert(c_i.rows() == matrices.num_inequality_constraints);
+  slp_assert(A_i.rows() == matrices.num_inequality_constraints);
+  slp_assert(A_i.cols() == matrices.num_decision_variables);
 
   // Check for overconstrained problem
   if (matrices.num_equality_constraints > matrices.num_decision_variables) {
@@ -203,7 +206,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
 
   // Check whether initial guess has finite cost, constraints, and derivatives
   if (!isfinite(f) || !all_finite(g) || !all_finite(H) || !c_e.allFinite() ||
-      !all_finite(A_e)) {
+      !all_finite(A_e) || !c_i.allFinite() || !all_finite(A_i)) {
     return ExitStatus::NONFINITE_INITIAL_GUESS;
   }
 
@@ -211,17 +214,32 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
 
   Filter<Scalar> filter;
 
-  // Kept outside the loop so its storage can be reused
-  gch::small_vector<Eigen::Triplet<Scalar>> triplets;
+  // This should be run when the inner Newton minimization of the augmented
+  // Lagrangian is complete for a given penalty parameter
+  auto update_penalty_and_reset_filter = [&] {
+    y -= ρ * c_e;
+    z = (z - ρ * c_i).cwiseMax(Scalar(0));
 
-  RegularizedLDLT<Scalar> solver{matrices.num_decision_variables,
-                                 matrices.num_equality_constraints};
+    // Increase penalty parameter
+    if (ρ < ρ_max) {
+      ρ *= Scalar(10);
+    }
+
+    // Update inequality contraint active set
+    for (int row = 0; row < matrices.num_inequality_constraints; ++row) {
+      a[row] =
+          c_i[row] <= Scalar(0) && z[row] == Scalar(0) ? Scalar(1) : Scalar(0);
+    }
+
+    // Reset the filter when the penalty parameter is updated
+    filter.reset();
+  };
+
+  RegularizedLDLT<Scalar> solver{matrices.num_decision_variables, 0};
 
   // Variables for determining when a step is acceptable
   constexpr Scalar α_reduction_factor(0.5);
   constexpr Scalar α_min(1e-7);
-
-  int full_step_rejected_counter = 0;
 
   // Error estimate
   Scalar E_0 = std::numeric_limits<Scalar>::infinity();
@@ -252,9 +270,36 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
       return ExitStatus::LOCALLY_INFEASIBLE;
     }
 
+    // Check for local inequality constraint infeasibility
+    if (is_inequality_locally_infeasible(A_i, c_i)) {
+      if (options.diagnostics) {
+        print_c_i_local_infeasibility_error(c_i);
+      }
+
+      return ExitStatus::LOCALLY_INFEASIBLE;
+    }
+
     // Check for diverging iterates
-    if (x.template lpNorm<Eigen::Infinity>() > Scalar(1e10) || !x.allFinite()) {
-      return ExitStatus::DIVERGING_ITERATES;
+    if (x.template lpNorm<Eigen::Infinity>() > Scalar(1e10) || !x.allFinite() ||
+        c_e.template lpNorm<Eigen::Infinity>() > Scalar(1e10) ||
+        c_i.template lpNorm<Eigen::Infinity>() > Scalar(1e10)) {
+      if (ρ < ρ_max) {
+        // Try again from the starting point with a larger penalty parameter
+        x = x_0;
+
+        c_e = matrices.c_e(x);
+        c_i = matrices.c_i(x);
+        A_e = matrices.A_e(x);
+        A_i = matrices.A_i(x);
+        g = matrices.g(x);
+        H = matrices.H(x, y, z, ρ, a);
+
+        ρ *= Scalar(10);
+        continue;
+      } else {
+        // Report diverging iterates
+        return ExitStatus::DIVERGING_ITERATES;
+      }
     }
 
     feasibility_check_profiler.stop();
@@ -262,7 +307,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
 
     // Call iteration callbacks
     for (const auto& callback : iteration_callbacks) {
-      if (callback({iterations, x, {}, y, {}, g, H, A_e, {}})) {
+      if (callback({iterations, x, {}, y, z, g, H, A_e, A_i})) {
         return ExitStatus::CALLBACK_REQUESTED_STOP;
       }
     }
@@ -270,35 +315,27 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
     iter_callbacks_profiler.stop();
     ScopedProfiler kkt_matrix_build_profiler{kkt_matrix_build_prof};
 
-    // lhs = [H   Aₑᵀ]
-    //       [Aₑ   0 ]
-    //
-    // Don't assign upper triangle because solver only uses lower triangle.
-    triplets.clear();
-    triplets.reserve(H.nonZeros() + A_e.nonZeros());
-    append_as_triplets(triplets, 0, 0, {H, A_e});
-    SparseMatrix lhs(
-        matrices.num_decision_variables + matrices.num_equality_constraints,
-        matrices.num_decision_variables + matrices.num_equality_constraints);
-    lhs.setFromSortedTriplets(triplets.begin(), triplets.end());
+    // lhs = H
+    SparseMatrix lhs = H;
 
-    // rhs = −[∇f − Aₑᵀy]
-    //        [   cₑ    ]
-    DenseVector rhs{x.rows() + y.rows()};
-    rhs.segment(0, x.rows()) = -g + A_e.transpose() * y;
-    rhs.segment(x.rows(), y.rows()) = -c_e;
+    // L(xₖ, yₖ, zₖ) = f(xₖ) − yₖᵀcₑ(xₖ) − zₖᵀcᵢ(xₖ) + 1/2ρcₑᵀcₑ + 1/2ρcᵢᵀIₐcᵢ
+    // rhs = −∇L
+    //     = −(∇f − Aₑᵀy − Aᵢᵀz + ρAₑᵀcₑ + ρAᵢᵀIₐcᵢ)
+    //     = −(∇f − Aₑᵀ(y − ρcₑ) − Aᵢᵀ(z − ρIₐcᵢ))
+    //     = −∇f + Aₑᵀ(y − ρcₑ) + Aᵢᵀ(z − ρIₐcᵢ)
+    SparseMatrix rhs = -g + A_e.transpose() * (y - ρ * c_e) +
+                       A_i.transpose() * (z - ρ * a.asDiagonal() * c_i);
 
     kkt_matrix_build_profiler.stop();
     ScopedProfiler kkt_matrix_decomp_profiler{kkt_matrix_decomp_prof};
 
     Step step;
-    constexpr Scalar α_max(1);
+    Scalar α_max(1);
     Scalar α(1);
 
     // Solve the Newton-KKT system
     //
-    // [H   Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy]
-    // [Aₑ   0 ][−pʸ]    [   cₑ    ]
+    // Hpₖˣ = −∇f + Aₑᵀ(y − ρcₑ) + Aᵢᵀ(z − Iₐcᵢ)
     if (solver.compute(lhs).info() != Eigen::Success) [[unlikely]] {
       return ExitStatus::FACTORIZATION_FAILED;
     }
@@ -306,141 +343,32 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
     kkt_matrix_decomp_profiler.stop();
     ScopedProfiler kkt_system_solve_profiler{kkt_system_solve_prof};
 
-    auto compute_step = [&](Step& step) {
-      // p = [ pˣ]
-      //     [−pʸ]
-      DenseVector p = solver.solve(rhs);
-      step.p_x = p.segment(0, x.rows());
-      step.p_y = -p.segment(x.rows(), y.rows());
-    };
-    compute_step(step);
+    step.p_x = solver.solve(rhs);
 
     kkt_system_solve_profiler.stop();
     ScopedProfiler line_search_profiler{line_search_prof};
 
-    α = α_max;
-
     // Loop until a step is accepted
     while (1) {
       DenseVector trial_x = x + α * step.p_x;
-      DenseVector trial_y = y + α * step.p_y;
 
       Scalar trial_f = matrices.f(trial_x);
       DenseVector trial_c_e = matrices.c_e(trial_x);
+      DenseVector trial_c_i = matrices.c_i(trial_x);
 
-      // If f(xₖ + αpₖˣ) or cₑ(xₖ + αpₖˣ) aren't finite, reduce step size
-      // immediately
-      if (!isfinite(trial_f) || !trial_c_e.allFinite()) {
+      // If f(xₖ + αpₖˣ), cₑ(xₖ + αpₖˣ), or cᵢ(xₖ + αpₖˣ) aren't finite, reduce
+      // step size immediately
+      if (!isfinite(trial_f) || !trial_c_e.allFinite() ||
+          !trial_c_i.allFinite()) {
         // Reduce step size
         α *= α_reduction_factor;
-
-        if (α < α_min) {
-          return ExitStatus::LINE_SEARCH_FAILED;
-        }
         continue;
       }
 
       // Check whether filter accepts trial iterate
-      if (filter.try_add(FilterEntry{trial_f, trial_c_e}, α)) {
+      if (filter.try_add(FilterEntry{f}, α)) {
         // Accept step
         break;
-      }
-
-      Scalar prev_constraint_violation = c_e.template lpNorm<1>();
-      Scalar next_constraint_violation = trial_c_e.template lpNorm<1>();
-
-      // Second-order corrections
-      //
-      // If first trial point was rejected and constraint violation stayed the
-      // same or went up, apply second-order corrections
-      if (α == α_max &&
-          next_constraint_violation >= prev_constraint_violation) {
-        // Apply second-order corrections. See section 2.4 of [2].
-        auto soc_step = step;
-
-        Scalar α_soc = α;
-        DenseVector c_e_soc = c_e;
-
-        bool step_acceptable = false;
-        for (int soc_iteration = 0; soc_iteration < 5 && !step_acceptable;
-             ++soc_iteration) {
-          ScopedProfiler soc_profiler{soc_prof};
-
-          scope_exit soc_exit{[&] {
-            soc_profiler.stop();
-
-            if (options.diagnostics) {
-              print_ipm_iteration_diagnostics(
-                  iterations,
-                  step_acceptable ? IterationType::ACCEPTED_SOC
-                                  : IterationType::REJECTED_SOC,
-                  soc_profiler.current_duration(),
-                  error_estimate<Scalar>(g, A_e, trial_c_e, trial_y), trial_f,
-                  trial_c_e.template lpNorm<1>(), Scalar(0), Scalar(0),
-                  solver.hessian_regularization(), α_soc, Scalar(1),
-                  α_reduction_factor, Scalar(1));
-            }
-          }};
-
-          // Rebuild Newton-KKT rhs with updated constraint values.
-          //
-          // rhs = −[∇f − Aₑᵀy]
-          //        [  cₑˢᵒᶜ  ]
-          //
-          // where cₑˢᵒᶜ = αc(xₖ) + c(xₖ + αpₖˣ)
-          c_e_soc = α_soc * c_e_soc + trial_c_e;
-          rhs.bottomRows(y.rows()) = -c_e_soc;
-
-          // Solve the Newton-KKT system
-          compute_step(soc_step);
-
-          trial_x = x + α_soc * soc_step.p_x;
-          trial_y = y + α_soc * soc_step.p_y;
-
-          trial_f = matrices.f(trial_x);
-          trial_c_e = matrices.c_e(trial_x);
-
-          // Constraint violation scale factor for second-order corrections
-          constexpr Scalar κ_soc(0.99);
-
-          // If constraint violation hasn't been sufficiently reduced, stop
-          // making second-order corrections
-          next_constraint_violation = trial_c_e.template lpNorm<1>();
-          if (next_constraint_violation > κ_soc * prev_constraint_violation) {
-            break;
-          }
-
-          // Check whether filter accepts trial iterate
-          if (filter.try_add(FilterEntry{trial_f, trial_c_e}, α)) {
-            step = soc_step;
-            α = α_soc;
-            step_acceptable = true;
-          }
-        }
-
-        if (step_acceptable) {
-          // Accept step
-          break;
-        }
-      }
-
-      // If we got here and α is the full step, the full step was rejected.
-      // Increment the full-step rejected counter to keep track of how many full
-      // steps have been rejected in a row.
-      if (α == α_max) {
-        ++full_step_rejected_counter;
-      }
-
-      // If the full step was rejected enough times in a row, reset the filter
-      // because it may be impeding progress.
-      //
-      // See section 3.2 case I of [2].
-      if (full_step_rejected_counter >= 4 &&
-          filter.max_constraint_violation >
-              filter.back().constraint_violation / Scalar(10)) {
-        filter.max_constraint_violation *= Scalar(0.1);
-        filter.reset();
-        continue;
       }
 
       // Reduce step size
@@ -449,15 +377,17 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
       // If step size hit a minimum, check if the KKT error was reduced. If it
       // wasn't, report line search failure.
       if (α < α_min) {
-        Scalar current_kkt_error = kkt_error<Scalar>(g, A_e, c_e, y);
+        Scalar current_kkt_error =
+            kkt_error<Scalar>(g, A_e, c_e, A_i, c_i, y, z);
 
         trial_x = x + α_max * step.p_x;
-        trial_y = y + α_max * step.p_y;
 
         trial_c_e = matrices.c_e(trial_x);
+        trial_c_i = matrices.c_i(trial_x);
 
         Scalar next_kkt_error = kkt_error<Scalar>(
-            matrices.g(trial_x), matrices.A_e(trial_x), trial_c_e, trial_y);
+            matrices.g(trial_x), matrices.A_e(trial_x), trial_c_e,
+            matrices.A_i(trial_x), trial_c_i, y, z);
 
         // If the step using αᵐᵃˣ reduced the KKT error, accept it anyway
         if (next_kkt_error <= Scalar(0.999) * current_kkt_error) {
@@ -473,38 +403,39 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
 
     line_search_profiler.stop();
 
-    // If full step was accepted, reset full-step rejected counter
-    if (α == α_max) {
-      full_step_rejected_counter = 0;
-    }
-
     // xₖ₊₁ = xₖ + αₖpₖˣ
-    // yₖ₊₁ = yₖ + αₖpₖʸ
     x += α * step.p_x;
-    y += α * step.p_y;
 
     // Update autodiff for Jacobians and Hessian
     f = matrices.f(x);
     A_e = matrices.A_e(x);
+    A_i = matrices.A_i(x);
     g = matrices.g(x);
-    H = matrices.H(x, y);
+    H = matrices.H(x, y, z, ρ, a);
 
     ScopedProfiler next_iter_prep_profiler{next_iter_prep_prof};
 
     c_e = matrices.c_e(x);
+    c_i = matrices.c_i(x);
 
     // Update the error estimate
-    E_0 = error_estimate<Scalar>(g, A_e, c_e, y);
+    E_0 = error_estimate<Scalar>(g, A_e, c_e, A_i, c_i, y, z, Scalar(0), a);
+
+    Scalar E_ρ = error_estimate<Scalar>(g, A_e, c_e, A_i, c_i, y, z, ρ, a);
+    if (E_ρ < Scalar(options.tolerance)) {
+      update_penalty_and_reset_filter();
+    }
 
     next_iter_prep_profiler.stop();
     inner_iter_profiler.stop();
 
     if (options.diagnostics) {
-      print_ipm_iteration_diagnostics(
+      print_augmented_lagrangian_iteration_diagnostics(
           iterations, IterationType::NORMAL,
           inner_iter_profiler.current_duration(), E_0, f,
-          c_e.template lpNorm<1>(), Scalar(0), Scalar(0),
-          solver.hessian_regularization(), α, α_max, α_reduction_factor, α);
+          c_e.template lpNorm<1>() + c_i.template lpNorm<1>(),
+          Scalar(z.transpose() * c_i), ρ, solver.hessian_regularization(), α,
+          α_max, α_reduction_factor, Scalar(1));
     }
 
     ++iterations;
@@ -523,8 +454,8 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
   return ExitStatus::SUCCESS;
 }
 
-extern template SLEIPNIR_DLLEXPORT ExitStatus
-sqp(const SQPMatrixCallbacks<double>& matrix_callbacks,
+extern template SLEIPNIR_DLLEXPORT ExitStatus augmented_lagrangian(
+    const AugmentedLagrangianMatrixCallbacks<double>& matrix_callbacks,
     std::span<std::function<bool(const IterationInfo<double>& info)>>
         iteration_callbacks,
     const Options& options, Eigen::Vector<double, Eigen::Dynamic>& x);
