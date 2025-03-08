@@ -952,6 +952,8 @@ Returns:
 
 )doc";
 
+static const char *mkd_doc_slp_Problem_solve_augmented_lagrangian = R"doc()doc";
+
 static const char *mkd_doc_slp_Problem_solve_ipm = R"doc()doc";
 
 static const char *mkd_doc_slp_Problem_solve_newton = R"doc()doc";
@@ -2346,6 +2348,14 @@ R"doc(Sets the VariableMatrix's internal values.
 
 Args:
     values: Eigen matrix of values.
+
+)doc";
+
+static const char *mkd_doc_slp_VariableMatrix_set_value_2 =
+R"doc(Sets the VariableMatrix's internal values.
+
+Args:
+    values: Diagonal matrix of values.
 
 )doc";
 
