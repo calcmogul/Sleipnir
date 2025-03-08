@@ -453,7 +453,7 @@ ExitStatus interior_point(
             soc_profiler.stop();
 
             if (options.diagnostics) {
-              print_iteration_diagnostics(
+              print_ipm_iteration_diagnostics(
                   iterations,
                   step_acceptable ? IterationType::ACCEPTED_SOC
                                   : IterationType::REJECTED_SOC,
@@ -637,11 +637,11 @@ ExitStatus interior_point(
     inner_iter_profiler.stop();
 
     if (options.diagnostics) {
-      print_iteration_diagnostics(iterations, IterationType::NORMAL,
-                                  inner_iter_profiler.current_duration(), E_0,
-                                  f, c_e.lpNorm<1>() + (c_i - s).lpNorm<1>(),
-                                  s.dot(z), μ, solver.hessian_regularization(),
-                                  α, α_max, α_reduction_factor, α_z);
+      print_ipm_iteration_diagnostics(
+          iterations, IterationType::NORMAL,
+          inner_iter_profiler.current_duration(), E_0, f,
+          c_e.lpNorm<1>() + (c_i - s).lpNorm<1>(), s.dot(z), μ,
+          solver.hessian_regularization(), α, α_max, α_reduction_factor, α_z);
     }
 
     ++iterations;

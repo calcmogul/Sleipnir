@@ -84,4 +84,38 @@ inline double kkt_error(const Eigen::VectorXd& g,
          (S * z - μe).lpNorm<1>() + c_e.lpNorm<1>() + (c_i - s).lpNorm<1>();
 }
 
+/**
+ * Returns the KKT error for the augmented Lagrangian method.
+ *
+ * @param g Gradient of the cost function ∇f.
+ * @param A_e The problem's equality constraint Jacobian Aₑ(x) evaluated at the
+ *   current iterate.
+ * @param c_e The problem's equality constraints cₑ(x) evaluated at the current
+ *   iterate.
+ * @param A_i The problem's inequality constraint Jacobian Aᵢ(x) evaluated at
+ *   the current iterate.
+ * @param c_i The problem's inequality constraints cᵢ(x) evaluated at the
+ *   current iterate.
+ * @param y Equality constraint dual variables.
+ * @param z Inequality constraint dual variables.
+ */
+inline double kkt_error(const Eigen::VectorXd& g,
+                        const Eigen::SparseMatrix<double>& A_e,
+                        const Eigen::VectorXd& c_e,
+                        const Eigen::SparseMatrix<double>& A_i,
+                        const Eigen::VectorXd& c_i, const Eigen::VectorXd& y,
+                        const Eigen::VectorXd& z) {
+  // Compute the KKT error as the 1-norm of the KKT conditions from equations
+  // (19.5a) through (19.5d) of [1].
+  //
+  //   ∇f − Aₑᵀy − Aᵢᵀz = 0
+  //   zᵀcᵢ = 0
+  //   cₑ = 0
+  //   cᵢ ≥ 0
+
+  return (g - A_e.transpose() * y - A_i.transpose() * z).lpNorm<1>() +
+         (z.transpose() * c_i).lpNorm<1>() + c_e.lpNorm<1>() +
+         c_i.cwiseMin(0.0).lpNorm<1>();
+}
+
 }  // namespace slp

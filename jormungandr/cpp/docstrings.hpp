@@ -27,6 +27,77 @@ static const char *__doc_Eigen_NumTraits =
 R"doc(NumTraits specialization that allows instantiating Eigen types with
 Variable.)doc";
 
+static const char *__doc_slp_AugmentedLagrangianMatrixCallbacks = R"doc(Matrix callbacks for the augmented Lagrangian solver.)doc";
+
+static const char *__doc_slp_AugmentedLagrangianMatrixCallbacks_A_e =
+R"doc(Equality constraint Jacobian ∂cₑ/∂x getter.
+
+@verbatim [∇ᵀcₑ₁(xₖ)] Aₑ(x) = [∇ᵀcₑ₂(xₖ)] [ ⋮ ] [∇ᵀcₑₘ(xₖ)]
+@endverbatim
+
+<table> <tr> <th>Variable</th> <th>Rows</th> <th>Columns</th> </tr>
+<tr> <td>x</td> <td>num_decision_variables</td> <td>1</td> </tr> <tr>
+<td>Aₑ(x)</td> <td>num_equality_constraints</td>
+<td>num_decision_variables</td> </tr> </table>)doc";
+
+static const char *__doc_slp_AugmentedLagrangianMatrixCallbacks_A_i =
+R"doc(Inequality constraint Jacobian ∂cᵢ/∂x getter.
+
+@verbatim [∇ᵀcᵢ₁(xₖ)] Aᵢ(x) = [∇ᵀcᵢ₂(xₖ)] [ ⋮ ] [∇ᵀcᵢₘ(xₖ)]
+@endverbatim
+
+<table> <tr> <th>Variable</th> <th>Rows</th> <th>Columns</th> </tr>
+<tr> <td>x</td> <td>num_decision_variables</td> <td>1</td> </tr> <tr>
+<td>Aᵢ(x)</td> <td>num_inequality_constraints</td>
+<td>num_decision_variables</td> </tr> </table>)doc";
+
+static const char *__doc_slp_AugmentedLagrangianMatrixCallbacks_H =
+R"doc(Lagrangian Hessian ∇ₓₓ²L(x, y, z) getter.
+
+L(xₖ, yₖ, zₖ) = f(xₖ) − yₖᵀcₑ(xₖ) − zₖᵀcᵢ(xₖ) + 1/2ρcₑᵀcₑ +
+1/2ρcᵢᵀdiag(a)cᵢ
+
+where diag(a) = diag(if cᵢ[i] > 0 and z[i] = 0 { 0 } else { 1 })
+denotes the inequality constraint active set.
+
+<table> <tr> <th>Variable</th> <th>Rows</th> <th>Columns</th> </tr>
+<tr> <td>x</td> <td>num_decision_variables</td> <td>1</td> </tr> <tr>
+<td>y</td> <td>num_equality_constraints</td> <td>1</td> </tr> <tr>
+<td>z</td> <td>num_inequality_constraints</td> <td>1</td> </tr> <tr>
+<td>∇ₓₓ²L(x, y, z)</td> <td>num_decision_variables</td>
+<td>num_decision_variables</td> </tr> </table>)doc";
+
+static const char *__doc_slp_AugmentedLagrangianMatrixCallbacks_c_e =
+R"doc(Equality constraint value cₑ(x) getter.
+
+<table> <tr> <th>Variable</th> <th>Rows</th> <th>Columns</th> </tr>
+<tr> <td>x</td> <td>num_decision_variables</td> <td>1</td> </tr> <tr>
+<td>cₑ(x)</td> <td>num_equality_constraints</td> <td>1</td> </tr>
+</table>)doc";
+
+static const char *__doc_slp_AugmentedLagrangianMatrixCallbacks_c_i =
+R"doc(Inequality constraint value cᵢ(x) getter.
+
+<table> <tr> <th>Variable</th> <th>Rows</th> <th>Columns</th> </tr>
+<tr> <td>x</td> <td>num_decision_variables</td> <td>1</td> </tr> <tr>
+<td>cᵢ(x)</td> <td>num_inequality_constraints</td> <td>1</td> </tr>
+</table>)doc";
+
+static const char *__doc_slp_AugmentedLagrangianMatrixCallbacks_f =
+R"doc(Cost function value f(x) getter.
+
+<table> <tr> <th>Variable</th> <th>Rows</th> <th>Columns</th> </tr>
+<tr> <td>x</td> <td>num_decision_variables</td> <td>1</td> </tr> <tr>
+<td>f(x)</td> <td>1</td> <td>1</td> </tr> </table>)doc";
+
+static const char *__doc_slp_AugmentedLagrangianMatrixCallbacks_g =
+R"doc(Cost function gradient ∇f(x) getter.
+
+<table> <tr> <th>Variable</th> <th>Rows</th> <th>Columns</th> </tr>
+<tr> <td>x</td> <td>num_decision_variables</td> <td>1</td> </tr> <tr>
+<td>∇f(x)</td> <td>num_decision_variables</td> <td>1</td> </tr>
+</table>)doc";
+
 static const char *__doc_slp_DynamicsType = R"doc(Enum describing a type of system dynamics constraints.)doc";
 
 static const char *__doc_slp_DynamicsType_DISCRETE = R"doc(The dynamics are a function in the form xₖ₊₁ = f(t, xₖ, uₖ).)doc";
@@ -1949,6 +2020,12 @@ R"doc(Sets the VariableMatrix's internal values.
 Parameter ``values``:
     Eigen matrix of values.)doc";
 
+static const char *__doc_slp_VariableMatrix_set_value_2 =
+R"doc(Sets the VariableMatrix's internal values.
+
+Parameter ``values``:
+    Diagonal matrix of values.)doc";
+
 static const char *__doc_slp_VariableMatrix_size =
 R"doc(Returns number of elements in matrix.
 
@@ -2118,6 +2195,32 @@ Parameter ``y``:
 
 Parameter ``x``:
     The x argument.)doc";
+
+static const char *__doc_slp_augmented_lagrangian =
+R"doc(Finds the optimal solution to a nonlinear program using the augmented
+Lagrangian method.
+
+A nonlinear program has the form:
+
+@verbatim min_x f(x) subject to cₑ(x) = 0 cᵢ(x) ≥ 0 @endverbatim
+
+where f(x) is the cost function, cₑ(x) are the equality constraints,
+and cᵢ(x) are the inequality constraints.
+
+Parameter ``matrix_callbacks``:
+    Matrix callbacks.
+
+Parameter ``iteration_callbacks``:
+    The list of iteration callbacks.
+
+Parameter ``options``:
+    Solver options.
+
+Parameter ``x``:
+    The initial guess and output location for the decision variables.
+
+Returns:
+    The exit status.)doc";
 
 static const char *__doc_slp_block =
 R"doc(Assemble a VariableMatrix from a nested list of blocks.
