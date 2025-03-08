@@ -547,7 +547,7 @@ ExitStatus interior_point(
             soc_profiler.stop();
 
             if (options.diagnostics) {
-              print_iteration_diagnostics(
+              print_ipm_iteration_diagnostics(
                   iterations,
                   step_acceptable ? IterationType::ACCEPTED_SOC
                                   : IterationType::REJECTED_SOC,
@@ -783,7 +783,7 @@ ExitStatus interior_point(
     inner_iter_profiler.stop();
 
     if (options.diagnostics) {
-      print_iteration_diagnostics(
+      print_ipm_iteration_diagnostics(
           iterations,
           in_feasibility_restoration ? IterationType::FEASIBILITY_RESTORATION
                                      : IterationType::NORMAL,

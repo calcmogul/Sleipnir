@@ -23,8 +23,8 @@
 #include "sleipnir/autodiff/jacobian.hpp"
 #include "sleipnir/autodiff/variable.hpp"
 #include "sleipnir/autodiff/variable_matrix.hpp"
+#include "sleipnir/optimization/solver/augmented_lagrangian.hpp"
 #include "sleipnir/optimization/solver/exit_status.hpp"
-#include "sleipnir/optimization/solver/interior_point.hpp"
 #include "sleipnir/optimization/solver/iteration_info.hpp"
 #include "sleipnir/optimization/solver/newton.hpp"
 #include "sleipnir/optimization/solver/options.hpp"
@@ -497,20 +497,32 @@ class Problem {
       status = sqp<Scalar>(matrix_callbacks, iteration_callbacks, options, x);
     } else {
       if (options.diagnostics) {
-        slp::println("\nInvoking IPM solver\n");
+        slp::println("\nInvoking augmented Lagrangian solver\n");
       }
 
       VariableMatrix<Scalar> c_e_ad{m_equality_constraints};
       VariableMatrix<Scalar> c_i_ad{m_inequality_constraints};
+
+      // Set up Lagrangian
+      //
+      //   L(xₖ, yₖ, zₖ) = f(xₖ) − yₖᵀcₑ(xₖ) − zₖᵀcᵢ(xₖ)
+      //     + 1/2ρcₑᵀcₑ + 1/2ρcᵢᵀdiag(a)cᵢ
+      //
+      // where diag(a) = diag(if cᵢ[i] > 0 and z[i] = 0 { 0 } else { 1 })
+      // denotes the inequality constraint active set.
+      Variable<Scalar> ρ_ad;
+      VariableMatrix<Scalar> diag_a_ad(num_inequality_constraints,
+                                       num_inequality_constraints);
       VariableMatrix<Scalar> y_ad(num_equality_constraints);
       VariableMatrix<Scalar> z_ad(num_inequality_constraints);
+      Variable L = f - y_ad.T() * c_e_ad - z_ad.T() * c_i_ad +
+                   Scalar(0.5) * ρ_ad * c_e_ad.T() * c_e_ad +
+                   Scalar(0.5) * ρ_ad * c_i_ad.T() * diag_a_ad * c_i_ad;
 
       gch::small_vector<SetupProfiler> ad_setup_profilers;
       ad_setup_profilers.emplace_back("setup");
       ad_setup_profilers.emplace_back("↳ ∇f(x)");
       ad_setup_profilers.emplace_back("↳ ∇²ₓₓL");
-      ad_setup_profilers.emplace_back("  ↳ ∇²ₓₓL_f");
-      ad_setup_profilers.emplace_back("  ↳ ∇²ₓₓL_c");
       ad_setup_profilers.emplace_back("↳ ∂cₑ/∂x");
       ad_setup_profilers.emplace_back("↳ ∂cᵢ/∂x");
 
@@ -521,30 +533,20 @@ class Problem {
       Gradient g{f, x_ad};
       ad_setup_profilers[1].stop();
 
+      // Set up Lagrangian Hessian autodiff
       ad_setup_profilers[2].start();
-
-      // Set up cost part of Lagrangian Hessian autodiff
-      ad_setup_profilers[3].start();
-      Hessian<Scalar, Eigen::Lower> H_f{f, x_ad};
-      ad_setup_profilers[3].stop();
-
-      // Set up constraint part of Lagrangian Hessian autodiff
-      ad_setup_profilers[4].start();
-      Hessian<Scalar, Eigen::Lower> H_c{-y_ad.T() * c_e_ad - z_ad.T() * c_i_ad,
-                                        x_ad};
-      ad_setup_profilers[4].stop();
-
+      Hessian<Scalar, Eigen::Lower> H{L, x_ad};
       ad_setup_profilers[2].stop();
 
       // Set up equality constraint Jacobian autodiff
-      ad_setup_profilers[5].start();
+      ad_setup_profilers[3].start();
       Jacobian A_e{c_e_ad, x_ad};
-      ad_setup_profilers[5].stop();
+      ad_setup_profilers[3].stop();
 
       // Set up inequality constraint Jacobian autodiff
-      ad_setup_profilers[6].start();
+      ad_setup_profilers[4].start();
       Jacobian A_i{c_i_ad, x_ad};
-      ad_setup_profilers[6].stop();
+      ad_setup_profilers[4].stop();
 
       ad_setup_profilers[0].stop();
 
@@ -595,7 +597,7 @@ class Problem {
       project_onto_bounds(x, bounds);
 #endif
 
-      InteriorPointMatrixCallbacks<Scalar> matrix_callbacks{
+      AugmentedLagrangianMatrixCallbacks<Scalar> matrix_callbacks{
           num_decision_variables,
           num_equality_constraints,
           num_inequality_constraints,
@@ -607,19 +609,14 @@ class Problem {
             x_ad.set_value(x);
             return g.value();
           },
-          [&](const DenseVector& x, const DenseVector& y,
-              const DenseVector& z) -> SparseMatrix {
+          [&](const DenseVector& x, const DenseVector& y, const DenseVector& z,
+              Scalar ρ, const DenseVector& a) -> SparseMatrix {
             x_ad.set_value(x);
             y_ad.set_value(y);
             z_ad.set_value(z);
-            return H_f.value() + H_c.value();
-          },
-          [&](const DenseVector& x, const DenseVector& y,
-              const DenseVector& z) -> SparseMatrix {
-            x_ad.set_value(x);
-            y_ad.set_value(y);
-            z_ad.set_value(z);
-            return H_c.value();
+            ρ_ad.set_value(ρ);
+            diag_a_ad.set_value(a.asDiagonal());
+            return H.value();
           },
           [&](const DenseVector& x) -> DenseVector {
             x_ad.set_value(x);
@@ -638,13 +635,9 @@ class Problem {
             return A_i.value();
           }};
 
-      // Invoke interior-point method solver
-      status =
-          interior_point<Scalar>(matrix_callbacks, iteration_callbacks, options,
-#ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
-                                 bound_constraint_mask,
-#endif
-                                 x);
+      // Invoke augmented Lagrangian solver
+      status = augmented_lagrangian<Scalar>(matrix_callbacks,
+                                            iteration_callbacks, options, x);
     }
 
     if (options.diagnostics) {
