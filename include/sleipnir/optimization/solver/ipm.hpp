@@ -379,7 +379,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
 
   // Print initial iterate diagnostics
   if (options.diagnostics) {
-    print_initial_iterate_diagnostics(
+    print_ipm_initial_iterate_diagnostics(
         E_0, f, c_e.template lpNorm<1>() + (c_i - s).template lpNorm<1>(),
         s.dot(z), μ);
   }
@@ -564,7 +564,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
             soc_profiler.stop();
 
             if (options.diagnostics && step_acceptable) {
-              print_iteration_diagnostics(
+              print_ipm_iteration_diagnostics(
                   iterations, IterationType::SECOND_ORDER_CORRECTION,
                   soc_profiler.current_duration(),
                   unscaled_kkt_error<Scalar, KKTErrorType::INF_NORM_SCALED>(
@@ -830,7 +830,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
     inner_iter_profiler.stop();
 
     if (options.diagnostics) {
-      print_iteration_diagnostics(
+      print_ipm_iteration_diagnostics(
           iterations,
           in_feasibility_restoration ? IterationType::FEASIBILITY_RESTORATION
                                      : IterationType::NORMAL,
