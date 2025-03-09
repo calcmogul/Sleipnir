@@ -19,6 +19,7 @@
 #include "optimization/solver/util/fraction_to_the_boundary_rule.hpp"
 #include "optimization/solver/util/is_locally_infeasible.hpp"
 #include "optimization/solver/util/kkt_error.hpp"
+#include "optimization/solver/util/lagrange_multiplier_estimate.hpp"
 #include "sleipnir/autodiff/gradient.hpp"
 #include "sleipnir/autodiff/hessian.hpp"
 #include "sleipnir/autodiff/jacobian.hpp"
@@ -457,9 +458,76 @@ ExitStatus interior_point(
     α_max = fraction_to_the_boundary_rule(s, step.p_s, τ);
     α = α_max;
 
-    // If maximum step size is below minimum, report line search failure
+    slp::println("x = {:.03f}, s₁ = {:.03f}, s₂ = {:.03f}", x(0), x(1), x(2));
+    slp::println("s = ({:.03f}, {:.03f})", s(0), s(1));
+    slp::println("norm p_x = ({:.03f}, {:.03f}, {:.03f})", step.p_x(0),
+                 step.p_x(1), step.p_x(2));
+    slp::println("norm p_s = ({:.03f}, {:.03f})", step.p_s(0), step.p_s(1));
+
+    // If maximum step size is below minimum, compute step that minimizes
+    // constraint violation instead
     if (α < α_min) {
-      return ExitStatus::LINE_SEARCH_FAILED;
+      // Second-order correction
+      //
+      // Start from the Newton-KKT system shown in equation (19.12) of [1].
+      //
+      //   [H    0  Aₑᵀ  Aᵢᵀ][ pₖˣ]    [∇f(x) − Aₑᵀy − Aᵢᵀz]
+      //   [0    Σ   0   −I ][ pₖˢ] = −[     z − μS⁻¹e     ]
+      //   [Aₑ   0   0    0 ][−pₖʸ]    [        cₑ         ]
+      //   [Aᵢ  −I   0    0 ][−pₖᶻ]    [      cᵢ − s       ]
+      //
+      // Remove the top two equations.
+      //
+      //                     [ pₖˣ]
+      //                     [ pₖˢ]
+      //   [Aₑ   0   0    0 ][−pₖʸ] = −[  cₑ  ]
+      //   [Aᵢ  −I   0    0 ][−pₖᶻ]    [cᵢ − s]
+      //
+      // Remove the right two columns.
+      //
+      //   [Aₑ   0][pₖˣ] = −[  cₑ  ]
+      //   [Aᵢ  −I][pₖˢ]    [cᵢ − s]
+      //
+      // Solve for pₖˣ.
+      //
+      //   Aₑpₖˣ = −cₑ
+      //
+      // Since the number of equality constraints must be ≤ the number of
+      // decision variables, use the right pseudoinverse.
+      //
+      //   pₖˣ = −Aₑᵀ(AₑAₑᵀ)⁻¹cₑ
+      //
+      // Solve for pₖˢ.
+      //
+      //   Aᵢpₖˣ − pₖˢ = −(cᵢ − s)
+      //   pₖˢ − Aᵢpₖˣ = cᵢ − s
+      //   pₖˢ = cᵢ − s + Aᵢpₖˣ
+
+      Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> soc_solver{
+          A_e * A_e.transpose()};
+      step.p_x = -A_e.transpose() * soc_solver.solve(c_e);
+      step.p_s = c_i - s + A_i * step.p_x;
+
+      Eigen::VectorXd trial_x = x + step.p_x;
+      x_ad.set_value(x + step.p_x);
+
+      Eigen::VectorXd trial_s = s + step.p_s;
+
+      Eigen::SparseVector<double> trial_g = gradient_f.value();
+      Eigen::SparseMatrix<double> trial_A_e = jacobian_c_e.value();
+      Eigen::SparseMatrix<double> trial_A_i = jacobian_c_i.value();
+
+      auto estimate = lagrange_multiplier_estimate(trial_g, trial_A_e,
+                                                   trial_A_i, trial_s, μ);
+      step.p_y = estimate.y - y;
+      step.p_z = estimate.z - z;
+
+      α_max = 1.0;
+      α = 1.0;
+
+      slp::println("soc p_x = ({:.03f}, {:.03f}, {:.03f})", step.p_x(0),
+                   step.p_x(1), step.p_x(2));
+      slp::println("soc p_s = ({:.03f}, {:.03f})", step.p_s(0), step.p_s(1));
     }
 
     // αₖᶻ = max(α ∈ (0, 1] : zₖ + αpₖᶻ ≥ (1−τⱼ)zₖ)
