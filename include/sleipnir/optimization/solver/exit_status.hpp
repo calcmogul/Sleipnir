@@ -22,21 +22,19 @@ enum class ExitStatus : int8_t {
   TOO_FEW_DOFS = -1,
   /// The solver determined the problem to be locally infeasible and gave up.
   LOCALLY_INFEASIBLE = -2,
-  /// The linear system factorization failed.
-  FACTORIZATION_FAILED = -3,
   /// The backtracking line search failed, and the problem isn't locally
   /// infeasible.
-  LINE_SEARCH_FAILED = -4,
+  LINE_SEARCH_FAILED = -3,
   /// The solver encountered nonfinite initial cost or constraints and gave up.
-  NONFINITE_INITIAL_COST_OR_CONSTRAINTS = -5,
+  NONFINITE_INITIAL_COST_OR_CONSTRAINTS = -4,
   /// The solver encountered diverging primal iterates xₖ and/or sₖ and gave up.
-  DIVERGING_ITERATES = -6,
+  DIVERGING_ITERATES = -5,
   /// The solver returned its solution so far after exceeding the maximum number
   /// of iterations.
-  MAX_ITERATIONS_EXCEEDED = -7,
+  MAX_ITERATIONS_EXCEEDED = -6,
   /// The solver returned its solution so far after exceeding the maximum
   /// elapsed wall clock time.
-  TIMEOUT = -8
+  TIMEOUT = -7
 };
 
 /**
@@ -57,8 +55,6 @@ SLEIPNIR_DLLEXPORT constexpr std::string_view to_message(
       return "too few degrees of freedom";
     case LOCALLY_INFEASIBLE:
       return "locally infeasible";
-    case FACTORIZATION_FAILED:
-      return "factorization failed";
     case LINE_SEARCH_FAILED:
       return "line search failed";
     case NONFINITE_INITIAL_COST_OR_CONSTRAINTS:
