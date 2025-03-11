@@ -250,9 +250,7 @@ ExitStatus sqp(const SQPMatrixCallbacks& matrix_callbacks,
     //
     // [H   Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy]
     // [Aₑ   0 ][−pʸ]    [   cₑ    ]
-    if (solver.compute(lhs).info() != Eigen::Success) [[unlikely]] {
-      return ExitStatus::FACTORIZATION_FAILED;
-    }
+    solver.compute(lhs);
 
     linear_system_compute_profiler.stop();
     ScopedProfiler linear_system_solve_profiler{linear_system_solve_prof};
