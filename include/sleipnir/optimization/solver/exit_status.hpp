@@ -22,25 +22,23 @@ enum class ExitStatus : int8_t {
   /// The problem setup frontend determined the problem to have an empty
   /// feasible region.
   GLOBALLY_INFEASIBLE = -3,
-  /// The linear system factorization failed.
-  FACTORIZATION_FAILED = -4,
   /// The backtracking line search failed, and the problem isn't locally
   /// infeasible.
-  LINE_SEARCH_FAILED = -5,
+  LINE_SEARCH_FAILED = -4,
   /// The solver failed to reach the desired tolerance, and feasibility
   /// restoration failed to converge.
-  FEASIBILITY_RESTORATION_FAILED = -6,
+  FEASIBILITY_RESTORATION_FAILED = -5,
   /// The solver encountered nonfinite initial cost, constraints, or derivatives
   /// and gave up.
-  NONFINITE_INITIAL_GUESS = -7,
+  NONFINITE_INITIAL_GUESS = -6,
   /// The solver encountered diverging primal iterates xₖ and/or sₖ and gave up.
-  DIVERGING_ITERATES = -8,
+  DIVERGING_ITERATES = -7,
   /// The solver returned its solution so far after exceeding the maximum number
   /// of iterations.
-  MAX_ITERATIONS_EXCEEDED = -9,
+  MAX_ITERATIONS_EXCEEDED = -8,
   /// The solver returned its solution so far after exceeding the maximum
   /// elapsed wall clock time.
-  TIMEOUT = -10,
+  TIMEOUT = -9,
 };
 
 }  // namespace slp
@@ -77,8 +75,6 @@ struct std::formatter<slp::ExitStatus> {
         return m_underlying.format("locally infeasible", ctx);
       case GLOBALLY_INFEASIBLE:
         return m_underlying.format("globally infeasible", ctx);
-      case FACTORIZATION_FAILED:
-        return m_underlying.format("factorization failed", ctx);
       case LINE_SEARCH_FAILED:
         return m_underlying.format("line search failed", ctx);
       case FEASIBILITY_RESTORATION_FAILED:
