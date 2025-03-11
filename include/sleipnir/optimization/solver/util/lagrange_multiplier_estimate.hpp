@@ -5,10 +5,10 @@
 #include <algorithm>
 #include <utility>
 
-#include <Eigen/SparseCholesky>
 #include <Eigen/SparseCore>
 #include <gch/small_vector.hpp>
 
+#include "sleipnir/optimization/solver/util/Eigen/SparseCholesky"
 #include "sleipnir/optimization/solver/util/append_as_triplets.hpp"
 
 namespace slp {
@@ -39,8 +39,8 @@ Eigen::Vector<Scalar, Eigen::Dynamic> lagrange_multiplier_estimate(
   //   ∇f − Aₑᵀy = 0
   //   Aₑᵀy = ∇f
   //   y = (AₑAₑᵀ)⁻¹Aₑ∇f
-  return Eigen::SimplicialLDLT<Eigen::SparseMatrix<Scalar>>{A_e *
-                                                            A_e.transpose()}
+  return Eigen::SimplicialLDLT<Eigen::SparseMatrix<Scalar>>{
+      A_e * A_e.transpose(), A_e.rows()}
       .solve(A_e * g);
 }
 
@@ -106,7 +106,7 @@ LagrangeMultiplierEstimate<Scalar> lagrange_multiplier_estimate(
   rhs_temp.segment(g.rows(), s.rows()).setConstant(-μ);
   DenseVector rhs = A_hat * rhs_temp;
 
-  Eigen::SimplicialLDLT<SparseMatrix> yz_estimator{lhs};
+  Eigen::SimplicialLDLT<SparseMatrix> yz_estimator{lhs, lhs.rows()};
   DenseVector sol = yz_estimator.solve(rhs);
   DenseVector y = sol.segment(0, A_e.rows());
   DenseVector z = sol.segment(A_e.rows(), s.rows());
