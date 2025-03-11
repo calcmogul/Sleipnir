@@ -342,10 +342,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
                   .nonZeros() +
               A_e.nonZeros() <
           0.25 * lhs_rows * lhs_rows,
-      matrices.num_decision_variables, matrices.num_equality_constraints,
-      // Constraint regularization is forced to zero in feasibility restoration
-      // because the equality constraint Jacobian cannot be rank-deficient
-      in_feasibility_restoration ? Scalar(0) : Scalar(1e-10)};
+      matrices.num_decision_variables, matrices.num_equality_constraints};
 
   // Variables for determining when a step is acceptable
   constexpr Scalar α_reduction_factor(0.5);
@@ -436,9 +433,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
     //
     // [H + AᵢᵀΣAᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(−Σcᵢ + μS⁻¹e + z)]
     // [    Aₑ       0 ][−pʸ]    [               cₑ                ]
-    if (solver.compute(lhs).info() != Eigen::Success) [[unlikely]] {
-      return ExitStatus::FACTORIZATION_FAILED;
-    }
+    solver.compute(lhs);
 
     kkt_matrix_decomp_profiler.stop();
     ScopedProfiler kkt_system_solve_profiler{kkt_system_solve_prof};

@@ -284,8 +284,6 @@ TEST_CASE("ExitStatus - Formatter", "[Formatter]") {
         "locally infeasible");
   CHECK(std::format("{}", slp::ExitStatus::GLOBALLY_INFEASIBLE) ==
         "globally infeasible");
-  CHECK(std::format("{}", slp::ExitStatus::FACTORIZATION_FAILED) ==
-        "factorization failed");
   CHECK(std::format("{}", slp::ExitStatus::LINE_SEARCH_FAILED) ==
         "line search failed");
   CHECK(std::format("{}", slp::ExitStatus::FEASIBILITY_RESTORATION_FAILED) ==
