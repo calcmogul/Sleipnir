@@ -1,5 +1,6 @@
 cppHeaderFileInclude {
   \.hpp$
+  SparseCholesky$
 }
 
 cppSrcFileInclude {
@@ -12,6 +13,7 @@ modifiableFileExclude {
   \.svg$
   jormungandr/cpp/docstrings\.hpp$
   jormungandr/py\.typed$
+  include/sleipnir/optimization/solver/util/Eigen/
 }
 
 includeOtherLibs {
