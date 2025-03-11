@@ -251,8 +251,7 @@ ExitStatus interior_point(
   // Kept outside the loop so its storage can be reused
   small_vector<Eigen::Triplet<double>> triplets;
 
-  RegularizedLDLT solver{decision_variables.size(),
-                         equality_constraints.size()};
+  RegularizedLDLT solver{decision_variables.size()};
 
   // Variables for determining when a step is acceptable
   constexpr double α_red_factor = 0.5;
@@ -437,7 +436,7 @@ ExitStatus interior_point(
     //
     // [H + AᵢᵀΣAᵢ  Aₑᵀ][ pₖˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(−Σcᵢ + μS⁻¹e + z)]
     // [    Aₑ       0 ][−pₖʸ]    [               cₑ                ]
-    if (solver.compute(lhs, μ).info() != Eigen::Success) [[unlikely]] {
+    if (solver.compute(lhs).info() != Eigen::Success) [[unlikely]] {
       return ExitStatus::FACTORIZATION_FAILED;
     }
 

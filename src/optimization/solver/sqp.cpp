@@ -172,8 +172,7 @@ ExitStatus sqp(
   // Kept outside the loop so its storage can be reused
   small_vector<Eigen::Triplet<double>> triplets;
 
-  RegularizedLDLT solver{decision_variables.size(),
-                         equality_constraints.size()};
+  RegularizedLDLT solver{decision_variables.size()};
 
   // Variables for determining when a step is acceptable
   constexpr double α_red_factor = 0.5;
