@@ -1,9 +1,14 @@
 cppHeaderFileInclude {
   \.hpp$
+  SparseCholesky$
 }
 
 cppSrcFileInclude {
   \.cpp$
+}
+
+modifiableFileExclude {
+  src/optimization/Eigen/
 }
 
 includeOtherLibs {
