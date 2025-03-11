@@ -23,21 +23,19 @@ enum class ExitStatus : int8_t {
   /// The problem setup frontend determined the problem to have an empty
   /// feasible region.
   GLOBALLY_INFEASIBLE = -3,
-  /// The linear system factorization failed.
-  FACTORIZATION_FAILED = -4,
   /// The backtracking line search failed, and the problem isn't locally
   /// infeasible.
-  LINE_SEARCH_FAILED = -5,
+  LINE_SEARCH_FAILED = -4,
   /// The solver encountered nonfinite initial cost or constraints and gave up.
-  NONFINITE_INITIAL_COST_OR_CONSTRAINTS = -6,
+  NONFINITE_INITIAL_COST_OR_CONSTRAINTS = -5,
   /// The solver encountered diverging primal iterates xₖ and/or sₖ and gave up.
-  DIVERGING_ITERATES = -7,
+  DIVERGING_ITERATES = -6,
   /// The solver returned its solution so far after exceeding the maximum number
   /// of iterations.
-  MAX_ITERATIONS_EXCEEDED = -8,
+  MAX_ITERATIONS_EXCEEDED = -7,
   /// The solver returned its solution so far after exceeding the maximum
   /// elapsed wall clock time.
-  TIMEOUT = -9,
+  TIMEOUT = -8,
 };
 
 /// Returns user-readable message corresponding to the solver exit status.
@@ -58,8 +56,6 @@ SLEIPNIR_DLLEXPORT constexpr std::string_view to_message(
       return "locally infeasible";
     case GLOBALLY_INFEASIBLE:
       return "globally infeasible";
-    case FACTORIZATION_FAILED:
-      return "factorization failed";
     case LINE_SEARCH_FAILED:
       return "line search failed";
     case NONFINITE_INITIAL_COST_OR_CONSTRAINTS:
