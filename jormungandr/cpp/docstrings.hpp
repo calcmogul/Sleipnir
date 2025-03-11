@@ -76,8 +76,6 @@ static const char *__doc_slp_ExitStatus_DIVERGING_ITERATES =
 R"doc(The solver encountered diverging primal iterates xₖ and/or sₖ and gave
 up.)doc";
 
-static const char *__doc_slp_ExitStatus_FACTORIZATION_FAILED = R"doc(The linear system factorization failed.)doc";
-
 static const char *__doc_slp_ExitStatus_LINE_SEARCH_FAILED =
 R"doc(The backtracking line search failed, and the problem isn't locally
 infeasible.)doc";
