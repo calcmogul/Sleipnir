@@ -142,8 +142,6 @@ static const char *__doc_slp_ExitStatus_DIVERGING_ITERATES =
 R"doc(The solver encountered diverging primal iterates xₖ and/or sₖ and gave
 up.)doc";
 
-static const char *__doc_slp_ExitStatus_FACTORIZATION_FAILED = R"doc(The linear system factorization failed.)doc";
-
 static const char *__doc_slp_ExitStatus_FEASIBILITY_RESTORATION_FAILED =
 R"doc(The solver failed to reach the desired tolerance, and feasibility
 restoration failed to converge.)doc";

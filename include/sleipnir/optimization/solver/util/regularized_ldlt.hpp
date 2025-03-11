@@ -31,24 +31,8 @@ class RegularizedLDLT {
   RegularizedLDLT(bool use_sparse_solver, int num_decision_variables,
                   int num_equality_constraints)
       : m_use_sparse_solver{use_sparse_solver},
-        m_sparse_solver{num_decision_variables, num_equality_constraints},
+        m_sparse_solver{num_decision_variables},
         m_dense_solver{num_decision_variables, num_equality_constraints} {}
-
-  /// Constructs a RegularizedLDLT instance.
-  ///
-  /// @param use_sparse_solver Whether to use sparse or dense solver.
-  /// @param num_decision_variables The number of decision variables in the
-  ///     system.
-  /// @param num_equality_constraints The number of equality constraints in the
-  ///     system.
-  /// @param γ_min The minimum constraint regularization.
-  RegularizedLDLT(bool use_sparse_solver, int num_decision_variables,
-                  int num_equality_constraints, Scalar γ_min)
-      : m_use_sparse_solver{use_sparse_solver},
-        m_sparse_solver{num_decision_variables, num_equality_constraints,
-                        γ_min},
-        m_dense_solver{num_decision_variables, num_equality_constraints,
-                       γ_min} {}
 
   /// Reports whether previous computation was successful.
   ///
@@ -121,7 +105,7 @@ class RegularizedLDLT {
   /// @return Constraint Jacobian regularization factor.
   Scalar constraint_jacobian_regularization() const {
     if (m_use_sparse_solver) {
-      return m_sparse_solver.constraint_jacobian_regularization();
+      return Scalar(0);
     } else {
       return m_dense_solver.constraint_jacobian_regularization();
     }
