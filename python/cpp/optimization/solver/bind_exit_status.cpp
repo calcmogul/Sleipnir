@@ -20,8 +20,6 @@ void bind_exit_status(nb::enum_<ExitStatus>& e) {
           DOC(slp, ExitStatus, LOCALLY_INFEASIBLE));
   e.value("GLOBALLY_INFEASIBLE", ExitStatus::GLOBALLY_INFEASIBLE,
           DOC(slp, ExitStatus, GLOBALLY_INFEASIBLE));
-  e.value("FACTORIZATION_FAILED", ExitStatus::FACTORIZATION_FAILED,
-          DOC(slp, ExitStatus, FACTORIZATION_FAILED));
   e.value("LINE_SEARCH_FAILED", ExitStatus::LINE_SEARCH_FAILED,
           DOC(slp, ExitStatus, LINE_SEARCH_FAILED));
   e.value("NONFINITE_INITIAL_COST_OR_CONSTRAINTS",

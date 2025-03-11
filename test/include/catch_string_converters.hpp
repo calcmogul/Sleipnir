@@ -51,8 +51,6 @@ struct StringMaker<slp::ExitStatus> {
         return "LOCALLY_INFEASIBLE";
       case GLOBALLY_INFEASIBLE:
         return "GLOBALLY_INFEASIBLE";
-      case FACTORIZATION_FAILED:
-        return "FACTORIZATION_FAILED";
       case LINE_SEARCH_FAILED:
         return "LINE_SEARCH_FAILED";
       case NONFINITE_INITIAL_COST_OR_CONSTRAINTS:

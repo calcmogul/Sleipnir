@@ -373,9 +373,7 @@ ExitStatus interior_point(
     //
     // [H + AᵢᵀΣAᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(−Σcᵢ + μS⁻¹e + z)]
     // [    Aₑ       0 ][−pʸ]    [               cₑ                ]
-    if (solver.compute(lhs).info() != Eigen::Success) [[unlikely]] {
-      return ExitStatus::FACTORIZATION_FAILED;
-    }
+    solver.compute(lhs);
 
     kkt_matrix_decomp_profiler.stop();
     ScopedProfiler kkt_system_solve_profiler{kkt_system_solve_prof};
