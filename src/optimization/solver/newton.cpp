@@ -110,7 +110,7 @@ ExitStatus newton(
 
   Filter filter;
 
-  RegularizedLDLT solver{decision_variables.size(), 0};
+  RegularizedLDLT solver{decision_variables.size()};
 
   // Variables for determining when a step is acceptable
   constexpr double α_red_factor = 0.5;
