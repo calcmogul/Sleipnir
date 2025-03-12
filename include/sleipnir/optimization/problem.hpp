@@ -517,7 +517,8 @@ class Problem {
       VariableMatrix<Scalar> c_e_ad{m_equality_constraints};
       VariableMatrix<Scalar> c_i_ad{m_inequality_constraints};
       VariableMatrix<Scalar> y_ad(num_equality_constraints);
-      VariableMatrix<Scalar> z_ad(num_inequality_constraints);
+      VariableMatrix<Scalar> v_ad(num_inequality_constraints);
+      Variable<Scalar> sqrt_μ_ad;
 
       gch::small_vector<SetupProfiler> ad_setup_profilers;
       ad_setup_profilers.emplace_back("setup");
@@ -544,8 +545,11 @@ class Problem {
 
       // Set up constraint part of Lagrangian Hessian autodiff
       ad_setup_profilers[4].start();
-      Hessian<Scalar, Eigen::Lower> H_c{-y_ad.T() * c_e_ad - z_ad.T() * c_i_ad,
-                                        x_ad};
+      Hessian<Scalar, Eigen::Lower> H_c{
+          -y_ad.T() * c_e_ad -
+              sqrt_μ_ad *
+                  (v_ad.cwise_transform(&slp::exp<Scalar>).T() * c_i_ad),
+          x_ad};
       ad_setup_profilers[4].stop();
 
       ad_setup_profilers[2].stop();
@@ -609,6 +613,24 @@ class Problem {
       project_onto_bounds(x, bounds);
 #endif
 
+      bool is_nlp = [&]() -> bool {
+        if (f.type() > ExpressionType::QUADRATIC) {
+          return true;
+        } else if (!m_equality_constraints.empty() &&
+                   std::ranges::max(m_equality_constraints, {},
+                                    &Variable<Scalar>::type)
+                           .type() > ExpressionType::LINEAR) {
+          return true;
+        } else if (!m_inequality_constraints.empty() &&
+                   std::ranges::max(m_inequality_constraints, {},
+                                    &Variable<Scalar>::type)
+                           .type() > ExpressionType::LINEAR) {
+          return true;
+        }
+
+        return false;
+      }();
+
       // Automatically scale the cost and constraints. The problem scaling
       // procedure is described in more detail in
       // docs/algorithms.md#problem-scaling.
@@ -627,18 +649,20 @@ class Problem {
             x_ad.set_value(x);
             return scaling.f * g.value();
           },
-          [&](const DenseVector& x, const DenseVector& y,
-              const DenseVector& z) -> SparseMatrix {
+          [&](const DenseVector& x, const DenseVector& y, const DenseVector& v,
+              Scalar sqrt_μ) -> SparseMatrix {
             x_ad.set_value(x);
             y_ad.set_value(scaling.c_e.cwiseProduct(y));
-            z_ad.set_value(scaling.c_i.cwiseProduct(z));
-            return scaling.f * H_f.value() + H_c.value();
+            v_ad.set_value(scaling.c_i.cwiseProduct(v));
+            sqrt_μ_ad.set_value(scaling.f * sqrt_μ);
+            return H_f.value() + H_c.value();
           },
-          [&](const DenseVector& x, const DenseVector& y,
-              const DenseVector& z) -> SparseMatrix {
+          [&](const DenseVector& x, const DenseVector& y, const DenseVector& v,
+              Scalar sqrt_μ) -> SparseMatrix {
             x_ad.set_value(x);
             y_ad.set_value(scaling.c_e.cwiseProduct(y));
-            z_ad.set_value(scaling.c_i.cwiseProduct(z));
+            v_ad.set_value(scaling.c_i.cwiseProduct(v));
+            sqrt_μ_ad.set_value(scaling.f * sqrt_μ);
             return H_c.value();
           },
           [&](const DenseVector& x) -> DenseVector {
@@ -660,12 +684,12 @@ class Problem {
           scaling};
 
       // Invoke interior-point method solver
-      status =
-          interior_point<Scalar>(matrix_callbacks, iteration_callbacks, options,
+      status = interior_point<Scalar>(matrix_callbacks, is_nlp,
+                                      iteration_callbacks, options,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
-                                 bound_constraint_mask,
+                                      bound_constraint_mask,
 #endif
-                                 x);
+                                      x);
     }
 
     if (options.diagnostics) {
