@@ -338,13 +338,11 @@ static const char *__doc_slp_IterationInfo_g = R"doc(The gradient of the cost fu
 
 static const char *__doc_slp_IterationInfo_iteration = R"doc(The solver iteration.)doc";
 
-static const char *__doc_slp_IterationInfo_s = R"doc(The inequality constraint slack variables.)doc";
+static const char *__doc_slp_IterationInfo_v = R"doc(The log-domain variables.)doc";
 
 static const char *__doc_slp_IterationInfo_x = R"doc(The decision variables.)doc";
 
 static const char *__doc_slp_IterationInfo_y = R"doc(The equality constraint dual variables.)doc";
-
-static const char *__doc_slp_IterationInfo_z = R"doc(The inequality constraint dual variables.)doc";
 
 static const char *__doc_slp_Jacobian =
 R"doc(This class calculates the Jacobian of a vector of variables with
@@ -651,13 +649,12 @@ second-order correction)</td> </tr> <tr> <td>time (ms)</td>
 <td>error</td> <td>Infinity norm of scaled KKT condition errors</td>
 </tr> <tr> <td>cost</td> <td>Cost function value at current
 iterate</td> </tr> <tr> <td>infeas.</td> <td>Constraint infeasibility
-at current iterate</td> </tr> <tr> <td>complement.</td>
-<td>Complementary slackness at current iterate (sᵀz)</td> </tr> <tr>
-<td>μ</td> <td>Barrier parameter</td> </tr> <tr> <td>reg</td>
-<td>Iteration matrix regularization</td> </tr> <tr> <td>primal α</td>
-<td>Primal step size</td> </tr> <tr> <td>dual α</td> <td>Dual step
-size</td> </tr> <tr> <td>↩</td> <td>Number of line search
-backtracks</td> </tr> </table>)doc";
+at current iterate</td> </tr> <tr> <td>μ</td> <td>Barrier
+parameter</td> </tr> <tr> <td>reg</td> <td>Iteration matrix
+regularization</td> </tr> <tr> <td>primal α</td> <td>Primal step
+size</td> </tr> <tr> <td>dual α</td> <td>Dual step size</td> </tr>
+<tr> <td>↩</td> <td>Number of line search backtracks</td> </tr>
+</table>)doc";
 
 static const char *__doc_slp_Options_feasible_ipm =
 R"doc(Enables the feasible interior-point method. When the inequality
