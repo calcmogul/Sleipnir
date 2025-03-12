@@ -61,9 +61,9 @@ struct SLEIPNIR_DLLEXPORT InteriorPointMatrixCallbacks {
   /// </table>
   std::function<Eigen::SparseVector<double>(const Eigen::VectorXd& x)> g;
 
-  /// Lagrangian Hessian ∇ₓₓ²L(x, y, z) getter.
+  /// Lagrangian Hessian ∇ₓₓ²L(x, y, v, √(μ)) getter.
   ///
-  /// L(xₖ, yₖ, zₖ) = f(xₖ) − yₖᵀcₑ(xₖ) − zₖᵀcᵢ(xₖ)
+  /// L(xₖ, yₖ, zₖ) = f(xₖ) − yₖᵀcₑ(xₖ) − √(μ)eᵛᵀcᵢ(xₖ)
   ///
   /// <table>
   ///   <tr>
@@ -92,9 +92,9 @@ struct SLEIPNIR_DLLEXPORT InteriorPointMatrixCallbacks {
   ///     <td>num_decision_variables</td>
   ///   </tr>
   /// </table>
-  std::function<Eigen::SparseMatrix<double>(const Eigen::VectorXd& x,
-                                            const Eigen::VectorXd& y,
-                                            const Eigen::VectorXd& z)>
+  std::function<Eigen::SparseMatrix<double>(
+      const Eigen::VectorXd& x, const Eigen::VectorXd& y,
+      const Eigen::VectorXd& v, double sqrt_μ)>
       H;
 
   /// Equality constraint value cₑ(x) getter.
@@ -212,16 +212,19 @@ where f(x) is the cost function, cₑ(x) are the equality constraints, and cᵢ(
 are the inequality constraints.
 
 @param[in] matrix_callbacks Matrix callbacks.
+@param[in] is_nlp If true, the solver uses a more conservative barrier parameter
+  reduction strategy that's more reliable on NLPs. Pass false for problems with
+  quadratic or lower-order cost and linear or lower-order constraints.
 @param[in] iteration_callbacks The list of iteration callbacks.
 @param[in] options Solver options.
 @param[in,out] x The initial guess and output location for the decision
   variables.
 @return The exit status.
 */
-SLEIPNIR_DLLEXPORT ExitStatus
-interior_point(const InteriorPointMatrixCallbacks& matrix_callbacks,
-               std::span<std::function<bool(const IterationInfo& info)>>
-                   iteration_callbacks,
-               const Options& options, Eigen::VectorXd& x);
+SLEIPNIR_DLLEXPORT ExitStatus interior_point(
+    const InteriorPointMatrixCallbacks& matrix_callbacks, bool is_nlp,
+    std::span<std::function<bool(const IterationInfo& info)>>
+        iteration_callbacks,
+    const Options& options, Eigen::VectorXd& x);
 
 }  // namespace slp

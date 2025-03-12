@@ -22,8 +22,6 @@ enum class ExitStatus : int8_t {
   TOO_FEW_DOFS = -1,
   /// The solver determined the problem to be locally infeasible and gave up.
   LOCALLY_INFEASIBLE = -2,
-  /// The linear system factorization failed.
-  FACTORIZATION_FAILED = -3,
   /// The backtracking line search failed, and the problem isn't locally
   /// infeasible.
   LINE_SEARCH_FAILED = -4,
@@ -57,8 +55,6 @@ SLEIPNIR_DLLEXPORT constexpr std::string_view to_message(
       return "too few degrees of freedom";
     case LOCALLY_INFEASIBLE:
       return "locally infeasible";
-    case FACTORIZATION_FAILED:
-      return "factorization failed";
     case LINE_SEARCH_FAILED:
       return "line search failed";
     case NONFINITE_INITIAL_COST_OR_CONSTRAINTS:
