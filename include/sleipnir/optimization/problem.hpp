@@ -495,8 +495,11 @@ class Problem {
 
       // Set up Lagrangian
       VariableMatrix<Scalar> y_ad(num_equality_constraints);
-      VariableMatrix<Scalar> z_ad(num_inequality_constraints);
-      Variable L = f - (y_ad.T() * c_e_ad)[0] - (z_ad.T() * c_i_ad)[0];
+      VariableMatrix<Scalar> v_ad(num_inequality_constraints);
+      Variable<Scalar> sqrt_μ_ad;
+      Variable L =
+          f - (y_ad.T() * c_e_ad)[0] -
+          sqrt_μ_ad * (v_ad.cwise_transform(&slp::exp<Scalar>).T() * c_i_ad)[0];
 
       // Set up Lagrangian Hessian autodiff
       ad_setup_profilers.emplace_back("  ↳ ∇²ₓₓL").start();
@@ -546,6 +549,25 @@ class Problem {
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
       project_onto_bounds(x, bounds);
 #endif
+
+      bool is_nlp = [&]() -> bool {
+        if (f.type() > ExpressionType::QUADRATIC) {
+          return true;
+        } else if (!m_equality_constraints.empty() &&
+                   std::ranges::max(m_equality_constraints, {},
+                                    &Variable<Scalar>::type)
+                           .type() > ExpressionType::LINEAR) {
+          return true;
+        } else if (!m_inequality_constraints.empty() &&
+                   std::ranges::max(m_inequality_constraints, {},
+                                    &Variable<Scalar>::type)
+                           .type() > ExpressionType::LINEAR) {
+          return true;
+        }
+
+        return false;
+      }();
+
       // Invoke interior-point method solver
       status = interior_point<Scalar>(
           InteriorPointMatrixCallbacks<Scalar>{
@@ -560,11 +582,12 @@ class Problem {
               },
               [&](const Eigen::Vector<Scalar, Eigen::Dynamic>& x,
                   const Eigen::Vector<Scalar, Eigen::Dynamic>& y,
-                  const Eigen::Vector<Scalar, Eigen::Dynamic>& z)
-                  -> Eigen::SparseMatrix<Scalar> {
+                  const Eigen::Vector<Scalar, Eigen::Dynamic>& v,
+                  Scalar sqrt_μ) -> Eigen::SparseMatrix<Scalar> {
                 x_ad.set_value(x);
                 y_ad.set_value(y);
-                z_ad.set_value(z);
+                v_ad.set_value(v);
+                sqrt_μ_ad.set_value(sqrt_μ);
                 return H.value();
               },
               [&](const Eigen::Vector<Scalar, Eigen::Dynamic>& x)
@@ -587,7 +610,7 @@ class Problem {
                 x_ad.set_value(x);
                 return A_i.value();
               }},
-          callbacks, options,
+          is_nlp, callbacks, options,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
           bound_constraint_mask,
 #endif

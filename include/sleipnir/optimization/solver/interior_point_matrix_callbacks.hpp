@@ -60,9 +60,9 @@ struct InteriorPointMatrixCallbacks {
       const Eigen::Vector<Scalar, Eigen::Dynamic>& x)>
       g;
 
-  /// Lagrangian Hessian ∇ₓₓ²L(x, y, z) getter.
+  /// Lagrangian Hessian ∇ₓₓ²L(x, y, v, √(μ)) getter.
   ///
-  /// L(xₖ, yₖ, zₖ) = f(xₖ) − yₖᵀcₑ(xₖ) − zₖᵀcᵢ(xₖ)
+  /// L(xₖ, yₖ, vₖ, √(μ))) = f(xₖ) − yₖᵀcₑ(xₖ) − √(μ)eᵛᵀcᵢ(xₖ)
   ///
   /// <table>
   ///   <tr>
@@ -81,12 +81,12 @@ struct InteriorPointMatrixCallbacks {
   ///     <td>1</td>
   ///   </tr>
   ///   <tr>
-  ///     <td>z</td>
+  ///     <td>v</td>
   ///     <td>num_inequality_constraints</td>
   ///     <td>1</td>
   ///   </tr>
   ///   <tr>
-  ///     <td>∇ₓₓ²L(x, y, z)</td>
+  ///     <td>∇ₓₓ²L(x, y, v, √(μ))</td>
   ///     <td>num_decision_variables</td>
   ///     <td>num_decision_variables</td>
   ///   </tr>
@@ -94,7 +94,7 @@ struct InteriorPointMatrixCallbacks {
   std::function<Eigen::SparseMatrix<Scalar>(
       const Eigen::Vector<Scalar, Eigen::Dynamic>& x,
       const Eigen::Vector<Scalar, Eigen::Dynamic>& y,
-      const Eigen::Vector<Scalar, Eigen::Dynamic>& z)>
+      const Eigen::Vector<Scalar, Eigen::Dynamic>& v, Scalar sqrt_μ)>
       H;
 
   /// Equality constraint value cₑ(x) getter.

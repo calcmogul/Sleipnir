@@ -4,14 +4,14 @@
 
 namespace slp {
 
-template SLEIPNIR_DLLEXPORT ExitStatus
-interior_point(const InteriorPointMatrixCallbacks<double>& matrix_callbacks,
-               std::span<std::function<bool(const IterationInfo<double>& info)>>
-                   iteration_callbacks,
-               const Options& options,
+template SLEIPNIR_DLLEXPORT ExitStatus interior_point(
+    const InteriorPointMatrixCallbacks<double>& matrix_callbacks, bool is_nlp,
+    std::span<std::function<bool(const IterationInfo<double>& info)>>
+        iteration_callbacks,
+    const Options& options,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
-               const Eigen::ArrayX<bool>& bound_constraint_mask,
+    const Eigen::ArrayX<bool>& bound_constraint_mask,
 #endif
-               Eigen::Vector<double, Eigen::Dynamic>& x);
+    Eigen::Vector<double, Eigen::Dynamic>& x);
 
 }  // namespace slp

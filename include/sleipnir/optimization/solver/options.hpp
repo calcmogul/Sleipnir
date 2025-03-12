@@ -64,10 +64,6 @@ struct SLEIPNIR_DLLEXPORT Options {
   ///     <td>Constraint infeasibility at current iterate</td>
   ///   </tr>
   ///   <tr>
-  ///     <td>complement.</td>
-  ///     <td>Complementary slackness at current iterate (sᵀz)</td>
-  ///   </tr>
-  ///   <tr>
   ///     <td>μ</td>
   ///     <td>Barrier parameter</td>
   ///   </tr>
