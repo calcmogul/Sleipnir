@@ -177,7 +177,6 @@ inline void print_bound_constraint_global_infeasibility_error(
 /// @param error The error.
 /// @param cost The cost.
 /// @param infeasibility The infeasibility.
-/// @param complementarity The complementarity.
 /// @param μ The barrier parameter.
 /// @param δ The Hessian regularization factor.
 /// @param γ The constraint Jacobian regularization factor.
@@ -192,24 +191,23 @@ template <typename Scalar, typename Rep, typename Period = std::ratio<1>>
 void print_iteration_diagnostics(int iterations, IterationType type,
                                  const std::chrono::duration<Rep, Period>& time,
                                  Scalar error, Scalar cost,
-                                 Scalar infeasibility, Scalar complementarity,
-                                 Scalar μ, Scalar δ, Scalar γ,
-                                 Scalar full_primal_step_inf_norm,
+                                 Scalar infeasibility, Scalar μ, Scalar δ,
+                                 Scalar γ, Scalar full_primal_step_inf_norm,
                                  Scalar full_dual_step_inf_norm,
                                  Scalar primal_α, Scalar primal_α_max,
                                  Scalar α_reduction_factor, Scalar dual_α) {
   if (iterations % 20 == 0) {
     if (iterations == 0) {
-      slp::println("┏{:━^119}┓", "");
+      slp::println("┏{:━^110}┓", "");
     } else {
-      slp::println("┢{:━^119}┪", "");
+      slp::println("┢{:━^110}┪", "");
     }
     slp::println(
-        "┃{:^4}   {:^9} {:^10} {:^11} {:^10} {:^8} {:^8} {:^5} {:^5} {:^8} "
-        "{:^8} {:^8} {:^8} {:^2}┃",
-        "iter", "duration", "error", "cost", "infeas.", "complem.", "μ", "δ",
-        "γ", "|p_pr|", "|p_du|", "α_pr", "α_du", "↩");
-    slp::println("┡{:━^119}┩", "");
+        "┃{:^4}   {:^9} {:^10} {:^11} {:^10} {:^8} {:^5} {:^5} {:^8} {:^8} "
+        "{:^8} {:^8} {:^2}┃",
+        "iter", "duration", "error", "cost", "infeas.", "μ", "δ", "γ", "|p_pr|",
+        "|p_du|", "α_pr", "α_du", "↩");
+    slp::println("┡{:━^110}┩", "");
   }
 
   // For the number of backtracks, we want x such that:
@@ -228,10 +226,10 @@ void print_iteration_diagnostics(int iterations, IterationType type,
 
   constexpr std::array ITERATION_TYPES{" ", "s", "r"};
   slp::println(
-      "│{:4} {:1} {:9.3f} {:10.4e} {:11.4e} {:10.4e} {:8.2e} {:8.2e} {:<5} "
-      "{:<5} {:8.2e} {:8.2e} {:8.2e} {:8.2e} {:2d}│",
+      "│{:4} {:1} {:9.3f} {:10.4e} {:11.4e} {:10.4e} {:8.2e} {:<5} {:<5} "
+      "{:8.2e} {:8.2e} {:8.2e} {:8.2e} {:2d}│",
       iterations, ITERATION_TYPES[std::to_underlying(type)], to_ms(time), error,
-      cost, infeasibility, complementarity, μ, power_of_10(δ), power_of_10(γ),
+      cost, infeasibility, μ, power_of_10(δ), power_of_10(γ),
       full_primal_step_inf_norm, full_dual_step_inf_norm, primal_α, dual_α,
       backtracks);
 }
@@ -242,7 +240,7 @@ void print_iteration_diagnostics(int iterations, IterationType type,
 #ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
 /// Prints bottom of iteration diagnostics table.
 inline void print_bottom_iteration_diagnostics() {
-  slp::println("└{:─^119}┘", "");
+  slp::println("└{:─^110}┘", "");
 }
 #else
 #define print_bottom_iteration_diagnostics(...)

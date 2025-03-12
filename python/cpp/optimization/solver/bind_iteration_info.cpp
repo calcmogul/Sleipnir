@@ -19,14 +19,11 @@ void bind_iteration_info(nb::class_<IterationInfo<double>>& cls) {
       "x", [](const IterationInfo<double>& self) { return self.x; },
       DOC(slp, IterationInfo, x));
   cls.def_prop_ro(
-      "s", [](const IterationInfo<double>& self) { return self.s; },
-      DOC(slp, IterationInfo, s));
-  cls.def_prop_ro(
       "y", [](const IterationInfo<double>& self) { return self.y; },
       DOC(slp, IterationInfo, y));
   cls.def_prop_ro(
-      "z", [](const IterationInfo<double>& self) { return self.z; },
-      DOC(slp, IterationInfo, z));
+      "v", [](const IterationInfo<double>& self) { return self.v; },
+      DOC(slp, IterationInfo, v));
   cls.def_prop_ro(
       "g",
       [](const IterationInfo<double>& self) {
