@@ -18,14 +18,11 @@ struct IterationInfo {
   /// The decision variables.
   const Eigen::VectorX<Scalar>& x;
 
-  /// The inequality constraint slack variables.
-  const Eigen::VectorX<Scalar>& s;
-
   /// The equality constraint dual variables.
   const Eigen::VectorX<Scalar>& y;
 
-  /// The inequality constraint dual variables.
-  const Eigen::VectorX<Scalar>& z;
+  /// The log-domain variables.
+  const Eigen::VectorX<Scalar>& v;
 
   /// The gradient of the cost function.
   const Eigen::SparseVector<Scalar>& g;

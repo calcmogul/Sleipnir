@@ -3,7 +3,7 @@
 #include <sleipnir/optimization/solver/ipm.hpp>
 
 template slp::ExitStatus slp::ipm(
-    const IPMMatrixCallbacks<float>& matrix_callbacks,
+    const IPMMatrixCallbacks<float>& matrix_callbacks, bool is_nlp,
     std::span<std::function<bool(const IterationInfo<float>& info)>>
         iteration_callbacks,
     const Options<float>& options,
