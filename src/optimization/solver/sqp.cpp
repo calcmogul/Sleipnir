@@ -309,11 +309,7 @@ ExitStatus sqp(
     linear_system_build_profiler.stop();
     ScopedProfiler linear_system_compute_profiler{linear_system_compute_prof};
 
-    Step step;
-    constexpr double α_max = 1.0;
-    double α = 1.0;
-
-    // Solve the Newton-KKT system
+    // Factorize the Newton-KKT system
     //
     // [H   Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy]
     // [Aₑ   0 ][−pʸ]    [   cₑ    ]
@@ -324,6 +320,8 @@ ExitStatus sqp(
     linear_system_compute_profiler.stop();
     ScopedProfiler linear_system_solve_profiler{linear_system_solve_prof};
 
+    // Solve the Newton-KKT system for the step
+    Step step;
     auto compute_step = [&](Step& step) {
       // p = [ pˣ]
       //     [−pʸ]
@@ -335,6 +333,9 @@ ExitStatus sqp(
 
     linear_system_solve_profiler.stop();
     ScopedProfiler line_search_profiler{line_search_prof};
+
+    constexpr double α_max = 1.0;
+    double α = 1.0;
 
     α = α_max;
 
@@ -392,8 +393,8 @@ ExitStatus sqp(
                   step_acceptable ? IterationType::ACCEPTED_SOC
                                   : IterationType::REJECTED_SOC,
                   soc_profiler.current_duration(), E, f.value(),
-                  trial_c_e.lpNorm<1>(), 0.0, 0.0,
-                  solver.hessian_regularization(), α_soc, 1.0, 1.0);
+                  trial_c_e.lpNorm<1>(), 0.0, solver.hessian_regularization(),
+                  α_soc, 1.0, 1.0);
             }
 #endif
           }};
@@ -553,7 +554,7 @@ ExitStatus sqp(
     if (options.diagnostics) {
       print_iteration_diagnostics(iterations, IterationType::NORMAL,
                                   inner_iter_profiler.current_duration(), E_0,
-                                  f.value(), c_e.lpNorm<1>(), 0.0, 0.0,
+                                  f.value(), c_e.lpNorm<1>(), 0.0,
                                   solver.hessian_regularization(), α, α_max, α);
     }
 #endif
