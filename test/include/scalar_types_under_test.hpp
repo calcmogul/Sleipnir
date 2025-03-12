@@ -27,7 +27,7 @@ extern template slp::VariableMatrix<ExplicitDouble> slp::solve(
 extern template class slp::OCP<ExplicitDouble>;
 
 extern template slp::ExitStatus slp::interior_point(
-    const InteriorPointMatrixCallbacks<double>& matrix_callbacks,
+    const InteriorPointMatrixCallbacks<double>& matrix_callbacks, bool is_nlp,
     std::span<std::function<bool(const IterationInfo<double>& info)>>
         iteration_callbacks,
     const Options& options,
