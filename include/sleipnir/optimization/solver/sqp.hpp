@@ -350,7 +350,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
                                   : IterationType::REJECTED_SOC,
                   soc_profiler.current_duration(),
                   error_estimate<Scalar>(g, A_e, trial_c_e, trial_y), trial_f,
-                  trial_c_e.template lpNorm<1>(), Scalar(0), Scalar(0),
+                  trial_c_e.template lpNorm<1>(), Scalar(0),
                   solver.hessian_regularization(), α_soc, Scalar(1),
                   α_reduction_factor, Scalar(1));
             }
@@ -477,8 +477,8 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
       print_iteration_diagnostics(iterations, IterationType::NORMAL,
                                   inner_iter_profiler.current_duration(), E_0,
                                   f, c_e.template lpNorm<1>(), Scalar(0),
-                                  Scalar(0), solver.hessian_regularization(), α,
-                                  α_max, α_reduction_factor, α);
+                                  solver.hessian_regularization(), α, α_max,
+                                  α_reduction_factor, α);
     }
 
     ++iterations;

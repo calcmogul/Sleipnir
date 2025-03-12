@@ -63,9 +63,9 @@ struct InteriorPointMatrixCallbacks {
   /// </table>
   std::function<SparseVector(const DenseVector& x)> g;
 
-  /// Lagrangian Hessian ∇ₓₓ²L(x, y, z) getter.
+  /// Lagrangian Hessian ∇ₓₓ²L(x, y, v, √(μ)) getter.
   ///
-  /// L(xₖ, yₖ, zₖ) = f(xₖ) − yₖᵀcₑ(xₖ) − zₖᵀcᵢ(xₖ)
+  /// L(xₖ, yₖ, vₖ, √(μ))) = f(xₖ) − yₖᵀcₑ(xₖ) − √(μ)eᵛᵀcᵢ(xₖ)
   ///
   /// <table>
   ///   <tr>
@@ -84,18 +84,18 @@ struct InteriorPointMatrixCallbacks {
   ///     <td>1</td>
   ///   </tr>
   ///   <tr>
-  ///     <td>z</td>
+  ///     <td>v</td>
   ///     <td>num_inequality_constraints</td>
   ///     <td>1</td>
   ///   </tr>
   ///   <tr>
-  ///     <td>∇ₓₓ²L(x, y, z)</td>
+  ///     <td>∇ₓₓ²L(x, y, v, √(μ))</td>
   ///     <td>num_decision_variables</td>
   ///     <td>num_decision_variables</td>
   ///   </tr>
   /// </table>
   std::function<SparseMatrix(const DenseVector& x, const DenseVector& y,
-                             const DenseVector& z)>
+                             const DenseVector& v, Scalar sqrt_μ)>
       H;
 
   /// Equality constraint value cₑ(x) getter.

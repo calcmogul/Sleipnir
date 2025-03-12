@@ -6,6 +6,7 @@
 
 template slp::ExitStatus slp::interior_point(
     const InteriorPointMatrixCallbacks<ExplicitDouble>& matrix_callbacks,
+    bool is_nlp,
     std::span<std::function<bool(const IterationInfo<ExplicitDouble>& info)>>
         iteration_callbacks,
     const Options& options,
