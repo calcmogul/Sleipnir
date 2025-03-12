@@ -76,8 +76,8 @@ class RegularizedLDLT {
     while (true) {
       // Regularize lhs by adding a multiple of the identity matrix
       //
-      // lhs = [H + AᵢᵀΣAᵢ + δI  Aₑᵀ]
-      //       [      Aₑ         −γI]
+      // lhs = [H + Aᵢᵀdiag(e²ᵛ)Aᵢ + δI  Aₑᵀ]
+      //       [          Aₑ             −γI]
       if (m_is_sparse) {
         m_info = compute_sparse(lhs + regularization(δ, γ)).info();
         if (m_info == Eigen::Success) {

@@ -177,12 +177,9 @@ TEST_CASE("Problem - Wachter and Biegler line search failure", "[Problem]") {
   CHECK(problem.equality_constraint_type() == slp::ExpressionType::QUADRATIC);
   CHECK(problem.inequality_constraint_type() == slp::ExpressionType::LINEAR);
 
-  // FIXME: Fails with "line search failed"
-  CHECK(problem.solve({.diagnostics = true}) ==
-        slp::ExitStatus::LINE_SEARCH_FAILED);
-  SKIP("Fails with \"line search failed\"");
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
 
-  CHECK(x.value() == 1.0);
-  CHECK(s1.value() == 0.0);
-  CHECK(s2.value() == 0.5);
+  CHECK(x.value() == Catch::Approx(1.0).margin(1e-6));
+  CHECK(s1.value() == Catch::Approx(0.0).margin(1e-6));
+  CHECK(s2.value() == Catch::Approx(0.5).margin(1e-6));
 }
