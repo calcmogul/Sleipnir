@@ -175,7 +175,7 @@ The iterates are applied like so
 
 Local infeasibility is only declared when the feasibility restoration phase converges to a minimizer of the constraint violation that still violates the constraints; testing for infeasibility at arbitrary iterates risks false positives. See section 3.3, p. 14 of [^2].
 
-## Interior-point method
+## Log-domain interior-point method
 
 We want to solve the following optimization problem.
 
@@ -245,37 +245,48 @@ where Aₑ = ∂cₑ/∂x, Aᵢ = ∂cᵢ/∂x, S = diag(s), and e is a column v
   cᵢ − s = 0
 ```
 
+To ensure s ≥ 0 and z ≥ 0, make the following substitutions.
+
+```
+  s = √(μ)e⁻ᵛ
+  z = √(μ)eᵛ
+```
+```
+  ∇f − Aₑᵀy − Aᵢᵀ√(μ)eᵛ = 0
+  cₑ = 0
+  cᵢ − √(μ)e⁻ᵛ = 0
+
+  ∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ = 0
+  cₑ = 0
+  cᵢ − √(μ)e⁻ᵛ = 0
+```
+
+The complementarity condition is now always satisfied, so it can be omitted.
+
 ### Newton's method
 
-Next, we'll apply Newton's method to the optimality conditions. Let H be ∂²L/∂x², Σ be the primal-dual barrier term Hessian S⁻¹Z, pˣ be the step for x, pˢ be the step for s, pʸ be the step for y, and pᶻ be the step for z.
+Next, we'll apply Newton's method to the optimality conditions. Let H be ∂²L/∂x², pˣ be the step for x, pʸ be the step for y, and pᵛ be the step for v.
 
 ```
-  ∇ₓL(x + pˣ, s + pˢ, y + pʸ, z + pᶻ)
-    ≈ ∇ₓL(x, s, y, z) + ∂²L/∂x²pˣ + ∂²L/∂x∂spˢ + ∂²L/∂x∂ypʸ + ∂²L/∂x∂zpᶻ
-  ∇ₓL(x, s, y, z) + Hpˣ − Aₑᵀpʸ − Aᵢᵀpᶻ = 0
-  Hpˣ − Aₑᵀpʸ − Aᵢᵀpᶻ = −∇ₓL(x, s, y, z)
-  Hpˣ − Aₑᵀpʸ − Aᵢᵀpᶻ = −(∇f − Aₑᵀy − Aᵢᵀz)
+  ∇ₓL(x + pˣ, y + pʸ, v + pᵛ)
+    ≈ ∇ₓL(x, y, v) + ∂²L/∂x²pˣ + ∂²L/∂x∂ypʸ + ∂²L/∂x∂vpᵛ
+  ∇ₓL(x, y, v) + Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘pᵛ = 0
+  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘pᵛ = −∇ₓL(x, y, v)
+  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘pᵛ = −(∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ)
 ```
 ```
-  ∇ₛL(x + pˣ, s + pˢ, y + pʸ, z + pᶻ)
-    ≈ ∇ₛL(x, s, y, z) + ∂²L/∂s∂xpˣ + ∂²L/∂s²pˢ + ∂²L/∂s∂ypʸ + ∂²L/∂s∂zpᶻ
-  ∇ₛL(x, s, y, z) + Zpˢ + Spᶻ = 0
-  Zpˢ + Spᶻ = −∇ₛL(x, s, y, z)
-  Zpˢ + Spᶻ = −(Sz − μe)
-```
-```
-  ∇_yL(x + pˣ, s + pˢ, y + pʸ, z + pᶻ)
-    ≈ ∇_yL(x, s, y, z) + ∂²L/∂y∂xpˣ + ∂²L/∂y∂spˢ + ∂²L/∂y²pʸ + ∂²L/∂y∂zpᶻ
-  ∇_yL(x, s, y, z) + Aₑpˣ = 0
-  Aₑpˣ = −∇_yL(x, s, y, z)
+  ∇_yL(x + pˣ, y + pʸ, v + pᵛ)
+    ≈ ∇_yL(x, y, v) + ∂²L/∂y∂xpˣ + ∂²L/∂y²pʸ + ∂²L/∂y∂vpᵛ
+  ∇_yL(x, y, v) + Aₑpˣ = 0
+  Aₑpˣ = −∇_yL(x, y, v)
   Aₑpˣ = −cₑ
 ```
 ```
-  ∇_zL(x + pˣ, s + pˢ, y + pʸ, z + pᶻ)
-    ≈ ∇_zL(x, s, y, z) + ∂²L/∂z∂xpˣ + ∂²L/∂z∂spˢ + ∂²L/∂z∂ypʸ + ∂²L/∂z²pᶻ
-  ∇_zL(x, s, y, z) + Aᵢpˣ − pˢ = 0
-  Aᵢpˣ − pˢ = −∇_zL(x, s, y, z)
-  Aᵢpˣ − pˢ = −(cᵢ − s)
+  ∇ᵥL(x + pˣ, y + pʸ, v + pᵛ)
+    ≈ ∇ᵥL(x, y, v) + ∂²L/∂v∂xpˣ + ∂²L/∂v∂ypʸ + ∂²L/∂v²pᵛ
+  ∇ᵥL(x, y, v) + Aᵢpˣ + √(μ)e⁻ᵛ∘pᵛ = 0
+  Aᵢpˣ + √(μ)e⁻ᵛ∘pᵛ = −∇ᵥL(x, y, v)
+  Aᵢpˣ + √(μ)e⁻ᵛ∘pᵛ = −(cᵢ − √(μ)e⁻ᵛ)
 ```
 
 ### Matrix equation
@@ -283,68 +294,60 @@ Next, we'll apply Newton's method to the optimality conditions. Let H be ∂²L/
 Group them into a matrix equation.
 
 ```
-  [H    0  −Aₑᵀ  −Aᵢᵀ][pˣ]    [∇f(x) − Aₑᵀy − Aᵢᵀz]
-  [0    Z   0     S  ][pˢ] = −[      Sz − μe      ]
-  [Aₑ   0   0     0  ][pʸ]    [        cₑ         ]
-  [Aᵢ  −I   0     0  ][pᶻ]    [      cᵢ − s       ]
+  [H   −Aₑᵀ  −√(μ)Aᵢᵀeᵛ][pˣ]    [∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ]
+  [Aₑ   0         0    ][pʸ] = −[          cₑ         ]
+  [Aᵢ   0     √(μ)e⁻ᵛ  ][pᵛ]    [    cᵢ − √(μ)e⁻ᵛ     ]
 ```
 
-Invert pʸ and pᶻ.
+Invert pʸ.
 
 ```
-  [H    0  Aₑᵀ  Aᵢᵀ][ pˣ]    [∇f(x) − Aₑᵀy − Aᵢᵀz]
-  [0    Z   0   −S ][ pˢ] = −[      Sz − μe      ]
-  [Aₑ   0   0    0 ][−pʸ]    [        cₑ         ]
-  [Aᵢ  −I   0    0 ][−pᶻ]    [      cᵢ − s       ]
+  [H   Aₑᵀ  −√(μ)Aᵢᵀeᵛ][ pˣ]    [∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ]
+  [Aₑ   0       0     ][−pʸ] = −[         cₑ          ]
+  [Aᵢ   0    √(μ)e⁻ᵛ  ][ pᵛ]    [    cᵢ − √(μ)e⁻ᵛ     ]
 ```
 
-Multiply the second row by S⁻¹ and replace S⁻¹Z with Σ.
+Solve the third row for pᵛ.
 
 ```
-  [H    0  Aₑᵀ  Aᵢᵀ][ pˣ]    [∇f(x) − Aₑᵀy − Aᵢᵀz]
-  [0    Σ   0   −I ][ pˢ] = −[     z − μS⁻¹e     ]
-  [Aₑ   0   0    0 ][−pʸ]    [        cₑ         ]
-  [Aᵢ  −I   0    0 ][−pᶻ]    [      cᵢ − s       ]
+  Aᵢpˣ + √(μ)e⁻ᵛ∘pᵛ = −cᵢ + √(μ)e⁻ᵛ
+  √(μ)e⁻ᵛ∘pᵛ = −Aᵢpˣ − cᵢ + √(μ)e⁻ᵛ
+  pᵛ = −1/√(μ) Aᵢeᵛ∘pˣ − 1/√(μ) eᵛ∘cᵢ + e
+  pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)
 ```
 
-Solve the fourth row for pˢ.
+Substitute the explicit formula for pᵛ into the first row.
 
 ```
-  Aᵢpˣ − pˢ = −(cᵢ − s)
-  pˢ = cᵢ − s + Aᵢpˣ
+  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘pᵛ = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
+  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘(e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)) = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
 ```
 
-Solve the second row for pᶻ.
+Expand and simplify.
 
 ```
-  Σpˢ + pᶻ = μS⁻¹e − z
-  pᶻ = μS⁻¹e − z − Σpˢ
+  Hpˣ − Aₑᵀpʸ − Aᵢᵀeᵛ∘(√(μ) − eᵛ∘(Aᵢpˣ + cᵢ)) = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
+  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ + Aᵢᵀe²ᵛ∘(Aᵢpˣ + cᵢ) = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
+  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ + Aᵢᵀdiag(e²ᵛ)Aᵢpˣ + Aᵢᵀe²ᵛ∘cᵢ = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
+  Hpˣ − Aₑᵀpʸ + Aᵢᵀdiag(e²ᵛ)Aᵢpˣ + Aᵢᵀe²ᵛ∘cᵢ = −∇f + Aₑᵀy + 2√(μ)Aᵢᵀeᵛ
+  Hpˣ − Aₑᵀpʸ + Aᵢᵀdiag(e²ᵛ)Aᵢpˣ = −∇f + Aₑᵀy + 2√(μ)Aᵢᵀeᵛ − Aᵢᵀe²ᵛ∘cᵢ
+  (Hpˣ + Aᵢᵀdiag(e²ᵛ)Aᵢ)pˣ − Aₑᵀpʸ = −∇f + Aₑᵀy + 2√(μ)Aᵢᵀeᵛ − Aᵢᵀe²ᵛ∘cᵢ
+  (Hpˣ + Aᵢᵀdiag(e²ᵛ)Aᵢ)pˣ − Aₑᵀpʸ = −∇f + Aₑᵀy + Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)
 ```
 
-Substitute pᶻ into the first row, expand, and cancel Aᵢᵀz from both sides.
+Substitute the new first and third rows into the system.
 
 ```
-  Hpˣ − Aₑᵀpʸ − Aᵢᵀ(μS⁻¹e − z − Σpˢ) = −∇f + Aₑᵀy + Aᵢᵀz
-  Hpˣ − Aₑᵀpʸ − AᵢᵀμS⁻¹e + Aᵢᵀz + AᵢᵀΣpˢ = −∇f + Aₑᵀy + Aᵢᵀz
-  Hpˣ − Aₑᵀpʸ − AᵢᵀμS⁻¹e + AᵢᵀΣpˢ = −∇f + Aₑᵀy
-  Hpˣ − Aₑᵀpʸ + AᵢᵀΣpˢ = −∇f + Aₑᵀy + AᵢᵀμS⁻¹e
+  [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ  0][ pˣ]    [∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
+  [        Aₑ           0   0][−pʸ] = −[               cₑ                ]
+  [        0            0   I][ pᵛ]    [    e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)    ]
 ```
 
-Substitute pˢ, distribute AᵢᵀΣ, and collect the pˣ terms.
+Eliminate the third row and column.
 
 ```
-  Hpˣ − Aₑᵀpʸ + AᵢᵀΣ(cᵢ − s + Aᵢpˣ) = −∇f + Aₑᵀy + AᵢᵀμS⁻¹e
-  Hpˣ − Aₑᵀpʸ + AᵢᵀΣ(cᵢ − s) + AᵢᵀΣAᵢpˣ = −∇f + Aₑᵀy + AᵢᵀμS⁻¹e
-  (H + AᵢᵀΣAᵢ)pˣ − Aₑᵀpʸ + AᵢᵀΣ(cᵢ − s) = −∇f + Aₑᵀy + AᵢᵀμS⁻¹e
-  (H + AᵢᵀΣAᵢ)pˣ − Aₑᵀpʸ = −∇f + Aₑᵀy + Aᵢᵀ(μS⁻¹e − Σ(cᵢ − s))
-  (H + AᵢᵀΣAᵢ)pˣ − Aₑᵀpʸ = −(∇f − Aₑᵀy − Aᵢᵀ(μS⁻¹e − Σ(cᵢ − s)))
-```
-
-Since pˢ and pᶻ can be recovered by back-substitution, eliminate their rows and columns.
-
-```
-  [H + AᵢᵀΣAᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(μS⁻¹e − Σ(cᵢ − s))]
-  [    Aₑ       0 ][−pʸ]    [                cₑ                ]
+  [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
+  [        Aₑ           0 ][−pʸ]    [               cₑ                ]
 ```
 
 ### Final results
@@ -352,34 +355,27 @@ Since pˢ and pᶻ can be recovered by back-substitution, eliminate their rows a
 In summary, the reduced 2x2 block system gives the iterates pₖˣ and pₖʸ.
 
 ```
-  [H + AᵢᵀΣAᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(μS⁻¹e − Σ(cᵢ − s))]
-  [    Aₑ       0 ][−pʸ]    [                cₑ                ]
+  [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
+  [        Aₑ           0 ][−pʸ]    [               cₑ                ]
 ```
 
-The iterates pˢ and pᶻ are given by
+The iterate pᵛ is given by
 
 ```
-  pˢ = cᵢ − s + Aᵢpˣ
-  pᶻ = μS⁻¹e − z − Σpˢ
+  pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)
 ```
 
 The iterates are applied like so
 
 ```
-  xₖ₊₁ = xₖ + αₖᵐᵃˣpₖˣ
-  sₖ₊₁ = sₖ + αₖᵐᵃˣpₖˢ
-  yₖ₊₁ = yₖ + αₖᶻpₖʸ
-  zₖ₊₁ = zₖ + αₖᶻpₖᶻ
+  αₖᵛ = min(1, 1/|pᵛ|_∞²)
+
+  xₖ₊₁ = xₖ + αₖpₖˣ
+  yₖ₊₁ = yₖ + αₖpₖʸ
+  vₖ₊₁ = vₖ + αₖᵛpₖᵛ
 ```
 
-where αₖᵐᵃˣ and αₖᶻ are computed via the fraction-to-the-boundary rule shown in equations (15a) and (15b) of [^2].
-
-```
-  αₖᵐᵃˣ = max(α ∈ (0, 1] : sₖ + αpₖˢ ≥ (1−τⱼ)sₖ)
-        = max(α ∈ (0, 1] : αpₖˢ ≥ −τⱼsₖ)
-  αₖᶻ = max(α ∈ (0, 1] : zₖ + αpₖᶻ ≥ (1−τⱼ)zₖ)
-      = max(α ∈ (0, 1] : αpₖᶻ ≥ −τⱼzₖ)
-```
+where αₖ is found via backtracking line search. A filter method determines acceptance of pˣ.
 
 Local infeasibility is only declared when the feasibility restoration phase converges to a minimizer of the constraint violation that still violates the constraints; testing for infeasibility at arbitrary iterates risks false positives. See section 3.3, p. 14 of [^2].
 
@@ -445,3 +441,5 @@ The algorithm is described in more detail in section 3.8 of [^2].
 [^3]: Gu, C. and Zhu, D. "A Dwindling Filter Algorithm with a Modified Subproblem for Nonlinear Inequality Constrained Optimization", 2014. [https://sci-hub.st/10.1007/s11401-014-0826-z](https://sci-hub.st/10.1007/s11401-014-0826-z)
 
 [^4]: Hinder, O. and Ye, Y. "A one-phase interior point method for nonconvex optimization", 2018. [https://arxiv.org/pdf/1801.03072.pdf](https://arxiv.org/pdf/1801.03072.pdf)
+
+[^5]: Permenter, F. "Log-domain interior-point methods for convex quadratic programming", 2022. [https://arxiv.org/pdf/2212.02294](https://arxiv.org/pdf/2212.02294)
