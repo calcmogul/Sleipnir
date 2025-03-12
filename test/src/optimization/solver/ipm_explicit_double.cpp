@@ -5,7 +5,7 @@
 #include "explicit_double.hpp"
 
 template slp::ExitStatus slp::ipm(
-    const IPMMatrixCallbacks<ExplicitDouble>& matrix_callbacks,
+    const IPMMatrixCallbacks<ExplicitDouble>& matrix_callbacks, bool is_nlp,
     std::span<std::function<bool(const IterationInfo<ExplicitDouble>& info)>>
         iteration_callbacks,
     const Options& options,
