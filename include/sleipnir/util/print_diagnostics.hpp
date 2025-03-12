@@ -185,23 +185,20 @@ inline void print_bound_constraint_global_infeasibility_error(
 /// @param error The error.
 /// @param cost The cost.
 /// @param infeasibility The infeasibility.
-/// @param complementarity The complementarity.
 /// @param μ The barrier parameter.
 template <typename Scalar>
 void print_initial_iterate_diagnostics(Scalar error, Scalar cost,
-                                       Scalar infeasibility,
-                                       Scalar complementarity, Scalar μ) {
-  slp::println("┏{:━^119}┓", "");
+                                       Scalar infeasibility, Scalar μ) {
+  slp::println("┏{:━^110}┓", "");
   slp::println(
-      "┃{:^4}   {:^9} {:^10} {:^11} {:^10} {:^8} {:^8} {:^5} {:^5} {:^8} {:^8} "
-      "{:^8} {:^8} {:^2}┃",
-      "iter", "duration", "error", "cost", "infeas.", "complem.", "μ", "δ", "γ",
-      "|p_pr|", "|p_du|", "α", "α_z", "↩");
-  slp::println("┡{:━^119}┩", "");
+      "┃{:^4}   {:^9} {:^10} {:^11} {:^10} {:^8} {:^5} {:^5} {:^8} {:^8} {:^8} "
+      "{:^8} {:^2}┃",
+      "iter", "duration", "error", "cost", "infeas.", "μ", "δ", "γ", "|p_pr|",
+      "|p_du|", "α", "α_z", "↩");
+  slp::println("┡{:━^110}┩", "");
 
-  slp::println(
-      "│init   {:^9} {:10.4e} {:11.4e} {:10.4e} {:8.2e} {:8.2e} {:^50}│", "",
-      error, cost, infeasibility, complementarity, μ, "");
+  slp::println("│init   {:^9} {:10.4e} {:11.4e} {:10.4e} {:8.2e} {:^50}│", "",
+               error, cost, infeasibility, μ, "");
 }
 #else
 #define print_initial_iterate_diagnostics(...)
@@ -217,7 +214,6 @@ void print_initial_iterate_diagnostics(Scalar error, Scalar cost,
 /// @param error The error.
 /// @param cost The cost.
 /// @param infeasibility The infeasibility.
-/// @param complementarity The complementarity.
 /// @param μ The barrier parameter.
 /// @param δ The Hessian regularization factor.
 /// @param γ The constraint Jacobian regularization factor.
@@ -232,19 +228,19 @@ template <typename Scalar, typename Rep, typename Period = std::ratio<1>>
 void print_iterate_diagnostics(int iterations, IterationType type,
                                const std::chrono::duration<Rep, Period>& time,
                                Scalar error, Scalar cost, Scalar infeasibility,
-                               Scalar complementarity, Scalar μ, Scalar δ,
-                               Scalar γ, Scalar full_primal_step_inf_norm,
+                               Scalar μ, Scalar δ, Scalar γ,
+                               Scalar full_primal_step_inf_norm,
                                Scalar full_dual_step_inf_norm, Scalar α,
                                Scalar α_max, Scalar α_reduction_factor,
                                Scalar α_z) {
   if (iterations > 0 && iterations % 20 == 0) {
-    slp::println("┢{:━^119}┪", "");
+    slp::println("┢{:━^110}┪", "");
     slp::println(
-        "┃{:^4}   {:^9} {:^10} {:^11} {:^10} {:^8} {:^8} {:^5} {:^5} {:^8} "
-        "{:^8} {:^8} {:^8} {:^2}┃",
-        "iter", "duration", "error", "cost", "infeas.", "complem.", "μ", "δ",
-        "γ", "|p_pr|", "|p_du|", "α", "α_z", "↩");
-    slp::println("┡{:━^119}┩", "");
+        "┃{:^4}   {:^9} {:^10} {:^11} {:^10} {:^8} {:^5} {:^5} {:^8} {:^8} "
+        "{:^8} {:^8} {:^2}┃",
+        "iter", "duration", "error", "cost", "infeas.", "μ", "δ", "γ", "|p_pr|",
+        "|p_du|", "α", "α_z", "↩");
+    slp::println("┡{:━^110}┩", "");
   }
 
   // For the number of backtracks, we want x such that:
@@ -262,10 +258,10 @@ void print_iterate_diagnostics(int iterations, IterationType type,
 
   constexpr std::array ITERATION_TYPES{" ", "s", "r"};
   slp::println(
-      "│{:4} {:1} {:9.3f} {:10.4e} {:11.4e} {:10.4e} {:8.2e} {:8.2e} {:<5} "
-      "{:<5} {:8.2e} {:8.2e} {:8.2e} {:8.2e} {:2d}│",
+      "│{:4} {:1} {:9.3f} {:10.4e} {:11.4e} {:10.4e} {:8.2e} {:<5} {:<5} "
+      "{:8.2e} {:8.2e} {:8.2e} {:8.2e} {:2d}│",
       iterations, ITERATION_TYPES[std::to_underlying(type)], to_ms(time), error,
-      cost, infeasibility, complementarity, μ, power_of_10(δ), power_of_10(γ),
+      cost, infeasibility, μ, power_of_10(δ), power_of_10(γ),
       full_primal_step_inf_norm, full_dual_step_inf_norm, α, α_z, backtracks);
 }
 #else
@@ -286,25 +282,22 @@ class IterateDiagnosticsTable {
   /// @param error The error.
   /// @param cost The cost.
   /// @param infeasibility The infeasibility.
-  /// @param complementarity The complementarity.
   /// @param μ The barrier parameter.
   template <typename Scalar>
   IterateDiagnosticsTable(bool print, [[maybe_unused]] Scalar error,
                           [[maybe_unused]] Scalar cost,
                           [[maybe_unused]] Scalar infeasibility,
-                          [[maybe_unused]] Scalar complementarity,
                           [[maybe_unused]] Scalar μ)
       : m_print{print} {
     if (m_print) {
-      print_initial_iterate_diagnostics(error, cost, infeasibility,
-                                        complementarity, μ);
+      print_initial_iterate_diagnostics(error, cost, infeasibility, μ);
     }
   }
 
   /// Prints the table bottom if requested.
   ~IterateDiagnosticsTable() {
     if (m_print) {
-      slp::println("└{:─^119}┘", "");
+      slp::println("└{:─^110}┘", "");
     }
   }
 

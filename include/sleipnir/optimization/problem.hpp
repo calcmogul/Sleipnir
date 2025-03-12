@@ -639,7 +639,8 @@ class Problem {
     VariableMatrix<Scalar> c_e_ad{m_equality_constraints};
     VariableMatrix<Scalar> c_i_ad{m_inequality_constraints};
     VariableMatrix<Scalar> y_ad(num_equality_constraints);
-    VariableMatrix<Scalar> z_ad(num_inequality_constraints);
+    VariableMatrix<Scalar> v_ad(num_inequality_constraints);
+    Variable<Scalar> sqrt_μ_ad;
 
     TimeTracerTree<SetupTimeTracer, ipm_setup_time_trace> ad_setup_tracers{
         options.diagnostics};
@@ -657,8 +658,10 @@ class Problem {
 
     // Set up constraint part of Lagrangian Hessian autodiff
     hessian_phase_tracer.next(ad_setup_tracers[HESSIAN_CONSTRAINTS]);
-    Hessian<Scalar, Eigen::Lower> H_c{-y_ad.T() * c_e_ad - z_ad.T() * c_i_ad,
-                                      x_ad};
+    Hessian<Scalar, Eigen::Lower> H_c{
+        -y_ad.T() * c_e_ad -
+            sqrt_μ_ad * (v_ad.cwise_transform(&slp::exp<Scalar>).T() * c_i_ad),
+        x_ad};
 
     hessian_phase_tracer.stop();
 
@@ -720,6 +723,24 @@ class Problem {
     project_onto_bounds(x, bounds);
 #endif
 
+    bool is_nlp = [&]() -> bool {
+      if (f.type() > ExpressionType::QUADRATIC) {
+        return true;
+      } else if (!m_equality_constraints.empty() &&
+                 std::ranges::max(m_equality_constraints, {},
+                                  &Variable<Scalar>::type)
+                         .type() > ExpressionType::LINEAR) {
+        return true;
+      } else if (!m_inequality_constraints.empty() &&
+                 std::ranges::max(m_inequality_constraints, {},
+                                  &Variable<Scalar>::type)
+                         .type() > ExpressionType::LINEAR) {
+        return true;
+      }
+
+      return false;
+    }();
+
     // Automatically scale the cost and constraints. The problem scaling
     // procedure is described in more detail in
     // docs/algorithms.md#problem-scaling.
@@ -738,18 +759,24 @@ class Problem {
           x_ad.set_value(x);
           return scaling.f * g.value();
         },
-        [&](const DenseVector& x, const DenseVector& y,
-            const DenseVector& z) -> SparseMatrix {
+        [&](const DenseVector& x, const DenseVector& y, const DenseVector& v,
+            Scalar sqrt_μ) -> SparseMatrix {
           x_ad.set_value(x);
           y_ad.set_value(scaling.c_e.cwiseProduct(y));
-          z_ad.set_value(scaling.c_i.cwiseProduct(z));
+          // The multipliers for the unscaled constraints are
+          // D_cᵢz = √(μ)exp(v + ln(D_cᵢ))
+          v_ad.set_value((v.array() + scaling.c_i.array().log()).matrix());
+          sqrt_μ_ad.set_value(sqrt_μ);
           return scaling.f * H_f.value() + H_c.value();
         },
-        [&](const DenseVector& x, const DenseVector& y,
-            const DenseVector& z) -> SparseMatrix {
+        [&](const DenseVector& x, const DenseVector& y, const DenseVector& v,
+            Scalar sqrt_μ) -> SparseMatrix {
           x_ad.set_value(x);
           y_ad.set_value(scaling.c_e.cwiseProduct(y));
-          z_ad.set_value(scaling.c_i.cwiseProduct(z));
+          // The multipliers for the unscaled constraints are
+          // D_cᵢz = √(μ)exp(v + ln(D_cᵢ))
+          v_ad.set_value((v.array() + scaling.c_i.array().log()).matrix());
+          sqrt_μ_ad.set_value(sqrt_μ);
           return H_c.value();
         },
         [&](const DenseVector& x) -> DenseVector {
@@ -771,7 +798,7 @@ class Problem {
         scaling};
 
     // Invoke interior-point method solver
-    return ipm<Scalar>(matrix_callbacks, iteration_callbacks, options,
+    return ipm<Scalar>(matrix_callbacks, is_nlp, iteration_callbacks, options,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
                        bound_constraint_mask,
 #endif

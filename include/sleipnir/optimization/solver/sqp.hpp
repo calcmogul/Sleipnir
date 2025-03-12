@@ -218,9 +218,8 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
 
   // Prints initial iterate diagnostics now and closes the iterate diagnostics
   // table when the solver exits
-  IterateDiagnosticsTable table{
-      options.diagnostics,       E_0,       f,
-      constraint_violation(c_e), Scalar(0), Scalar(0)};
+  IterateDiagnosticsTable table{options.diagnostics, E_0, f,
+                                constraint_violation(c_e), Scalar(0)};
 
   while (E_0 > Scalar(options.tolerance)) {
     ScopedTimeTracer inner_iter_tracer{diagnostics[ITERATION]};
@@ -234,7 +233,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
 
     // Call iteration callbacks
     for (const auto& callback : iteration_callbacks) {
-      if (callback({iterations, x, {}, y, {}, g, H, A_e, {}})) {
+      if (callback({iterations, x, y, {}, g, H, A_e, {}})) {
         return ExitStatus::CALLBACK_REQUESTED_STOP;
       }
     }
@@ -352,7 +351,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
                   kkt_error<Scalar, KKTErrorType::INF_NORM_SCALED>(
                       g, A_e, trial_c_e, trial_y),
                   trial_f, constraint_violation(trial_c_e), Scalar(0),
-                  Scalar(0), solver.hessian_regularization(),
+                  solver.hessian_regularization(),
                   solver.constraint_jacobian_regularization(),
                   soc_step.primal_inf_norm(), soc_step.dual_inf_norm(), α_soc,
                   Scalar(1), α_reduction_factor, Scalar(1));
@@ -496,7 +495,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
                filter.try_add(initial_entry, trial_entry, D_ϕ_restoration,
                               Scalar(1));
       });
-      auto status = feasibility_restoration<Scalar>(matrices, callbacks,
+      auto status = feasibility_restoration<Scalar>(matrices, true, callbacks,
                                                     options, x, y, iterations);
 
       if (status != ExitStatus::SUCCESS) {
@@ -532,13 +531,12 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
     inner_iter_tracer.stop();
 
     if (options.diagnostics) {
-      print_iterate_diagnostics(iterations, IterationType::NORMAL,
-                                inner_iter_tracer.current_duration(), E_0, f,
-                                constraint_violation(c_e), Scalar(0), Scalar(0),
-                                solver.hessian_regularization(),
-                                solver.constraint_jacobian_regularization(),
-                                step.primal_inf_norm(), step.dual_inf_norm(), α,
-                                α_max, α_reduction_factor, Scalar(1));
+      print_iterate_diagnostics(
+          iterations, IterationType::NORMAL,
+          inner_iter_tracer.current_duration(), E_0, f,
+          constraint_violation(c_e), Scalar(0), solver.hessian_regularization(),
+          solver.constraint_jacobian_regularization(), step.primal_inf_norm(),
+          step.dual_inf_norm(), α, α_max, α_reduction_factor, Scalar(1));
     }
 
     ++iterations;
