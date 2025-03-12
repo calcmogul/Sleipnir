@@ -216,8 +216,10 @@ ExitStatus Problem::solve(const Options& options, [[maybe_unused]] bool spy) {
 
     // Set up Lagrangian
     VariableMatrix y_ad(num_equality_constraints);
-    VariableMatrix z_ad(num_inequality_constraints);
-    Variable L = f - (y_ad.T() * c_e_ad)[0] - (z_ad.T() * c_i_ad)[0];
+    VariableMatrix v_ad(num_inequality_constraints);
+    Variable sqrt_μ_ad;
+    Variable L = f - (y_ad.T() * c_e_ad)[0] -
+                 sqrt_μ_ad * (v_ad.cwise_transform(&slp::exp).T() * c_i_ad)[0];
 
     // Set up Lagrangian Hessian autodiff
     ad_setup_profilers.emplace_back("  ↳ ∇²ₓₓL").start();
@@ -266,6 +268,23 @@ ExitStatus Problem::solve(const Options& options, [[maybe_unused]] bool spy) {
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
     project_onto_bounds(x, bounds);
 #endif
+
+    bool is_nlp = [&]() -> bool {
+      if (f.type() > ExpressionType::QUADRATIC) {
+        return true;
+      } else if (!m_equality_constraints.empty() &&
+                 std::ranges::max(m_equality_constraints, {}, &Variable::type)
+                         .type() > ExpressionType::LINEAR) {
+        return true;
+      } else if (!m_inequality_constraints.empty() &&
+                 std::ranges::max(m_inequality_constraints, {}, &Variable::type)
+                         .type() > ExpressionType::LINEAR) {
+        return true;
+      }
+
+      return false;
+    }();
+
     // Invoke interior-point method solver
     status = interior_point(
         InteriorPointMatrixCallbacks{
@@ -278,10 +297,12 @@ ExitStatus Problem::solve(const Options& options, [[maybe_unused]] bool spy) {
               return g.value();
             },
             [&](const Eigen::VectorXd& x, const Eigen::VectorXd& y,
-                const Eigen::VectorXd& z) -> Eigen::SparseMatrix<double> {
+                const Eigen::VectorXd& v,
+                double sqrt_μ) -> Eigen::SparseMatrix<double> {
               x_ad.set_value(x);
               y_ad.set_value(y);
-              z_ad.set_value(z);
+              v_ad.set_value(v);
+              sqrt_μ_ad.set_value(sqrt_μ);
               return H.value();
             },
             [&](const Eigen::VectorXd& x) -> Eigen::VectorXd {
@@ -300,7 +321,7 @@ ExitStatus Problem::solve(const Options& options, [[maybe_unused]] bool spy) {
               x_ad.set_value(x);
               return A_i.value();
             }},
-        m_iteration_callbacks, options,
+        is_nlp, m_iteration_callbacks, options,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
         bound_constraint_mask,
 #endif
