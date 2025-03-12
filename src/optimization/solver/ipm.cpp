@@ -5,7 +5,7 @@
 #include "sleipnir/util/symbol_exports.hpp"
 
 template SLEIPNIR_DLLEXPORT slp::ExitStatus slp::ipm(
-    const IPMMatrixCallbacks<double>& matrix_callbacks,
+    const IPMMatrixCallbacks<double>& matrix_callbacks, bool is_nlp,
     std::span<std::function<bool(const IterationInfo<double>& info)>>
         iteration_callbacks,
     const Options& options,
