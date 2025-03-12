@@ -42,6 +42,8 @@ enum class SolveTimeTracerID : uint8_t {
   ITERATION,
   /// Iteration callbacks.
   CALLBACKS,
+  /// Barrier parameter update.
+  BARRIER_PARAMETER_UPDATE,
   /// KKT matrix build.
   KKT_MATRIX_BUILD,
   /// KKT matrix decomposition.
@@ -143,6 +145,7 @@ inline constexpr std::array ipm_time_trace{
     TimeTraceEntry{SolveTimeTracerID::SETUP, "setup", 1},
     TimeTraceEntry{SolveTimeTracerID::ITERATION, "iteration", 1},
     TimeTraceEntry{SolveTimeTracerID::CALLBACKS, "callbacks", 2},
+    TimeTraceEntry{SolveTimeTracerID::BARRIER_PARAMETER_UPDATE, "μ update", 2},
     TimeTraceEntry{SolveTimeTracerID::KKT_MATRIX_BUILD, "KKT matrix build", 2},
     TimeTraceEntry{SolveTimeTracerID::KKT_MATRIX_DECOMP, "KKT matrix decomp",
                    2},
