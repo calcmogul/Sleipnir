@@ -43,7 +43,7 @@ extern template slp::VariableMatrix<float> slp::solve(
 extern template class slp::OCP<float>;
 
 extern template slp::ExitStatus slp::ipm(
-    const IPMMatrixCallbacks<float>& matrix_callbacks,
+    const IPMMatrixCallbacks<float>& matrix_callbacks, bool is_nlp,
     std::span<std::function<ControlFlow(const IterationInfo<float>& info)>>
         iteration_callbacks,
     const Options<float>& options,
@@ -81,7 +81,7 @@ extern template slp::VariableMatrix<ExplicitDouble> slp::solve(
 extern template class slp::OCP<ExplicitDouble>;
 
 extern template slp::ExitStatus slp::ipm(
-    const IPMMatrixCallbacks<ExplicitDouble>& matrix_callbacks,
+    const IPMMatrixCallbacks<ExplicitDouble>& matrix_callbacks, bool is_nlp,
     std::span<
         std::function<ControlFlow(const IterationInfo<ExplicitDouble>& info)>>
         iteration_callbacks,

@@ -129,8 +129,8 @@ ExitStatus newton(
 
   // Prints initial iterate diagnostics now and closes the iterate diagnostics
   // table when the solver exits
-  IterateDiagnosticsTable table{options.diagnostics, E_0,       f,
-                                Scalar(0),           Scalar(0), Scalar(0)};
+  IterateDiagnosticsTable table{options.diagnostics, E_0, f, Scalar(0),
+                                Scalar(0)};
 
   while (E_0 > options.tolerance) {
     ScopedTimeTracer inner_iter_tracer{diagnostics[ITERATION]};
@@ -144,7 +144,7 @@ ExitStatus newton(
 
     // Call iteration callbacks
     for (const auto& callback : iteration_callbacks) {
-      if (callback({iterations, x, {}, {}, {}, g, H, {}, {}}) ==
+      if (callback({iterations, x, {}, {}, g, H, {}, {}}) ==
           ControlFlow::BREAK) {
         return ExitStatus::CALLBACK_REQUESTED_STOP;
       }
@@ -264,7 +264,7 @@ ExitStatus newton(
       print_iterate_diagnostics(
           iterations, IterationType::NORMAL,
           inner_iter_tracer.current_duration(), E_0, f, Scalar(0), Scalar(0),
-          Scalar(0), solver.hessian_regularization(),
+          solver.hessian_regularization(),
           solver.constraint_jacobian_regularization(),
           p_x.template lpNorm<Eigen::Infinity>(), Scalar(1), α, α_max,
           α_reduction_factor, Scalar(1));
