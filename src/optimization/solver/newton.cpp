@@ -150,7 +150,7 @@ ExitStatus newton(const NewtonMatrixCallbacks& matrix_callbacks,
     iter_callbacks_profiler.stop();
     ScopedProfiler kkt_matrix_decomp_profiler{kkt_matrix_decomp_prof};
 
-    // Solve the Newton-KKT system
+    // Factorize the Newton-KKT system
     //
     // Hpˣ = −∇f
     solver.compute(H);
@@ -158,6 +158,7 @@ ExitStatus newton(const NewtonMatrixCallbacks& matrix_callbacks,
     kkt_matrix_decomp_profiler.stop();
     ScopedProfiler kkt_system_solve_profiler{kkt_system_solve_prof};
 
+    // Solve the Newton-KKT system for the step
     Eigen::VectorXd p_x = solver.solve(-g);
 
     kkt_system_solve_profiler.stop();
@@ -233,10 +234,10 @@ ExitStatus newton(const NewtonMatrixCallbacks& matrix_callbacks,
     inner_iter_profiler.stop();
 
     if (options.diagnostics) {
-      print_iteration_diagnostics(
-          iterations, IterationType::NORMAL,
-          inner_iter_profiler.current_duration(), E_0, f, 0.0, 0.0, 0.0,
-          solver.hessian_regularization(), α, α_max, α_reduction_factor, 1.0);
+      print_iteration_diagnostics(iterations, IterationType::NORMAL,
+                                  inner_iter_profiler.current_duration(), E_0,
+                                  f, 0.0, 0.0, solver.hessian_regularization(),
+                                  α, α_max, α_reduction_factor, 1.0);
     }
 
     ++iterations;
