@@ -57,31 +57,32 @@ inline double kkt_error(const Eigen::VectorXd& g,
  *   the current iterate.
  * @param c_i The problem's inequality constraints cᵢ(x) evaluated at the
  *   current iterate.
- * @param s Inequality constraint slack variables.
  * @param y Equality constraint dual variables.
- * @param z Inequality constraint dual variables.
- * @param μ Barrier parameter.
+ * @param v Log-domain variables.
+ * @param sqrt_μ Square root of the barrier parameter.
  */
 inline double kkt_error(const Eigen::VectorXd& g,
                         const Eigen::SparseMatrix<double>& A_e,
                         const Eigen::VectorXd& c_e,
                         const Eigen::SparseMatrix<double>& A_i,
-                        const Eigen::VectorXd& c_i, const Eigen::VectorXd& s,
-                        const Eigen::VectorXd& y, const Eigen::VectorXd& z,
-                        double μ) {
-  // Compute the KKT error as the 1-norm of the KKT conditions from equations
-  // (19.5a) through (19.5d) of [1].
+                        const Eigen::VectorXd& c_i, const Eigen::VectorXd& y,
+                        const Eigen::VectorXd& v, double sqrt_μ) {
+  // Compute the KKT error as the 1-norm of the KKT conditions.
   //
   //   ∇f − Aₑᵀy − Aᵢᵀz = 0
-  //   Sz − μe = 0
   //   cₑ = 0
   //   cᵢ − s = 0
+  //
+  // where
+  //
+  //   s = √(μ)e⁻ᵛ
+  //   z = √(μ)eᵛ
 
-  const auto S = s.asDiagonal();
-  const Eigen::VectorXd μe = Eigen::VectorXd::Constant(s.rows(), μ);
+  const Eigen::VectorXd s = sqrt_μ * (-v).array().exp().matrix();
+  const Eigen::VectorXd z = sqrt_μ * v.array().exp().matrix();
 
   return (g - A_e.transpose() * y - A_i.transpose() * z).lpNorm<1>() +
-         (S * z - μe).lpNorm<1>() + c_e.lpNorm<1>() + (c_i - s).lpNorm<1>();
+         c_e.lpNorm<1>() + (c_i - s).lpNorm<1>();
 }
 
 }  // namespace slp
