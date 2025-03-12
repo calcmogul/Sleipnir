@@ -8,6 +8,7 @@
 #include <functional>
 #include <limits>
 #include <span>
+#include <utility>
 
 #include <Eigen/Core>
 #include <Eigen/SparseCore>
@@ -19,7 +20,6 @@
 #include "sleipnir/optimization/solver/options.hpp"
 #include "sleipnir/optimization/solver/util/error_estimate.hpp"
 #include "sleipnir/optimization/solver/util/filter.hpp"
-#include "sleipnir/optimization/solver/util/fraction_to_the_boundary_rule.hpp"
 #include "sleipnir/optimization/solver/util/is_locally_infeasible.hpp"
 #include "sleipnir/optimization/solver/util/kkt_error.hpp"
 #include "sleipnir/optimization/solver/util/regularized_ldlt.hpp"
@@ -52,6 +52,10 @@ namespace slp {
 ///
 /// @tparam Scalar Scalar type.
 /// @param[in] matrix_callbacks Matrix callbacks.
+/// @param[in] is_nlp If true, the solver uses a more conservative barrier
+///     parameter reduction strategy that's more reliable on NLPs. Pass false
+///     for problems with quadratic or lower-order cost and linear or
+///     lower-order constraints.
 /// @param[in] iteration_callbacks The list of callbacks to call at the
 ///     beginning of each iteration.
 /// @param[in] options Solver options.
@@ -60,7 +64,7 @@ namespace slp {
 /// @return The exit status.
 template <typename Scalar>
 ExitStatus interior_point(
-    const InteriorPointMatrixCallbacks<Scalar>& matrix_callbacks,
+    const InteriorPointMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
     std::span<std::function<bool(const IterationInfo<Scalar>& info)>>
         iteration_callbacks,
     const Options& options,
@@ -78,13 +82,12 @@ ExitStatus interior_point(
     DenseVector p_x;
     /// Equality constraint dual step.
     DenseVector p_y;
-    /// Inequality constraint slack variable step.
-    DenseVector p_s;
-    /// Inequality constraint dual step.
-    DenseVector p_z;
+    /// Log-domain variable step.
+    DenseVector p_v;
   };
 
   using std::isfinite;
+  using std::sqrt;
 
   const auto solve_start_time = std::chrono::steady_clock::now();
 
@@ -94,6 +97,7 @@ ExitStatus interior_point(
   solve_profilers.emplace_back("  ↳ iteration");
   solve_profilers.emplace_back("    ↳ feasibility ✓");
   solve_profilers.emplace_back("    ↳ iter callbacks");
+  solve_profilers.emplace_back("    ↳ μ update");
   solve_profilers.emplace_back("    ↳ KKT matrix build");
   solve_profilers.emplace_back("    ↳ KKT matrix decomp");
   solve_profilers.emplace_back("    ↳ KKT system solve");
@@ -113,22 +117,23 @@ ExitStatus interior_point(
   auto& inner_iter_prof = solve_profilers[2];
   auto& feasibility_check_prof = solve_profilers[3];
   auto& iter_callbacks_prof = solve_profilers[4];
-  auto& kkt_matrix_build_prof = solve_profilers[5];
-  auto& kkt_matrix_decomp_prof = solve_profilers[6];
-  auto& kkt_system_solve_prof = solve_profilers[7];
-  auto& line_search_prof = solve_profilers[8];
-  auto& soc_prof = solve_profilers[9];
-  auto& next_iter_prep_prof = solve_profilers[10];
+  auto& μ_update_prof = solve_profilers[5];
+  auto& kkt_matrix_build_prof = solve_profilers[6];
+  auto& kkt_matrix_decomp_prof = solve_profilers[7];
+  auto& kkt_system_solve_prof = solve_profilers[8];
+  auto& line_search_prof = solve_profilers[9];
+  auto& soc_prof = solve_profilers[10];
+  auto& next_iter_prep_prof = solve_profilers[11];
 
   // Set up profiled matrix callbacks
 #ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
-  auto& f_prof = solve_profilers[11];
-  auto& g_prof = solve_profilers[12];
-  auto& H_prof = solve_profilers[13];
-  auto& c_e_prof = solve_profilers[14];
-  auto& A_e_prof = solve_profilers[15];
-  auto& c_i_prof = solve_profilers[16];
-  auto& A_i_prof = solve_profilers[17];
+  auto& f_prof = solve_profilers[12];
+  auto& g_prof = solve_profilers[13];
+  auto& H_prof = solve_profilers[14];
+  auto& c_e_prof = solve_profilers[15];
+  auto& A_e_prof = solve_profilers[16];
+  auto& c_i_prof = solve_profilers[17];
+  auto& A_i_prof = solve_profilers[18];
 
   InteriorPointMatrixCallbacks<Scalar> matrices{
       [&](const DenseVector& x) -> Scalar {
@@ -139,10 +144,10 @@ ExitStatus interior_point(
         ScopedProfiler prof{g_prof};
         return matrix_callbacks.g(x);
       },
-      [&](const DenseVector& x, const DenseVector& y,
-          const DenseVector& z) -> SparseMatrix {
+      [&](const DenseVector& x, const DenseVector& y, const DenseVector& v,
+          Scalar sqrt_μ) -> SparseMatrix {
         ScopedProfiler prof{H_prof};
-        return matrix_callbacks.H(x, y, z);
+        return matrix_callbacks.H(x, y, v, sqrt_μ);
       },
       [&](const DenseVector& x) -> DenseVector {
         ScopedProfiler prof{c_e_prof};
@@ -188,15 +193,36 @@ ExitStatus interior_point(
   SparseMatrix A_e = matrices.A_e(x);
   SparseMatrix A_i = matrices.A_i(x);
 
-  DenseVector s = DenseVector::Ones(num_inequality_constraints);
+  DenseVector y = DenseVector::Zero(num_equality_constraints);
+  DenseVector v = DenseVector::Zero(num_inequality_constraints);
+
+  // Barrier parameter minimum
+  const Scalar sqrt_μ_min = sqrt(Scalar(options.tolerance) / Scalar(10));
+
+  // Barrier parameter μ
+  Scalar sqrt_μ(0);
+
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
   // We set sʲ = cᵢʲ(x) for each bound inequality constraint index j
-  s = bound_constraint_mask.select(c_i, s);
+  //
+  //   cᵢ − √(μ)e⁻ᵛ = 0
+  //   √(μ)e⁻ᵛ = cᵢ
+  //   e⁻ᵛ = 1/√(μ) cᵢ
+  //   −v = ln(1/√(μ) cᵢ)
+  //   v = −ln(1/√(μ) cᵢ)
+  v = bound_constraint_mask.select(
+      -(c_i * (Scalar(1) / sqrt_μ_min)).array().log().matrix(), v);
 #endif
-  DenseVector y = DenseVector::Zero(num_equality_constraints);
-  DenseVector z = DenseVector::Ones(num_inequality_constraints);
+  // eᵛ
+  DenseVector exp_v{v.array().exp().matrix()};
+  // e⁻ᵛ
+  DenseVector exp_neg_v = exp_v.cwiseInverse();
+  // e²ᵛ
+  DenseVector exp_2v = exp_v.cwiseProduct(exp_v);
+  // s = √(μ)e⁻ᵛ
+  DenseVector s = sqrt_μ * exp_neg_v;
 
-  SparseMatrix H = matrices.H(x, y, z);
+  SparseMatrix H = matrices.H(x, y, v, sqrt_μ);
 
   // Ensure matrix callback dimensions are consistent
   slp_assert(g.rows() == num_decision_variables);
@@ -214,65 +240,200 @@ ExitStatus interior_point(
 
   int iterations = 0;
 
-  // Barrier parameter minimum
-  const Scalar μ_min = Scalar(options.tolerance) / Scalar(10);
-
-  // Barrier parameter μ
-  Scalar μ(0.1);
-
-  // Fraction-to-the-boundary rule scale factor minimum
-  constexpr Scalar τ_min(0.99);
-
-  // Fraction-to-the-boundary rule scale factor τ
-  Scalar τ = τ_min;
-
   Filter<Scalar> filter;
-
-  // This should be run when the error estimate is below a desired threshold for
-  // the current barrier parameter
-  auto update_barrier_parameter_and_reset_filter = [&] {
-    // Barrier parameter linear decrease power in "κ_μ μ". Range of (0, 1).
-    constexpr Scalar κ_μ(0.2);
-
-    // Barrier parameter superlinear decrease power in "μ^(θ_μ)". Range of (1,
-    // 2).
-    constexpr Scalar θ_μ(1.5);
-
-    // Update the barrier parameter.
-    //
-    //   μⱼ₊₁ = max(εₜₒₗ/10, min(κ_μ μⱼ, μⱼ^θ_μ))
-    //
-    // See equation (7) of [2].
-    using std::pow;
-    μ = std::max(μ_min, std::min(κ_μ * μ, pow(μ, θ_μ)));
-
-    // Update the fraction-to-the-boundary rule scaling factor.
-    //
-    //   τⱼ = max(τₘᵢₙ, 1 − μⱼ)
-    //
-    // See equation (8) of [2].
-    τ = std::max(τ_min, Scalar(1) - μ);
-
-    // Reset the filter when the barrier parameter is updated
-    filter.reset();
-  };
 
   // Kept outside the loop so its storage can be reused
   gch::small_vector<Eigen::Triplet<Scalar>> triplets;
 
   RegularizedLDLT<Scalar> solver{num_decision_variables,
                                  num_equality_constraints};
+  SparseMatrix lhs(num_decision_variables + num_equality_constraints,
+                   num_decision_variables + num_equality_constraints);
+  DenseVector rhs{x.rows() + y.rows()};
+
+  setup_prof.stop();
+
+  // r is sqrt_μ
+  auto build_and_compute_lhs = [&]() -> ExitStatus {
+    ScopedProfiler kkt_matrix_build_profiler{kkt_matrix_build_prof};
+
+    // lhs = [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ]
+    //       [        Aₑ           0 ]
+    //
+    // Don't assign upper triangle because solver only uses lower triangle.
+    const SparseMatrix top_left =
+        H + (A_i.transpose() * exp_2v.asDiagonal() * A_i)
+                .template triangularView<Eigen::Lower>();
+    triplets.clear();
+    triplets.reserve(top_left.nonZeros() + A_e.nonZeros());
+    for (int col = 0; col < H.cols(); ++col) {
+      // Append column of H + Aᵢᵀdiag(e²ᵛ)Aᵢ lower triangle in top-left quadrant
+      for (typename SparseMatrix::InnerIterator it{top_left, col}; it; ++it) {
+        triplets.emplace_back(it.row(), it.col(), it.value());
+      }
+      // Append column of Aₑ in bottom-left quadrant
+      for (typename SparseMatrix::InnerIterator it{A_e, col}; it; ++it) {
+        triplets.emplace_back(H.rows() + it.row(), it.col(), it.value());
+      }
+    }
+    lhs.setFromSortedTriplets(triplets.begin(), triplets.end());
+
+    kkt_matrix_build_profiler.stop();
+    ScopedProfiler kkt_matrix_decomp_profiler{kkt_matrix_decomp_prof};
+
+    // Solve the Newton-KKT system
+    //
+    // [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
+    // [        Aₑ           0 ][−pʸ]    [               cₑ                ]
+    if (solver.compute(lhs).info() != Eigen::Success) {
+      return ExitStatus::FACTORIZATION_FAILED;
+    } else {
+      return ExitStatus::SUCCESS;
+    }
+  };
+
+  // r is sqrt_μ
+  auto build_rhs = [&](Scalar r) {
+    // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
+    //        [               cₑ                ]
+    rhs.segment(0, x.rows()) =
+        -g + A_e.transpose() * y +
+        A_i.transpose() * (Scalar(2) * r * exp_v - exp_2v.asDiagonal() * c_i);
+    rhs.segment(x.rows(), y.rows()) = -c_e;
+  };
+
+  // r is sqrt_μ
+  auto compute_step = [&](Scalar r) -> Step {
+    Step step;
+
+    // p = [ pˣ]
+    //     [−pʸ]
+    DenseVector p = solver.solve(rhs);
+    step.p_x = p.segment(0, x.rows());
+    step.p_y = -p.segment(x.rows(), y.rows());
+
+    // pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)
+    step.p_v = DenseVector::Ones(v.rows()) -
+               Scalar(1) / r * exp_v.asDiagonal() * (A_i * step.p_x + c_i);
+
+    return step;
+  };
+
+  // Initializes the barrier parameter for the current iterate.
+  //
+  // Returns true on success and false on failure.
+  auto init_barrier_parameter = [&] {
+    build_rhs(Scalar(1e15));
+    DenseVector p_v_0 = compute_step(Scalar(1e15)).p_v;
+    build_rhs(Scalar(1));
+    DenseVector p_v_1 = compute_step(Scalar(1)).p_v - p_v_0;
+
+    // See section 3.2.3 of [6]
+    if (Scalar dot = p_v_0.transpose() * p_v_1; dot < Scalar(0)) {
+      sqrt_μ = std::max(sqrt_μ_min, p_v_1.squaredNorm() / -dot);
+    } else {
+      // Initialization failed, so use a hardcoded value for μ instead
+      sqrt_μ = Scalar(10);
+    }
+  };
+
+  // Updates the barrier parameter for the current iterate and resets the
+  // filter.
+  //
+  // This should be run when the error estimate is below a desired threshold for
+  // the current barrier parameter.
+  auto update_barrier_parameter = [&] {
+    if (sqrt_μ == sqrt_μ_min) {
+      return;
+    }
+
+    bool found_μ = false;
+
+    if (is_nlp) {
+      // Binary search for smallest μ such that |pᵛ|_∞ ≤ 1 starting from the
+      // current value of μ. If one doesn't exist, keep the original.
+
+      constexpr Scalar sqrt_μ_line_search_tol(1e-8);
+
+      Scalar sqrt_μ_lower(0);
+      Scalar sqrt_μ_upper = sqrt_μ;
+
+      while (sqrt_μ_upper - sqrt_μ_lower > sqrt_μ_line_search_tol) {
+        // Search bias [0, 1] that determines which side of range to check
+        constexpr Scalar search_bias(0.75);
+
+        Scalar sqrt_μ_mid = (Scalar(1) - search_bias) * sqrt_μ_lower +
+                            search_bias * sqrt_μ_upper;
+
+        build_rhs(sqrt_μ_mid);
+        DenseVector p_v = compute_step(sqrt_μ_mid).p_v;
+        Scalar p_v_infnorm = p_v.template lpNorm<Eigen::Infinity>();
+
+        if (p_v_infnorm <= Scalar(1)) {
+          // If step down was successful, decrease upper bound and try again
+          sqrt_μ = sqrt_μ_mid;
+          sqrt_μ_upper = sqrt_μ_mid;
+          found_μ = true;
+
+          // If μ hit minimum, stop searching
+          if (sqrt_μ <= sqrt_μ_min) {
+            sqrt_μ = sqrt_μ_min;
+            break;
+          }
+        } else {
+          // Otherwise, increase lower bound and try again
+          sqrt_μ_lower = sqrt_μ_mid;
+        }
+      }
+    } else {
+      // Line search for smallest μ such that |pᵛ|_∞ ≤ 1. If one doesn't exist,
+      // keep the original.
+      //
+      // For quadratic models, this only requires two system solves instead of a
+      // binary search.
+
+      constexpr Scalar dinf_bound(0.99);
+
+      build_rhs(Scalar(1e15));
+      DenseVector p_v_0 = compute_step(Scalar(1e15)).p_v;
+      build_rhs(Scalar(1));
+      DenseVector p_v_1 = compute_step(Scalar(1)).p_v - p_v_0;
+
+      Scalar α_μ_min(0);
+      Scalar α_μ_max(1e15);
+
+      for (int i = 0; i < v.rows(); ++i) {
+        Scalar temp_min = (dinf_bound - p_v_0[i]) / p_v_1[i];
+        Scalar temp_max = (-dinf_bound - p_v_0[i]) / p_v_1[i];
+        if (p_v_1[i] > Scalar(0)) {
+          using std::swap;
+          swap(temp_min, temp_max);
+        }
+
+        α_μ_min = std::max(α_μ_min, temp_min);
+        α_μ_max = std::min(α_μ_max, temp_max);
+      }
+
+      if (α_μ_min <= α_μ_max) {
+        found_μ = true;
+        sqrt_μ = std::max(sqrt_μ_min, Scalar(1) / α_μ_max);
+      }
+    }
+
+    if (found_μ) {
+      // Reset the filter when the barrier parameter is updated
+      filter.reset();
+    }
+  };
 
   // Variables for determining when a step is acceptable
-  constexpr Scalar α_reduction_factor(0.5);
+  constexpr Scalar α_reduction_factor(0.75);
   constexpr Scalar α_min(1e-7);
 
   int full_step_rejected_counter = 0;
 
   // Error estimate
   Scalar E_0 = std::numeric_limits<Scalar>::infinity();
-
-  setup_prof.stop();
 
   // Prints final solver diagnostics when the solver exits
   scope_exit exit{[&] {
@@ -284,6 +445,15 @@ ExitStatus interior_point(
       print_solver_diagnostics(solve_profilers);
     }
   }};
+
+  Scalar prev_p_v_infnorm = std::numeric_limits<Scalar>::infinity();
+  bool μ_initialized = false;
+
+  // Watchdog (nonmonotone) variables. If a line search fails, accept up to this
+  // many steps in a row in case the dual variable steps allow the primal steps
+  // to make progress again.
+  constexpr int watchdog_max = 5;
+  int watchdog_count = 0;
 
   while (E_0 > Scalar(options.tolerance)) {
     ScopedProfiler inner_iter_profiler{inner_iter_prof};
@@ -309,7 +479,7 @@ ExitStatus interior_point(
 
     // Check for diverging iterates
     if (x.template lpNorm<Eigen::Infinity>() > Scalar(1e10) || !x.allFinite() ||
-        s.template lpNorm<Eigen::Infinity>() > Scalar(1e10) || !s.allFinite()) {
+        v.template lpNorm<Eigen::Infinity>() > Scalar(1e10) || !v.allFinite()) {
       return ExitStatus::DIVERGING_ITERATES;
     }
 
@@ -324,96 +494,50 @@ ExitStatus interior_point(
     }
 
     iter_callbacks_profiler.stop();
-    ScopedProfiler kkt_matrix_build_profiler{kkt_matrix_build_prof};
 
-    // S = diag(s)
-    // Z = diag(z)
-    // Σ = S⁻¹Z
-    const SparseMatrix Σ{s.cwiseInverse().asDiagonal() * z.asDiagonal()};
-
-    // lhs = [H + AᵢᵀΣAᵢ  Aₑᵀ]
-    //       [    Aₑ       0 ]
-    //
-    // Don't assign upper triangle because solver only uses lower triangle.
-    const SparseMatrix top_left =
-        H + (A_i.transpose() * Σ * A_i).template triangularView<Eigen::Lower>();
-    triplets.clear();
-    triplets.reserve(top_left.nonZeros() + A_e.nonZeros());
-    for (int col = 0; col < H.cols(); ++col) {
-      // Append column of H + AᵢᵀΣAᵢ lower triangle in top-left quadrant
-      for (typename SparseMatrix::InnerIterator it{top_left, col}; it; ++it) {
-        triplets.emplace_back(it.row(), it.col(), it.value());
-      }
-      // Append column of Aₑ in bottom-left quadrant
-      for (typename SparseMatrix::InnerIterator it{A_e, col}; it; ++it) {
-        triplets.emplace_back(H.rows() + it.row(), it.col(), it.value());
-      }
-    }
-    SparseMatrix lhs(num_decision_variables + num_equality_constraints,
-                     num_decision_variables + num_equality_constraints);
-    lhs.setFromSortedTriplets(triplets.begin(), triplets.end());
-
-    // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(−Σcᵢ + μS⁻¹e + z)]
-    //        [               cₑ                ]
-    DenseVector rhs{x.rows() + y.rows()};
-    rhs.segment(0, x.rows()) =
-        -g + A_e.transpose() * y +
-        A_i.transpose() * (-Σ * c_i + μ * s.cwiseInverse() + z);
-    rhs.segment(x.rows(), y.rows()) = -c_e;
-
-    kkt_matrix_build_profiler.stop();
-    ScopedProfiler kkt_matrix_decomp_profiler{kkt_matrix_decomp_prof};
-
-    Step step;
-    Scalar α_max(1);
-    Scalar α(1);
-    Scalar α_z(1);
-
-    // Solve the Newton-KKT system
-    //
-    // [H + AᵢᵀΣAᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(−Σcᵢ + μS⁻¹e + z)]
-    // [    Aₑ       0 ][−pʸ]    [               cₑ                ]
-    if (solver.compute(lhs).info() != Eigen::Success) [[unlikely]] {
-      return ExitStatus::FACTORIZATION_FAILED;
+    if (auto status = build_and_compute_lhs(); status != ExitStatus::SUCCESS) {
+      return status;
     }
 
-    kkt_matrix_decomp_profiler.stop();
+    // Update the barrier parameter if necessary
+    if (!μ_initialized) {
+      init_barrier_parameter();
+      μ_initialized = true;
+    } else if (is_nlp) {
+      Scalar E_sqrt_μ =
+          error_estimate<Scalar>(g, A_e, c_e, A_i, c_i, y, v, sqrt_μ);
+      if (E_sqrt_μ <= Scalar(10) * sqrt_μ * sqrt_μ) {
+        ScopedProfiler μ_update_profiler{μ_update_prof};
+        update_barrier_parameter();
+      }
+    } else if (prev_p_v_infnorm <= Scalar(1)) {
+      ScopedProfiler μ_update_profiler{μ_update_prof};
+      update_barrier_parameter();
+    }
+
     ScopedProfiler kkt_system_solve_profiler{kkt_system_solve_prof};
 
-    auto compute_step = [&](Step& step) {
-      // p = [ pˣ]
-      //     [−pʸ]
-      DenseVector p = solver.solve(rhs);
-      step.p_x = p.segment(0, x.rows());
-      step.p_y = -p.segment(x.rows(), y.rows());
+    build_rhs(sqrt_μ);
 
-      // pˢ = cᵢ − s + Aᵢpˣ
-      // pᶻ = −Σcᵢ + μS⁻¹e − ΣAᵢpˣ
-      step.p_s = c_i - s + A_i * step.p_x;
-      step.p_z = -Σ * c_i + μ * s.cwiseInverse() - Σ * A_i * step.p_x;
-    };
-    compute_step(step);
+    // Solve the Newton-KKT system for the step
+    Step step = compute_step(sqrt_μ);
 
     kkt_system_solve_profiler.stop();
     ScopedProfiler line_search_profiler{line_search_prof};
 
-    // αᵐᵃˣ = max(α ∈ (0, 1] : sₖ + αpₖˢ ≥ (1−τⱼ)sₖ)
-    α_max = fraction_to_the_boundary_rule<Scalar>(s, step.p_s, τ);
-    α = α_max;
+    constexpr Scalar α_max(1);
+    Scalar α(1);
 
-    // If maximum step size is below minimum, report line search failure
-    if (α < α_min) {
-      return ExitStatus::LINE_SEARCH_FAILED;
-    }
-
-    // αₖᶻ = max(α ∈ (0, 1] : zₖ + αpₖᶻ ≥ (1−τⱼ)zₖ)
-    α_z = fraction_to_the_boundary_rule<Scalar>(z, step.p_z, τ);
+    // αₖᵛ = min(1, 1/|pᵛ|_∞²)
+    Scalar p_v_infnorm = step.p_v.template lpNorm<Eigen::Infinity>();
+    Scalar α_v = std::min(Scalar(1), Scalar(1) / (p_v_infnorm * p_v_infnorm));
+    prev_p_v_infnorm = p_v_infnorm;
 
     // Loop until a step is accepted
     while (1) {
       DenseVector trial_x = x + α * step.p_x;
-      DenseVector trial_y = y + α_z * step.p_y;
-      DenseVector trial_z = z + α_z * step.p_z;
+      DenseVector trial_y = y + α * step.p_y;
+      DenseVector trial_v = v + α_v * step.p_v;
 
       Scalar trial_f = matrices.f(trial_x);
       DenseVector trial_c_e = matrices.c_e(trial_x);
@@ -437,16 +561,22 @@ ExitStatus interior_point(
         // If the inequality constraints are all feasible, prevent them from
         // becoming infeasible again.
         //
-        // See equation (19.30) in [1].
-        trial_s = trial_c_i;
+        //   cᵢ − √(μ)e⁻ᵛ = 0
+        //   √(μ)e⁻ᵛ = cᵢ
+        //   e⁻ᵛ = 1/√(μ) cᵢ
+        //   −v = ln(1/√(μ) cᵢ)
+        //   v = −ln(1/√(μ) cᵢ)
+        trial_s = c_i;
+        trial_v = -(c_i * (Scalar(1) / sqrt_μ)).array().log().matrix();
       } else {
-        trial_s = s + α * step.p_s;
+        trial_s = sqrt_μ * (-trial_v).array().exp().matrix();
       }
 
       // Check whether filter accepts trial iterate
-      if (filter.try_add(FilterEntry{trial_f, trial_s, trial_c_e, trial_c_i, μ},
-                         α)) {
+      if (filter.try_add(
+              FilterEntry{trial_f, trial_v, trial_c_e, trial_c_i, sqrt_μ}, α)) {
         // Accept step
+        watchdog_count = 0;
         break;
       }
 
@@ -465,8 +595,7 @@ ExitStatus interior_point(
         // Apply second-order corrections. See section 2.4 of [2].
         auto soc_step = step;
 
-        Scalar α_soc = α;
-        Scalar α_z_soc = α_z;
+        Scalar α_v_soc = α_v;
         DenseVector c_e_soc = c_e;
 
         bool step_acceptable = false;
@@ -484,36 +613,36 @@ ExitStatus interior_point(
                                   : IterationType::REJECTED_SOC,
                   soc_profiler.current_duration(),
                   error_estimate<Scalar>(g, A_e, trial_c_e, A_i, trial_c_i,
-                                         trial_s, trial_y, trial_z, Scalar(0)),
+                                         trial_y, trial_v, Scalar(0)),
                   trial_f,
                   trial_c_e.template lpNorm<1>() +
                       (trial_c_i - trial_s).template lpNorm<1>(),
-                  trial_s.dot(trial_z), μ, solver.hessian_regularization(),
-                  α_soc, Scalar(1), α_reduction_factor, α_z_soc);
+                  sqrt_μ * sqrt_μ, solver.hessian_regularization(), Scalar(1),
+                  Scalar(1), α_reduction_factor, α_v_soc);
             }
           }};
 
           // Rebuild Newton-KKT rhs with updated constraint values.
           //
-          // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(−Σcᵢ + μS⁻¹e + z)]
+          // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
           //        [              cₑˢᵒᶜ              ]
           //
-          // where cₑˢᵒᶜ = αc(xₖ) + c(xₖ + αpₖˣ)
-          c_e_soc = α_soc * c_e_soc + trial_c_e;
+          // where cₑˢᵒᶜ = c(xₖ) + c(xₖ + αpₖˣ)
+          c_e_soc += trial_c_e;
           rhs.bottomRows(y.rows()) = -c_e_soc;
 
           // Solve the Newton-KKT system
-          compute_step(soc_step);
+          soc_step = compute_step(sqrt_μ);
 
-          // αˢᵒᶜ = max(α ∈ (0, 1] : sₖ + αpₖˢ ≥ (1−τⱼ)sₖ)
-          α_soc = fraction_to_the_boundary_rule<Scalar>(s, soc_step.p_s, τ);
-          trial_x = x + α_soc * soc_step.p_x;
-          trial_s = s + α_soc * soc_step.p_s;
+          trial_x = x + soc_step.p_x;
+          trial_y = y + soc_step.p_y;
 
-          // αₖᶻ = max(α ∈ (0, 1] : zₖ + αpₖᶻ ≥ (1−τⱼ)zₖ)
-          α_z_soc = fraction_to_the_boundary_rule<Scalar>(z, soc_step.p_z, τ);
-          trial_y = y + α_z_soc * soc_step.p_y;
-          trial_z = z + α_z_soc * soc_step.p_z;
+          // αₖᵛ = 1/max(1, |pᵛ|_∞²)
+          Scalar p_v_infnorm = step.p_v.template lpNorm<Eigen::Infinity>();
+          α_v_soc = Scalar(1) / std::max(Scalar(1), p_v_infnorm * p_v_infnorm);
+
+          trial_v = v + α_v_soc * soc_step.p_v;
+          trial_s = sqrt_μ * (-trial_v).array().exp().matrix();
 
           trial_f = matrices.f(trial_x);
           trial_c_e = matrices.c_e(trial_x);
@@ -533,16 +662,18 @@ ExitStatus interior_point(
 
           // Check whether filter accepts trial iterate
           if (filter.try_add(
-                  FilterEntry{trial_f, trial_s, trial_c_e, trial_c_i, μ}, α)) {
+                  FilterEntry{trial_f, trial_v, trial_c_e, trial_c_i, sqrt_μ},
+                  α)) {
             step = soc_step;
-            α = α_soc;
-            α_z = α_z_soc;
+            α = Scalar(1);
+            α_v = α_v_soc;
             step_acceptable = true;
           }
         }
 
         if (step_acceptable) {
           // Accept step
+          watchdog_count = 0;
           break;
         }
       }
@@ -573,26 +704,32 @@ ExitStatus interior_point(
       // wasn't, report line search failure.
       if (α < α_min) {
         Scalar current_kkt_error =
-            kkt_error<Scalar>(g, A_e, c_e, A_i, c_i, s, y, z, μ);
+            kkt_error<Scalar>(g, A_e, c_e, A_i, c_i, y, v, sqrt_μ);
 
         trial_x = x + α_max * step.p_x;
-        trial_s = s + α_max * step.p_s;
-
-        trial_y = y + α_z * step.p_y;
-        trial_z = z + α_z * step.p_z;
+        trial_y = y + α_max * step.p_y;
+        trial_v = v + α_v * step.p_v;
 
         trial_c_e = matrices.c_e(trial_x);
         trial_c_i = matrices.c_i(trial_x);
 
         Scalar next_kkt_error = kkt_error<Scalar>(
-            matrices.g(trial_x), matrices.A_e(trial_x), matrices.c_e(trial_x),
-            matrices.A_i(trial_x), trial_c_i, trial_s, trial_y, trial_z, μ);
+            matrices.g(trial_x), matrices.A_e(trial_x), trial_c_e,
+            matrices.A_i(trial_x), trial_c_i, trial_y, trial_v, sqrt_μ);
 
         // If the step using αᵐᵃˣ reduced the KKT error, accept it anyway
         if (next_kkt_error <= Scalar(0.999) * current_kkt_error) {
           α = α_max;
 
           // Accept step
+          watchdog_count = 0;
+          break;
+        }
+
+        // If the dual step is making progress, accept the whole step anyway
+        if (p_v_infnorm > α_min && watchdog_count < watchdog_max) {
+          // Accept step
+          ++watchdog_count;
           break;
         }
 
@@ -608,39 +745,23 @@ ExitStatus interior_point(
     }
 
     // xₖ₊₁ = xₖ + αₖpₖˣ
-    // sₖ₊₁ = sₖ + αₖpₖˢ
-    // yₖ₊₁ = yₖ + αₖᶻpₖʸ
-    // zₖ₊₁ = zₖ + αₖᶻpₖᶻ
+    // yₖ₊₁ = yₖ + αₖpₖʸ
+    // vₖ₊₁ = vₖ + αₖᵛpₖᵛ
     x += α * step.p_x;
-    s += α * step.p_s;
-    y += α_z * step.p_y;
-    z += α_z * step.p_z;
+    y += α * step.p_y;
+    v += α_v * step.p_v;
 
-    // A requirement for the convergence proof is that the primal-dual barrier
-    // term Hessian Σₖ₊₁ does not deviate arbitrarily much from the primal
-    // barrier term Hessian μSₖ₊₁⁻².
-    //
-    //   Σₖ₊₁ = μSₖ₊₁⁻²
-    //   Sₖ₊₁⁻¹Zₖ₊₁ = μSₖ₊₁⁻²
-    //   Zₖ₊₁ = μSₖ₊₁⁻¹
-    //
-    // We ensure this by resetting
-    //
-    //   zₖ₊₁ = clamp(zₖ₊₁, 1/κ_Σ μ/sₖ₊₁, κ_Σ μ/sₖ₊₁)
-    //
-    // for some fixed κ_Σ ≥ 1 after each step. See equation (16) of [2].
-    for (int row = 0; row < z.rows(); ++row) {
-      constexpr Scalar κ_Σ(1e10);
-      z[row] =
-          std::clamp(z[row], Scalar(1) / κ_Σ * μ / s[row], κ_Σ * μ / s[row]);
-    }
+    exp_v = v.array().exp().matrix();
+    exp_neg_v = exp_v.cwiseInverse();
+    exp_2v = exp_v.cwiseProduct(exp_v);
+    s = sqrt_μ * exp_neg_v;
 
     // Update autodiff for Jacobians and Hessian
     f = matrices.f(x);
     A_e = matrices.A_e(x);
     A_i = matrices.A_i(x);
     g = matrices.g(x);
-    H = matrices.H(x, y, z);
+    H = matrices.H(x, y, v, sqrt_μ);
 
     ScopedProfiler next_iter_prep_profiler{next_iter_prep_prof};
 
@@ -648,21 +769,7 @@ ExitStatus interior_point(
     c_i = matrices.c_i(x);
 
     // Update the error estimate
-    E_0 = error_estimate<Scalar>(g, A_e, c_e, A_i, c_i, s, y, z, Scalar(0));
-
-    // Update the barrier parameter if necessary
-    if (E_0 > Scalar(options.tolerance)) {
-      // Barrier parameter scale factor for tolerance checks
-      constexpr Scalar κ_ε(10);
-
-      // While the error estimate is below the desired threshold for this
-      // barrier parameter value, decrease the barrier parameter further
-      Scalar E_μ = error_estimate<Scalar>(g, A_e, c_e, A_i, c_i, s, y, z, μ);
-      while (μ > μ_min && E_μ <= κ_ε * μ) {
-        update_barrier_parameter_and_reset_filter();
-        E_μ = error_estimate<Scalar>(g, A_e, c_e, A_i, c_i, s, y, z, μ);
-      }
-    }
+    E_0 = error_estimate<Scalar>(g, A_e, c_e, A_i, c_i, y, v, sqrt_μ_min);
 
     next_iter_prep_profiler.stop();
     inner_iter_profiler.stop();
@@ -671,9 +778,9 @@ ExitStatus interior_point(
       print_iteration_diagnostics(
           iterations, IterationType::NORMAL,
           inner_iter_profiler.current_duration(), E_0, f,
-          c_e.template lpNorm<1>() + (c_i - s).template lpNorm<1>(), s.dot(z),
-          μ, solver.hessian_regularization(), α, α_max, α_reduction_factor,
-          α_z);
+          c_e.template lpNorm<1>() + (c_i - s).template lpNorm<1>(),
+          sqrt_μ * sqrt_μ, solver.hessian_regularization(), α, α_max,
+          α_reduction_factor, α_v);
     }
 
     ++iterations;
@@ -692,14 +799,14 @@ ExitStatus interior_point(
   return ExitStatus::SUCCESS;
 }
 
-extern template SLEIPNIR_DLLEXPORT ExitStatus
-interior_point(const InteriorPointMatrixCallbacks<double>& matrix_callbacks,
-               std::span<std::function<bool(const IterationInfo<double>& info)>>
-                   iteration_callbacks,
-               const Options& options,
+extern template SLEIPNIR_DLLEXPORT ExitStatus interior_point(
+    const InteriorPointMatrixCallbacks<double>& matrix_callbacks, bool is_nlp,
+    std::span<std::function<bool(const IterationInfo<double>& info)>>
+        iteration_callbacks,
+    const Options& options,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
-               const Eigen::ArrayX<bool>& bound_constraint_mask,
+    const Eigen::ArrayX<bool>& bound_constraint_mask,
 #endif
-               Eigen::Vector<double, Eigen::Dynamic>& x);
+    Eigen::Vector<double, Eigen::Dynamic>& x);
 
 }  // namespace slp
