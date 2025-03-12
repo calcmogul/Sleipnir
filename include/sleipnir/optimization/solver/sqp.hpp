@@ -273,7 +273,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
 
     // Call iteration callbacks
     for (const auto& callback : iteration_callbacks) {
-      if (callback({iterations, x, {}, y, {}, g, H, A_e, {}})) {
+      if (callback({iterations, x, y, {}, g, H, A_e, {}})) {
         return ExitStatus::CALLBACK_REQUESTED_STOP;
       }
     }
@@ -393,7 +393,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
                   soc_profiler.current_duration(),
                   kkt_error<Scalar, KKTErrorType::INF_NORM_SCALED>(
                       g, A_e, trial_c_e, trial_y),
-                  trial_f, trial_c_e.template lpNorm<1>(), Scalar(0), Scalar(0),
+                  trial_f, trial_c_e.template lpNorm<1>(), Scalar(0),
                   solver.hessian_regularization(), α_soc, Scalar(1),
                   α_reduction_factor, Scalar(1));
             }
@@ -519,8 +519,8 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
                    Scalar(0.9) * initial_entry.constraint_violation &&
                filter.try_add(initial_entry, trial_entry, trial_x - x, g, α);
       });
-      auto status =
-          feasibility_restoration<Scalar>(matrices, callbacks, options, x, y);
+      auto status = feasibility_restoration<Scalar>(matrices, true, callbacks,
+                                                    options, x, y);
 
       if (status != ExitStatus::SUCCESS) {
         // Report failure
@@ -557,8 +557,8 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
       print_iteration_diagnostics(iterations, IterationType::NORMAL,
                                   inner_iter_profiler.current_duration(), E_0,
                                   f, c_e.template lpNorm<1>(), Scalar(0),
-                                  Scalar(0), solver.hessian_regularization(), α,
-                                  α_max, α_reduction_factor, α);
+                                  solver.hessian_regularization(), α, α_max,
+                                  α_reduction_factor, α);
     }
 
     ++iterations;
