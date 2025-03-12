@@ -144,3 +144,24 @@ TEST_CASE("Problem - Equality-constrained", "[Problem]") {
     CHECK(x.value(1) == Catch::Approx(3.0).margin(1e-5));
   }
 }
+
+TEST_CASE("Problem - Inequality-constrained 2D", "[Problem]") {
+  slp::Problem problem;
+
+  auto x = problem.decision_variable();
+  x.set_value(5.0);
+  auto y = problem.decision_variable();
+  y.set_value(5.0);
+
+  problem.minimize(x * x + y * 2 * y);
+  problem.subject_to(y >= -x + 5);
+
+  CHECK(problem.cost_function_type() == slp::ExpressionType::QUADRATIC);
+  CHECK(problem.equality_constraint_type() == slp::ExpressionType::NONE);
+  CHECK(problem.inequality_constraint_type() == slp::ExpressionType::LINEAR);
+
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
+
+  CHECK(x.value() == Catch::Approx(3.0 + 1.0 / 3.0).margin(1e-6));
+  CHECK(y.value() == Catch::Approx(1.0 + 2.0 / 3.0).margin(1e-6));
+}

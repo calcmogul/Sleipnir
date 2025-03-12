@@ -138,3 +138,24 @@ def test_equality_constrained_2():
 
     assert x.value(0) == pytest.approx(3.0, abs=1e-5)
     assert x.value(1) == pytest.approx(3.0, abs=1e-5)
+
+
+def test_inequality_constrained_2d():
+    problem = Problem()
+
+    x = problem.decision_variable()
+    x.set_value(5.0)
+    y = problem.decision_variable()
+    y.set_value(5.0)
+
+    problem.minimize(x * x + y * 2 * y)
+    problem.subject_to(y >= -x + 5)
+
+    assert problem.cost_function_type() == ExpressionType.QUADRATIC
+    assert problem.equality_constraint_type() == ExpressionType.NONE
+    assert problem.inequality_constraint_type() == ExpressionType.LINEAR
+
+    assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS
+
+    assert x.value() == pytest.approx(3.0 + 1.0 / 3.0, abs=1e-6)
+    assert y.value() == pytest.approx(1.0 + 2.0 / 3.0, abs=1e-6)

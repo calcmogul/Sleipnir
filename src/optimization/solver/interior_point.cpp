@@ -9,6 +9,7 @@
 #include <limits>
 #include <memory>
 #include <ranges>
+#include <utility>
 
 #include <Eigen/Core>
 #include <Eigen/SparseCore>
@@ -16,7 +17,6 @@
 #include "optimization/regularized_ldlt.hpp"
 #include "optimization/solver/util/error_estimate.hpp"
 #include "optimization/solver/util/filter.hpp"
-#include "optimization/solver/util/fraction_to_the_boundary_rule.hpp"
 #include "optimization/solver/util/is_locally_infeasible.hpp"
 #include "optimization/solver/util/kkt_error.hpp"
 #include "sleipnir/autodiff/gradient.hpp"
@@ -52,10 +52,8 @@ struct Step {
   Eigen::VectorXd p_x;
   /// Equality constraint dual step.
   Eigen::VectorXd p_y;
-  /// Inequality constraint slack variable step.
-  Eigen::VectorXd p_s;
-  /// Inequality constraint dual step.
-  Eigen::VectorXd p_z;
+  /// Log-domain variable step.
+  Eigen::VectorXd p_v;
 };
 
 }  // namespace
@@ -124,37 +122,49 @@ ExitStatus interior_point(
   Eigen::SparseMatrix<double> A_i = jacobian_c_i.value();
 
   setup_profilers.back().stop();
-  setup_profilers.emplace_back("  ↳ s,y,z setup").start();
-
-  // Create autodiff variables for s for Lagrangian
-  Eigen::VectorXd s = Eigen::VectorXd::Ones(inequality_constraints.size());
-  VariableMatrix s_ad(inequality_constraints.size());
-  s_ad.set_value(s);
+  setup_profilers.emplace_back("  ↳ y,v setup").start();
 
   // Create autodiff variables for y for Lagrangian
   Eigen::VectorXd y = Eigen::VectorXd::Zero(equality_constraints.size());
   VariableMatrix y_ad(equality_constraints.size());
   y_ad.set_value(y);
 
-  // Create autodiff variables for z for Lagrangian
-  Eigen::VectorXd z = Eigen::VectorXd::Ones(inequality_constraints.size());
-  VariableMatrix z_ad(inequality_constraints.size());
-  z_ad.set_value(z);
+  // Create autodiff variables for v for Lagrangian
+  Eigen::VectorXd v = Eigen::VectorXd::Zero(inequality_constraints.size());
+  VariableMatrix v_ad(inequality_constraints.size());
+  v_ad.set_value(v);
+
+  // Barrier parameter μ
+  double sqrt_μ = 1.0;
+  Variable sqrt_μ_ad;
+  sqrt_μ_ad.set_value(sqrt_μ);
+
+  // eᵛ
+  Eigen::VectorXd exp_v{v.array().exp().matrix()};
+  // e⁻ᵛ
+  Eigen::VectorXd exp_neg_v{(-v).array().exp().matrix()};
+  // e²ᵛ
+  Eigen::VectorXd exp_2v{(2 * v).array().exp().matrix()};
+  // s = √(μ)e⁻ᵛ
+  Eigen::VectorXd s = sqrt_μ * exp_neg_v;
 
   setup_profilers.back().stop();
   setup_profilers.emplace_back("  ↳ L setup").start();
 
   // Lagrangian L
   //
-  // L(xₖ, sₖ, yₖ, zₖ) = f(xₖ) − yₖᵀcₑ(xₖ) − zₖᵀ(cᵢ(xₖ) − sₖ)
-  auto L = f - (y_ad.T() * c_e_ad)[0] - (z_ad.T() * (c_i_ad - s_ad))[0];
+  //   ∇ₓL(x, y, v) = ∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ
+  //
+  //   L(x, y, v) = f(x) − yᵀcₑ(x) − √(μ)eᵛᵀcᵢ(x)
+  auto L = f - (y_ad.T() * c_e_ad)[0] -
+           sqrt_μ_ad * (v_ad.cwise_transform(&slp::exp).T() * c_i_ad)[0];
 
   setup_profilers.back().stop();
   setup_profilers.emplace_back("  ↳ ∇²ₓₓL setup").start();
 
   // Hessian of the Lagrangian H
   //
-  // Hₖ = ∇²ₓₓL(xₖ, sₖ, yₖ, zₖ)
+  // Hₖ = ∇²ₓₓL(xₖ, yₖ, vₖ)
   Hessian<Eigen::Lower> hessian_L{L, x_ad};
 
   setup_profilers.back().stop();
@@ -207,46 +217,9 @@ ExitStatus interior_point(
   int iterations = 0;
 
   // Barrier parameter minimum
-  const double μ_min = options.tolerance / 10.0;
-
-  // Barrier parameter μ
-  double μ = 0.1;
-
-  // Fraction-to-the-boundary rule scale factor minimum
-  constexpr double τ_min = 0.99;
-
-  // Fraction-to-the-boundary rule scale factor τ
-  double τ = τ_min;
+  const double sqrt_μ_min = std::sqrt(options.tolerance / 10.0);
 
   Filter filter;
-
-  // This should be run when the error estimate is below a desired threshold for
-  // the current barrier parameter
-  auto update_barrier_parameter_and_reset_filter = [&] {
-    // Barrier parameter linear decrease power in "κ_μ μ". Range of (0, 1).
-    constexpr double κ_μ = 0.2;
-
-    // Barrier parameter superlinear decrease power in "μ^(θ_μ)". Range of (1,
-    // 2).
-    constexpr double θ_μ = 1.5;
-
-    // Update the barrier parameter.
-    //
-    //   μⱼ₊₁ = max(εₜₒₗ/10, min(κ_μ μⱼ, μⱼ^θ_μ))
-    //
-    // See equation (7) of [2].
-    μ = std::max(μ_min, std::min(κ_μ * μ, std::pow(μ, θ_μ)));
-
-    // Update the fraction-to-the-boundary rule scaling factor.
-    //
-    //   τⱼ = max(τₘᵢₙ, 1 − μⱼ)
-    //
-    // See equation (8) of [2].
-    τ = std::max(τ_min, 1.0 - μ);
-
-    // Reset the filter when the barrier parameter is updated
-    filter.reset();
-  };
 
   // Kept outside the loop so its storage can be reused
   small_vector<Eigen::Triplet<double>> triplets;
@@ -254,13 +227,74 @@ ExitStatus interior_point(
   RegularizedLDLT solver{decision_variables.size(),
                          equality_constraints.size()};
 
+  // Updates the barrier parameter for the current iterate.
+  //
+  // Returns true on success and false on failure.
+  auto update_barrier_parameter = [&]() -> bool {
+#if 0
+    // Update the barrier parameter.
+    //
+    //   μₖ₊₁ = 1/k μₖ
+    //   √μₖ₊₁ = √(1/k μₖ)
+    //   √μₖ₊₁ = 1/√k √μₖ
+    sqrt_μ = std::max(sqrt_μ_min, 1.0 / std::numbers::sqrt2 * sqrt_μ);
+#else
+    constexpr double dinf_bound = 0.99;
+
+    auto solve_p_v = [&](double r) -> Eigen::VectorXd {
+      // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
+      //        [               cₑ                ]
+      Eigen::VectorXd rhs{x.rows() + y.rows()};
+      rhs.segment(0, x.rows()) =
+          -g + A_e.transpose() * y +
+          A_i.transpose() * (2.0 * r * exp_v - exp_2v.asDiagonal() * c_i);
+      rhs.segment(x.rows(), y.rows()) = -c_e;
+
+      // p = [ pˣ]
+      //     [−pʸ]
+      Eigen::VectorXd p_x = solver.solve(rhs).segment(0, x.rows());
+
+      // pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)
+      return Eigen::VectorXd::Ones(v.rows()) -
+             1.0 / r * exp_v.asDiagonal() * (A_i * p_x + c_i);
+    };
+
+    Eigen::VectorXd p_v_0 = solve_p_v(sqrt_μ * 1e15);
+    Eigen::VectorXd p_v_1 = solve_p_v(sqrt_μ) - p_v_0;
+
+    double α_min = 0.0;
+    double α_max = 1e15;
+
+    for (int i = 0; i < v.rows(); ++i) {
+      double temp_min = (dinf_bound - p_v_0[i]) / p_v_1[i];
+      double temp_max = (-dinf_bound - p_v_0[i]) / p_v_1[i];
+      if (p_v_1[i] > 0.0) {
+        std::swap(temp_min, temp_max);
+      }
+
+      α_min = std::max(α_min, temp_min);
+      α_max = std::min(α_max, temp_max);
+    }
+
+    if (α_min > α_max) {
+      return true;
+    }
+
+    sqrt_μ = std::max(sqrt_μ_min, 1.0 / std::abs(α_max));
+#endif
+
+    return true;
+  };
+
   // Variables for determining when a step is acceptable
   constexpr double α_red_factor = 0.5;
   constexpr double α_min = 1e-7;
   int acceptable_iter_counter = 0;
 
+  // Scale factor for v step
+  constexpr double β = 1.0;
+
   int full_step_rejected_counter = 0;
-  int step_too_small_counter = 0;
 
   // Error estimate
   double E_0 = std::numeric_limits<double>::infinity();
@@ -361,7 +395,7 @@ ExitStatus interior_point(
 
     // Check for diverging iterates
     if (x.lpNorm<Eigen::Infinity>() > 1e20 || !x.allFinite() ||
-        s.lpNorm<Eigen::Infinity>() > 1e20 || !s.allFinite()) {
+        v.lpNorm<Eigen::Infinity>() > 1e20 || !v.allFinite()) {
       return ExitStatus::DIVERGING_ITERATES;
     }
 
@@ -370,7 +404,7 @@ ExitStatus interior_point(
 
     // Call user callbacks
     for (const auto& callback : callbacks) {
-      if (callback({iterations, x, s, g, H, A_e, A_i})) {
+      if (callback({iterations, x, g, H, A_e, A_i})) {
         return ExitStatus::CALLBACK_REQUESTED_STOP;
       }
     }
@@ -378,18 +412,13 @@ ExitStatus interior_point(
     user_callbacks_profiler.stop();
     ScopedProfiler linear_system_build_profiler{linear_system_build_prof};
 
-    // S = diag(s)
-    // Z = diag(z)
-    // Σ = S⁻¹Z
-    const Eigen::SparseMatrix<double> Σ{s.cwiseInverse().asDiagonal() *
-                                        z.asDiagonal()};
-
-    // lhs = [H + AᵢᵀΣAᵢ  Aₑᵀ]
-    //       [    Aₑ       0 ]
+    // lhs = [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ]
+    //       [        Aₑ           0 ]
     //
     // Don't assign upper triangle because solver only uses lower triangle.
     const Eigen::SparseMatrix<double> top_left =
-        H + (A_i.transpose() * Σ * A_i).triangularView<Eigen::Lower>();
+        H + (A_i.transpose() * exp_2v.asDiagonal() * A_i)
+                .triangularView<Eigen::Lower>();
     triplets.clear();
     triplets.reserve(top_left.nonZeros() + A_e.nonZeros());
     for (int col = 0; col < H.cols(); ++col) {
@@ -409,33 +438,37 @@ ExitStatus interior_point(
     lhs.setFromSortedTriplets(triplets.begin(), triplets.end(),
                               [](const auto&, const auto& b) { return b; });
 
-    // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(−Σcᵢ + μS⁻¹e + z)]
+    // Update the barrier parameter if necessary
+    if (E_0 > options.tolerance && sqrt_μ > sqrt_μ_min) {
+      if (!update_barrier_parameter()) {
+        return ExitStatus::LINE_SEARCH_FAILED;
+      }
+    }
+
+    // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
     //        [               cₑ                ]
     Eigen::VectorXd rhs{x.rows() + y.rows()};
     rhs.segment(0, x.rows()) =
         -g + A_e.transpose() * y +
-        A_i.transpose() * (-Σ * c_i + μ * s.cwiseInverse() + z);
+        A_i.transpose() * (2.0 * sqrt_μ * exp_v - exp_2v.asDiagonal() * c_i);
     rhs.segment(x.rows(), y.rows()) = -c_e;
 
     linear_system_build_profiler.stop();
     ScopedProfiler linear_system_compute_profiler{linear_system_compute_prof};
 
-    Step step;
-    double α_max = 1.0;
-    double α = 1.0;
-    double α_z = 1.0;
-
     // Solve the Newton-KKT system
     //
-    // [H + AᵢᵀΣAᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(−Σcᵢ + μS⁻¹e + z)]
-    // [    Aₑ       0 ][−pʸ]    [               cₑ                ]
-    if (solver.compute(lhs, μ).info() != Eigen::Success) [[unlikely]] {
+    // [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
+    // [        Aₑ           0 ][−pʸ]    [               cₑ                ]
+    if (solver.compute(lhs, sqrt_μ).info() != Eigen::Success) [[unlikely]] {
       return ExitStatus::FACTORIZATION_FAILED;
     }
 
     linear_system_compute_profiler.stop();
     ScopedProfiler linear_system_solve_profiler{linear_system_solve_prof};
 
+    // Solve the Newton-KKT system for the step
+    Step step;
     auto compute_step = [&](Step& step) {
       // p = [ pˣ]
       //     [−pʸ]
@@ -443,33 +476,28 @@ ExitStatus interior_point(
       step.p_x = p.segment(0, x.rows());
       step.p_y = -p.segment(x.rows(), y.rows());
 
-      // pˢ = cᵢ − s + Aᵢpˣ
-      // pᶻ = −Σcᵢ + μS⁻¹e − ΣAᵢpˣ
-      step.p_s = c_i - s + A_i * step.p_x;
-      step.p_z = -Σ * c_i + μ * s.cwiseInverse() - Σ * A_i * step.p_x;
+      // pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)
+      step.p_v = Eigen::VectorXd::Ones(v.rows()) -
+                 1.0 / sqrt_μ * exp_v.asDiagonal() * (A_i * step.p_x + c_i);
     };
     compute_step(step);
 
     linear_system_solve_profiler.stop();
     ScopedProfiler line_search_profiler{line_search_prof};
 
-    // αᵐᵃˣ = max(α ∈ (0, 1] : sₖ + αpₖˢ ≥ (1−τⱼ)sₖ)
-    α_max = fraction_to_the_boundary_rule(s, step.p_s, τ);
-    α = α_max;
+    double α_max = 1.0;
+    double α = 1.0;
+    double α_v = 1.0;
 
-    // If maximum step size is below minimum, report line search failure
-    if (α < α_min) {
-      return ExitStatus::LINE_SEARCH_FAILED;
-    }
-
-    // αₖᶻ = max(α ∈ (0, 1] : zₖ + αpₖᶻ ≥ (1−τⱼ)zₖ)
-    α_z = fraction_to_the_boundary_rule(z, step.p_z, τ);
+    // αₖᵛ = 1/max(1, 1/(2β) |pᵛ|_∞²)
+    double p_v_inf = step.p_v.lpNorm<Eigen::Infinity>();
+    α_v = 1.0 / std::max(1.0, 1.0 / (2.0 * β) * p_v_inf * p_v_inf);
 
     // Loop until a step is accepted
     while (1) {
       Eigen::VectorXd trial_x = x + α * step.p_x;
-      Eigen::VectorXd trial_y = y + α_z * step.p_y;
-      Eigen::VectorXd trial_z = z + α_z * step.p_z;
+      Eigen::VectorXd trial_y = y + α * step.p_y;
+      Eigen::VectorXd trial_v = v + α_v * step.p_v;
 
       x_ad.set_value(trial_x);
 
@@ -490,14 +518,20 @@ ExitStatus interior_point(
         // If the inequality constraints are all feasible, prevent them from
         // becoming infeasible again.
         //
-        // See equation (19.30) in [1].
-        trial_s = trial_c_i;
+        //   cᵢ − √(μ)e⁻ᵛ = 0
+        //   √(μ)e⁻ᵛ = cᵢ
+        //   e⁻ᵛ = 1/√(μ) cᵢ
+        //   −v = ln(1/√(μ) cᵢ)
+        //   v = −ln(1/√(μ) cᵢ)
+        trial_s = c_i;
+        trial_v = -(c_i * (1.0 / sqrt_μ)).array().log().matrix();
       } else {
-        trial_s = s + α * step.p_s;
+        trial_s = sqrt_μ * (-trial_v).array().exp().matrix();
       }
 
       // Check whether filter accepts trial iterate
-      if (filter.try_add(FilterEntry{f, trial_s, trial_c_e, trial_c_i, μ}, α)) {
+      if (filter.try_add(FilterEntry{f, trial_v, trial_c_e, trial_c_i, sqrt_μ},
+                         α)) {
         // Accept step
         break;
       }
@@ -517,7 +551,7 @@ ExitStatus interior_point(
         auto soc_step = step;
 
         double α_soc = α;
-        double α_z_soc = α_z;
+        double α_v_soc = α_v;
         Eigen::VectorXd c_e_soc = c_e;
 
         bool step_acceptable = false;
@@ -536,16 +570,18 @@ ExitStatus interior_point(
                   step_acceptable ? IterationType::ACCEPTED_SOC
                                   : IterationType::REJECTED_SOC,
                   soc_profiler.current_duration(), E, f.value(),
-                  trial_c_e.lpNorm<1>() + (trial_c_i - trial_s).lpNorm<1>(),
-                  trial_s.dot(trial_z), μ, solver.hessian_regularization(),
-                  α_soc, 1.0, α_z_soc);
+                  trial_c_e.lpNorm<1>() +
+                      (trial_c_i - sqrt_μ * (-trial_v).array().exp().matrix())
+                          .lpNorm<1>(),
+                  sqrt_μ * sqrt_μ, solver.hessian_regularization(), α_soc, 1.0,
+                  α_v_soc);
             }
           }};
 #endif
 
           // Rebuild Newton-KKT rhs with updated constraint values.
           //
-          // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(−Σcᵢ + μS⁻¹e + z)]
+          // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
           //        [              cₑˢᵒᶜ              ]
           //
           // where cₑˢᵒᶜ = αc(xₖ) + c(xₖ + αpₖˣ)
@@ -555,15 +591,15 @@ ExitStatus interior_point(
           // Solve the Newton-KKT system
           compute_step(soc_step);
 
-          // αˢᵒᶜ = max(α ∈ (0, 1] : sₖ + αpₖˢ ≥ (1−τⱼ)sₖ)
-          α_soc = fraction_to_the_boundary_rule(s, soc_step.p_s, τ);
+          α_soc = 1.0;
           trial_x = x + α_soc * soc_step.p_x;
-          trial_s = s + α_soc * soc_step.p_s;
+          trial_y = y + α_soc * soc_step.p_y;
 
-          // αₖᶻ = max(α ∈ (0, 1] : zₖ + αpₖᶻ ≥ (1−τⱼ)zₖ)
-          α_z_soc = fraction_to_the_boundary_rule(z, soc_step.p_z, τ);
-          trial_y = y + α_z_soc * soc_step.p_y;
-          trial_z = z + α_z_soc * soc_step.p_z;
+          // αₖᵛ = 1/max(1, 1/(2β) |pᵛ|_∞²)
+          double p_v_inf = step.p_v.lpNorm<Eigen::Infinity>();
+          α_v_soc = 1.0 / std::max(1.0, 1.0 / (2.0 * β) * p_v_inf * p_v_inf);
+
+          trial_v = v + α_v_soc * soc_step.p_v;
 
           x_ad.set_value(trial_x);
 
@@ -576,17 +612,18 @@ ExitStatus interior_point(
           // If constraint violation hasn't been sufficiently reduced, stop
           // making second-order corrections
           next_constraint_violation =
-              trial_c_e.lpNorm<1>() + (trial_c_i - trial_s).lpNorm<1>();
+              trial_c_e.lpNorm<1>() +
+              (trial_c_i - sqrt_μ * exp_neg_v).lpNorm<1>();
           if (next_constraint_violation > κ_soc * prev_constraint_violation) {
             break;
           }
 
           // Check whether filter accepts trial iterate
-          if (filter.try_add(FilterEntry{f, trial_s, trial_c_e, trial_c_i, μ},
-                             α)) {
+          if (filter.try_add(
+                  FilterEntry{f, trial_v, trial_c_e, trial_c_i, sqrt_μ}, α)) {
             step = soc_step;
             α = α_soc;
-            α_z = α_z_soc;
+            α_v = α_v_soc;
             step_acceptable = true;
           }
         }
@@ -622,26 +659,24 @@ ExitStatus interior_point(
       // If step size hit a minimum, check if the KKT error was reduced. If it
       // wasn't, report line search failure.
       if (α < α_min) {
-        double current_kkt_error = kkt_error(g, A_e, c_e, A_i, c_i, s, y, z, μ);
+        double current_kkt_error =
+            kkt_error(g, A_e, c_e, A_i, c_i, y, v, sqrt_μ);
 
         trial_x = x + α_max * step.p_x;
-        trial_s = s + α_max * step.p_s;
-
-        trial_y = y + α_z * step.p_y;
-        trial_z = z + α_z * step.p_z;
+        trial_y = y + α_max * step.p_y;
+        trial_v = v + α_v * step.p_v;
 
         // Upate autodiff
         x_ad.set_value(trial_x);
-        s_ad.set_value(trial_s);
         y_ad.set_value(trial_y);
-        z_ad.set_value(trial_z);
+        v_ad.set_value(trial_v);
 
         trial_c_e = c_e_ad.value();
         trial_c_i = c_i_ad.value();
 
         double next_kkt_error = kkt_error(
             gradient_f.value(), jacobian_c_e.value(), trial_c_e,
-            jacobian_c_i.value(), trial_c_i, trial_s, trial_y, trial_z, μ);
+            jacobian_c_i.value(), trial_c_i, trial_y, trial_v, sqrt_μ);
 
         // If the step using αᵐᵃˣ reduced the KKT error, accept it anyway
         if (next_kkt_error <= 0.999 * current_kkt_error) {
@@ -684,40 +719,24 @@ ExitStatus interior_point(
     }
     if (max_step_scaled < 10.0 * std::numeric_limits<double>::epsilon()) {
       α = α_max;
-      ++step_too_small_counter;
-    } else {
-      step_too_small_counter = 0;
     }
 
     // xₖ₊₁ = xₖ + αₖpₖˣ
-    // sₖ₊₁ = sₖ + αₖpₖˢ
-    // yₖ₊₁ = yₖ + αₖᶻpₖʸ
-    // zₖ₊₁ = zₖ + αₖᶻpₖᶻ
+    // yₖ₊₁ = yₖ + αₖpₖʸ
+    // vₖ₊₁ = vₖ + αₖᵛpₖᵛ
     x += α * step.p_x;
-    s += α * step.p_s;
-    y += α_z * step.p_y;
-    z += α_z * step.p_z;
+    y += α * step.p_y;
+    v += α_v * step.p_v;
 
-    // A requirement for the convergence proof is that the "primal-dual barrier
-    // term Hessian" Σₖ does not deviate arbitrarily much from the "primal
-    // Hessian" μⱼSₖ⁻². We ensure this by resetting
-    //
-    //   zₖ₊₁⁽ⁱ⁾ = max(min(zₖ₊₁⁽ⁱ⁾, κ_Σ μⱼ/sₖ₊₁⁽ⁱ⁾), μⱼ/(κ_Σ sₖ₊₁⁽ⁱ⁾))
-    //
-    // for some fixed κ_Σ ≥ 1 after each step. See equation (16) of [2].
-    for (int row = 0; row < z.rows(); ++row) {
-      // Barrier parameter scale factor for inequality constraint Lagrange
-      // multiplier safeguard
-      constexpr double κ_Σ = 1e10;
-
-      z[row] = std::max(std::min(z[row], κ_Σ * μ / s[row]), μ / (κ_Σ * s[row]));
-    }
+    exp_v = v.array().exp().matrix();
+    exp_neg_v = (-v).array().exp().matrix();
+    exp_2v = (2 * v).array().exp().matrix();
 
     // Update autodiff for Jacobians and Hessian
     x_ad.set_value(x);
-    s_ad.set_value(s);
     y_ad.set_value(y);
-    z_ad.set_value(z);
+    v_ad.set_value(v);
+    sqrt_μ_ad.set_value(sqrt_μ);
     A_e = jacobian_c_e.value();
     A_i = jacobian_c_i.value();
     g = gradient_f.value();
@@ -729,25 +748,11 @@ ExitStatus interior_point(
     c_i = c_i_ad.value();
 
     // Update the error estimate
-    E_0 = error_estimate(g, A_e, c_e, A_i, c_i, s, y, z, 0.0);
+    E_0 = error_estimate(g, A_e, c_e, A_i, c_i, y, v, sqrt_μ_min);
     if (E_0 < options.acceptable_tolerance) {
       ++acceptable_iter_counter;
     } else {
       acceptable_iter_counter = 0;
-    }
-
-    // Update the barrier parameter if necessary
-    if (E_0 > options.tolerance) {
-      // Barrier parameter scale factor for tolerance checks
-      constexpr double κ_ε = 10.0;
-
-      // While the error estimate is below the desired threshold for this
-      // barrier parameter value, decrease the barrier parameter further
-      double E_μ = error_estimate(g, A_e, c_e, A_i, c_i, s, y, z, μ);
-      while (μ > μ_min && E_μ <= κ_ε * μ) {
-        update_barrier_parameter_and_reset_filter();
-        E_μ = error_estimate(g, A_e, c_e, A_i, c_i, s, y, z, μ);
-      }
     }
 
     next_iter_prep_profiler.stop();
@@ -758,8 +763,8 @@ ExitStatus interior_point(
       print_iteration_diagnostics(
           iterations, IterationType::NORMAL,
           inner_iter_profiler.current_duration(), E_0, f.value(),
-          c_e.lpNorm<1>() + (c_i - s).lpNorm<1>(), s.dot(z), μ,
-          solver.hessian_regularization(), α, α_max, α_z);
+          c_e.lpNorm<1>() + (c_i - sqrt_μ * exp_neg_v).lpNorm<1>(),
+          sqrt_μ * sqrt_μ, solver.hessian_regularization(), α, α_max, α_v);
     }
 #endif
 
@@ -779,16 +784,6 @@ ExitStatus interior_point(
     if (E_0 > options.tolerance &&
         acceptable_iter_counter == options.max_acceptable_iterations) {
       return ExitStatus::SOLVED_TO_ACCEPTABLE_TOLERANCE;
-    }
-
-    // The search direction has been very small twice, so assume the problem has
-    // been solved as well as possible given finite precision and reduce the
-    // barrier parameter.
-    //
-    // See section 3.9 of [2].
-    if (step_too_small_counter >= 2 && μ > μ_min) {
-      update_barrier_parameter_and_reset_filter();
-      continue;
     }
   }
 

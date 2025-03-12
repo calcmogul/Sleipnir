@@ -268,8 +268,6 @@ static const char *__doc_slp_IterationInfo_g = R"doc(The gradient of the cost fu
 
 static const char *__doc_slp_IterationInfo_iteration = R"doc(The solver iteration.)doc";
 
-static const char *__doc_slp_IterationInfo_s = R"doc(The inequality constraint slack variables.)doc";
-
 static const char *__doc_slp_IterationInfo_x = R"doc(The decision variables.)doc";
 
 static const char *__doc_slp_Jacobian =

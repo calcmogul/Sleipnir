@@ -55,10 +55,12 @@ class RegularizedLDLT {
    * Computes the regularized LDLT factorization of a matrix.
    *
    * @param lhs Left-hand side of the system.
-   * @param μ The barrier parameter for the current interior-point iteration.
+   * @param sqrt_μ Square root of the barrier parameter for the current
+   *   interior-point iteration.
    * @return The factorization.
    */
-  RegularizedLDLT& compute(const Eigen::SparseMatrix<double>& lhs, double μ) {
+  RegularizedLDLT& compute(const Eigen::SparseMatrix<double>& lhs,
+                           double sqrt_μ) {
     // The regularization procedure is based on algorithm B.1 of [1]
 
     // Max density is 50% due to the caller only providing the lower triangle.
@@ -90,7 +92,7 @@ class RegularizedLDLT {
     // or the decomposition failed, regularize the equality constraints
     double γ = (m_info == Eigen::Success && inertia.zero > 0) ||
                        m_info != Eigen::Success
-                   ? 1e-8 * std::pow(μ, 0.25)
+                   ? 1e-8 * std::sqrt(sqrt_μ)
                    : 0.0;
 
     while (true) {
