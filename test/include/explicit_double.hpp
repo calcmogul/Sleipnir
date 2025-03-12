@@ -153,6 +153,9 @@ class ExplicitDouble {
   friend ExplicitDouble log10(const ExplicitDouble& x) {
     return ExplicitDouble{std::log10(x.m_value)};
   }
+  friend ExplicitDouble log1p(const ExplicitDouble& x) {
+    return ExplicitDouble{std::log1p(x.m_value)};
+  }
   friend ExplicitDouble pow(const ExplicitDouble& base,
                             const ExplicitDouble& power) {
     return ExplicitDouble{std::pow(base.m_value, power.m_value)};

@@ -3,6 +3,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 
 #include <Eigen/Core>
 #include <Eigen/SparseCore>
@@ -85,25 +86,42 @@ Scalar kkt_error(const Eigen::Vector<Scalar, Eigen::Dynamic>& g,
 /// @param c_e Equality constraints cₑ(x).
 /// @param A_i Inequality constraint Jacobian Aᵢ(x).
 /// @param c_i Inequality constraints cᵢ(x).
-/// @param s Inequality constraint slack variables.
 /// @param y Equality constraint dual variables.
-/// @param z Inequality constraint dual variables.
-/// @param μ Barrier parameter.
+/// @param v Log-domain variables.
+/// @param sqrt_μ Square root of the barrier parameter for the iterate.
+/// @param μ_target The barrier parameter against which to measure
+///     complementarity. Pass zero for the error of the original problem and μ
+///     for the error of the barrier subproblem.
 template <typename Scalar, KKTErrorType T>
 Scalar kkt_error(const Eigen::Vector<Scalar, Eigen::Dynamic>& g,
                  const Eigen::SparseMatrix<Scalar>& A_e,
                  const Eigen::Vector<Scalar, Eigen::Dynamic>& c_e,
                  const Eigen::SparseMatrix<Scalar>& A_i,
                  const Eigen::Vector<Scalar, Eigen::Dynamic>& c_i,
-                 const Eigen::Vector<Scalar, Eigen::Dynamic>& s,
                  const Eigen::Vector<Scalar, Eigen::Dynamic>& y,
-                 const Eigen::Vector<Scalar, Eigen::Dynamic>& z, Scalar μ) {
+                 const Eigen::Vector<Scalar, Eigen::Dynamic>& v, Scalar sqrt_μ,
+                 Scalar μ_target) {
   // The KKT conditions from docs/algorithms.md:
   //
   //   ∇f − Aₑᵀy − Aᵢᵀz = 0
   //   Sz − μe = 0
   //   cₑ = 0
   //   cᵢ − s = 0
+  //
+  // where
+  //
+  //   s = √(μ)e⁻ᵛ
+  //   z = √(μ)eᵛ
+  //
+  // The log-domain parameterization satisfies Sz = μe exactly, so the
+  // complementarity error relative to μ_target is |μ − μ_target|.
+
+  using std::abs;
+
+  const Eigen::Vector<Scalar, Eigen::Dynamic> s =
+      sqrt_μ * (-v).array().exp().matrix();
+  const Eigen::Vector<Scalar, Eigen::Dynamic> z =
+      sqrt_μ * v.array().exp().matrix();
 
   if constexpr (T == KKTErrorType::INF_NORM_SCALED) {
     // See equation (5) of [2].
@@ -119,29 +137,22 @@ Scalar kkt_error(const Eigen::Vector<Scalar, Eigen::Dynamic>& g,
     Scalar s_c =
         std::max(s_max, z.template lpNorm<1>() / Scalar(z.rows())) / s_max;
 
-    const auto S = s.asDiagonal();
-    const Eigen::Vector<Scalar, Eigen::Dynamic> μe =
-        Eigen::Vector<Scalar, Eigen::Dynamic>::Constant(s.rows(), μ);
-
     // ‖∇f − Aₑᵀy − Aᵢᵀz‖_∞ / s_d
     // ‖Sz − μe‖_∞ / s_c
     // ‖cₑ‖_∞
     // ‖cᵢ − s‖_∞
-    return std::max({(g - A_e.transpose() * y - A_i.transpose() * z)
-                             .template lpNorm<Eigen::Infinity>() /
-                         s_d,
-                     (S * z - μe).template lpNorm<Eigen::Infinity>() / s_c,
-                     c_e.template lpNorm<Eigen::Infinity>(),
-                     (c_i - s).template lpNorm<Eigen::Infinity>()});
+    return std::max(
+        {(g - A_e.transpose() * y - A_i.transpose() * z)
+                 .template lpNorm<Eigen::Infinity>() /
+             s_d,
+         z.rows() > 0 ? abs(sqrt_μ * sqrt_μ - μ_target) / s_c : Scalar(0),
+         c_e.template lpNorm<Eigen::Infinity>(),
+         (c_i - s).template lpNorm<Eigen::Infinity>()});
   } else if constexpr (T == KKTErrorType::ONE_NORM) {
-    const auto S = s.asDiagonal();
-    const Eigen::Vector<Scalar, Eigen::Dynamic> μe =
-        Eigen::Vector<Scalar, Eigen::Dynamic>::Constant(s.rows(), μ);
-
     return (g - A_e.transpose() * y - A_i.transpose() * z)
                .template lpNorm<1>() +
-           (S * z - μe).template lpNorm<1>() + c_e.template lpNorm<1>() +
-           (c_i - s).template lpNorm<1>();
+           Scalar(z.rows()) * abs(sqrt_μ * sqrt_μ - μ_target) +
+           c_e.template lpNorm<1>() + (c_i - s).template lpNorm<1>();
   }
 }
 
@@ -209,10 +220,11 @@ Scalar unscaled_kkt_error(const ProblemScaling<Scalar>& scaling,
 /// @param c_e Scaled equality constraints D_cₑ·cₑ(x).
 /// @param A_i Scaled inequality constraint Jacobian D_cᵢ·Aᵢ(x).
 /// @param c_i Scaled inequality constraints D_cᵢ·cᵢ(x).
-/// @param s Scaled inequality constraint slack variables.
 /// @param y Scaled equality constraint dual variables.
-/// @param z Scaled inequality constraint dual variables.
-/// @param μ Scaled barrier parameter.
+/// @param v Scaled log-domain variables.
+/// @param sqrt_μ Square root of the scaled barrier parameter.
+/// @param μ_target The scaled barrier parameter against which to measure
+///     complementarity.
 template <typename Scalar, KKTErrorType T>
 Scalar unscaled_kkt_error(const ProblemScaling<Scalar>& scaling,
                           const Eigen::Vector<Scalar, Eigen::Dynamic>& g,
@@ -220,15 +232,17 @@ Scalar unscaled_kkt_error(const ProblemScaling<Scalar>& scaling,
                           const Eigen::Vector<Scalar, Eigen::Dynamic>& c_e,
                           const Eigen::SparseMatrix<Scalar>& A_i,
                           const Eigen::Vector<Scalar, Eigen::Dynamic>& c_i,
-                          const Eigen::Vector<Scalar, Eigen::Dynamic>& s,
                           const Eigen::Vector<Scalar, Eigen::Dynamic>& y,
-                          const Eigen::Vector<Scalar, Eigen::Dynamic>& z,
-                          Scalar μ) {
+                          const Eigen::Vector<Scalar, Eigen::Dynamic>& v,
+                          Scalar sqrt_μ, Scalar μ_target) {
   using DenseVector = Eigen::Vector<Scalar, Eigen::Dynamic>;
   using SparseMatrix = Eigen::SparseMatrix<Scalar>;
 
+  using std::log;
+  using std::sqrt;
+
   if (scaling.is_identity()) {
-    return kkt_error<Scalar, T>(g, A_e, c_e, A_i, c_i, s, y, z, μ);
+    return kkt_error<Scalar, T>(g, A_e, c_e, A_i, c_i, y, v, sqrt_μ, μ_target);
   }
 
   const Scalar inv_d_f = Scalar(1) / scaling.f;
@@ -240,14 +254,27 @@ Scalar unscaled_kkt_error(const ProblemScaling<Scalar>& scaling,
   const DenseVector c_e_unscaled = inv_d_c_e.cwiseProduct(c_e);
   const SparseMatrix A_i_unscaled = inv_d_c_i.asDiagonal() * A_i;
   const DenseVector c_i_unscaled = inv_d_c_i.cwiseProduct(c_i);
-  const DenseVector s_unscaled = inv_d_c_i.cwiseProduct(s);
   const DenseVector y_unscaled = scaling.c_e.cwiseProduct(y) * inv_d_f;
-  const DenseVector z_unscaled = scaling.c_i.cwiseProduct(z) * inv_d_f;
-  const Scalar μ_unscaled = inv_d_f * μ;
+
+  // The unscaled slacks and duals are
+  //
+  //   sᵤ = D_cᵢ⁻¹s
+  //   zᵤ = D_cᵢz/d_f
+  //
+  // so sᵤzᵤ = μ/d_f. Matching sᵤ = √(μᵤ)exp(−vᵤ) and zᵤ = √(μᵤ)exp(vᵤ) gives
+  //
+  //   √(μᵤ) = √(μ/d_f)
+  //   vᵤ = v + ln(D_cᵢ) − ½ln(d_f)
+  const DenseVector v_unscaled =
+      (v.array() + scaling.c_i.array().log() - Scalar(0.5) * log(scaling.f))
+          .matrix();
+  const Scalar sqrt_μ_unscaled = sqrt_μ * sqrt(inv_d_f);
+
+  const Scalar μ_target_unscaled = μ_target * inv_d_f;
 
   return kkt_error<Scalar, T>(g_unscaled, A_e_unscaled, c_e_unscaled,
-                              A_i_unscaled, c_i_unscaled, s_unscaled,
-                              y_unscaled, z_unscaled, μ_unscaled);
+                              A_i_unscaled, c_i_unscaled, y_unscaled,
+                              v_unscaled, sqrt_μ_unscaled, μ_target_unscaled);
 }
 
 }  // namespace slp

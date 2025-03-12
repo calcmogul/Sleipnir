@@ -256,7 +256,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
   // Print initial iterate diagnostics
   if (options.diagnostics) {
     print_initial_iterate_diagnostics(E_0, f, c_e.template lpNorm<1>(),
-                                      Scalar(0), Scalar(0));
+                                      Scalar(0));
   }
 
   while (E_0 > Scalar(options.tolerance)) {
@@ -271,7 +271,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
 
     // Call iteration callbacks
     for (const auto& callback : iteration_callbacks) {
-      if (callback({iterations, x, {}, y, {}, g, H, A_e, {}})) {
+      if (callback({iterations, x, y, {}, g, H, A_e, {}})) {
         return ExitStatus::CALLBACK_REQUESTED_STOP;
       }
     }
@@ -392,7 +392,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
                   soc_profiler.current_duration(),
                   kkt_error<Scalar, KKTErrorType::INF_NORM_SCALED>(
                       g, A_e, trial_c_e, trial_y),
-                  trial_f, trial_c_e.template lpNorm<1>(), Scalar(0), Scalar(0),
+                  trial_f, trial_c_e.template lpNorm<1>(), Scalar(0),
                   solver.hessian_regularization(),
                   solver.constraint_jacobian_regularization(),
                   soc_step.p_x.template lpNorm<Eigen::Infinity>(),
@@ -526,7 +526,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
                filter.try_add(initial_entry, trial_entry, D_ϕ_restoration,
                               Scalar(1));
       });
-      auto status = feasibility_restoration<Scalar>(matrices, callbacks,
+      auto status = feasibility_restoration<Scalar>(matrices, true, callbacks,
                                                     options, x, y, iterations);
 
       if (status != ExitStatus::SUCCESS) {
@@ -565,7 +565,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
       print_iteration_diagnostics(iterations, IterationType::NORMAL,
                                   inner_iter_profiler.current_duration(), E_0,
                                   f, c_e.template lpNorm<1>(), Scalar(0),
-                                  Scalar(0), solver.hessian_regularization(),
+                                  solver.hessian_regularization(),
                                   solver.constraint_jacobian_regularization(),
                                   step.p_x.template lpNorm<Eigen::Infinity>(),
                                   step.p_y.template lpNorm<Eigen::Infinity>(),
