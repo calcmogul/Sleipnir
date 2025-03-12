@@ -168,7 +168,7 @@ ExitStatus newton(
 
     // Call iteration callbacks
     for (const auto& callback : iteration_callbacks) {
-      if (callback({iterations, x, {}, {}, {}, g, H, {}, {}})) {
+      if (callback({iterations, x, {}, {}, g, H, {}, {}})) {
         return ExitStatus::CALLBACK_REQUESTED_STOP;
       }
     }
@@ -260,7 +260,7 @@ ExitStatus newton(
     if (options.diagnostics) {
       print_iteration_diagnostics(iterations, IterationType::NORMAL,
                                   inner_iter_profiler.current_duration(), E_0,
-                                  f, Scalar(0), Scalar(0), Scalar(0),
+                                  f, Scalar(0), Scalar(0),
                                   solver.hessian_regularization(), α, α_max,
                                   α_reduction_factor, Scalar(1));
     }
