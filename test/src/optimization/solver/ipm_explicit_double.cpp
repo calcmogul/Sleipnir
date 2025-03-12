@@ -15,7 +15,7 @@
 #include "explicit_double.hpp"
 
 template slp::ExitStatus slp::ipm(
-    const IPMMatrixCallbacks<ExplicitDouble>& matrix_callbacks,
+    const IPMMatrixCallbacks<ExplicitDouble>& matrix_callbacks, bool is_nlp,
     std::span<
         std::function<ControlFlow(const IterationInfo<ExplicitDouble>& info)>>
         iteration_callbacks,
@@ -26,7 +26,7 @@ template slp::ExitStatus slp::ipm(
     Eigen::VectorX<ExplicitDouble>& x);
 
 template slp::ExitStatus slp::ipm(
-    const IPMMatrixCallbacks<ExplicitDouble>& matrix_callbacks,
+    const IPMMatrixCallbacks<ExplicitDouble>& matrix_callbacks, bool is_nlp,
     std::span<
         std::function<ControlFlow(const IterationInfo<ExplicitDouble>& info)>>
         iteration_callbacks,
@@ -34,4 +34,5 @@ template slp::ExitStatus slp::ipm(
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
     const Eigen::ArrayX<bool>& bound_constraint_mask,
 #endif
-    IPMIterates<ExplicitDouble>& iterates, ExplicitDouble& μ, int& iterations);
+    IPMIterates<ExplicitDouble>& iterates, ExplicitDouble& sqrt_μ,
+    int& iterations);

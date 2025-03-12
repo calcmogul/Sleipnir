@@ -211,9 +211,8 @@ ExitStatus sqp(
 
   // Prints initial iterate diagnostics now and closes the iterate diagnostics
   // table when the solver exits
-  IterateDiagnosticsTable table{
-      options.diagnostics,       E_0,       f,
-      constraint_violation(c_e), Scalar(0), Scalar(0)};
+  IterateDiagnosticsTable table{options.diagnostics, E_0, f,
+                                constraint_violation(c_e), Scalar(0)};
 
   while (E_0 > options.tolerance) {
     ScopedTimeTracer inner_iter_tracer{diagnostics[ITERATION]};
@@ -227,7 +226,7 @@ ExitStatus sqp(
 
     // Call iteration callbacks
     for (const auto& callback : iteration_callbacks) {
-      if (callback({iterations, x, {}, y, {}, g, H, A_e, {}}) ==
+      if (callback({iterations, x, y, {}, g, H, A_e, {}}) ==
           ControlFlow::BREAK) {
         return ExitStatus::CALLBACK_REQUESTED_STOP;
       }
@@ -326,7 +325,7 @@ ExitStatus sqp(
                       trial_iterates, trial_function_values, first_derivatives,
                       options.tolerance),
                   trial_f, constraint_violation(trial_c_e), Scalar(0),
-                  Scalar(0), kkt_system.hessian_regularization(),
+                  kkt_system.hessian_regularization(),
                   kkt_system.constraint_jacobian_regularization(),
                   soc_step.primal_inf_norm(), soc_step.dual_inf_norm(), α_soc,
                   Scalar(1), α_reduction_factor, Scalar(1));
@@ -478,7 +477,7 @@ ExitStatus sqp(
         }
       });
       auto status = feasibility_restoration<Scalar>(
-          matrices, callbacks, options, iterates, iterations);
+          matrices, true, callbacks, options, iterates, iterations);
 
       if (status != ExitStatus::SUCCESS) {
         // Report failure
@@ -524,7 +523,7 @@ ExitStatus sqp(
     if (options.diagnostics) {
       print_iterate_diagnostics(iterations, IterationType::NORMAL,
                                 inner_iter_tracer.current_duration(), E_0, f,
-                                constraint_violation(c_e), Scalar(0), Scalar(0),
+                                constraint_violation(c_e), Scalar(0),
                                 kkt_system.hessian_regularization(),
                                 kkt_system.constraint_jacobian_regularization(),
                                 step.primal_inf_norm(), step.dual_inf_norm(), α,

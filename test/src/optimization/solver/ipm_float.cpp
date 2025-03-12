@@ -13,7 +13,7 @@
 #include <sleipnir/optimization/solver/util/iterates.hpp>
 
 template slp::ExitStatus slp::ipm(
-    const IPMMatrixCallbacks<float>& matrix_callbacks,
+    const IPMMatrixCallbacks<float>& matrix_callbacks, bool is_nlp,
     std::span<std::function<ControlFlow(const IterationInfo<float>& info)>>
         iteration_callbacks,
     const Options<float>& options,
@@ -23,11 +23,11 @@ template slp::ExitStatus slp::ipm(
     Eigen::Vector<float, Eigen::Dynamic>& x);
 
 template slp::ExitStatus slp::ipm(
-    const IPMMatrixCallbacks<float>& matrix_callbacks,
+    const IPMMatrixCallbacks<float>& matrix_callbacks, bool is_nlp,
     std::span<std::function<ControlFlow(const IterationInfo<float>& info)>>
         iteration_callbacks,
     const Options<float>& options, bool in_feasibility_restoration,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
     const Eigen::ArrayX<bool>& bound_constraint_mask,
 #endif
-    IPMIterates<float>& iterates, float& μ, int& iterations);
+    IPMIterates<float>& iterates, float& sqrt_μ, int& iterations);

@@ -171,17 +171,14 @@ class SQPKKTSystem {
   gch::small_vector<Eigen::Triplet<Scalar>> m_triplets;
 };
 
-/// The interior-point method's Newton-KKT system.
+/// The log-domain interior-point method's Newton-KKT system.
 ///
 /// ```
-/// [H + AᵢᵀΣAᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(μS⁻¹e − Σ(cᵢ − s))]
-/// [    Aₑ       0 ][−pʸ]    [                cₑ                ]
+/// [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
+/// [        Aₑ           0 ][−pʸ]    [               cₑ                ]
 ///
-/// pˢ = cᵢ − s + Aᵢpˣ
-/// pᶻ = μS⁻¹e − z − Σpˢ
+/// pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)
 /// ```
-///
-/// where S = diag(s), Z = diag(z), and Σ = S⁻¹Z.
 ///
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
@@ -220,21 +217,19 @@ class IPMKKTSystem {
   /// @param H The Hessian of the Lagrangian.
   /// @param A_e The equality constraint Jacobian.
   /// @param A_i The inequality constraint Jacobian.
-  /// @param s The inequality constraint slack variables.
-  /// @param z The inequality constraint dual variables.
+  /// @param exp_v eᵛ, where v is the log-domain variables.
   void build(const SparseMatrix& H, const SparseMatrix& A_e,
-             const SparseMatrix& A_i, const DenseVector& s,
-             const DenseVector& z) {
-    // Σ = S⁻¹Z
-    m_Σ = SparseMatrix{s.cwiseInverse().asDiagonal() * z.asDiagonal()};
+             const SparseMatrix& A_i, const DenseVector& exp_v) {
+    m_exp_v = exp_v;
+    m_exp_2v = exp_v.cwiseProduct(exp_v);
 
-    // lhs = [H + AᵢᵀΣAᵢ  Aₑᵀ]
-    //       [    Aₑ       0 ]
+    // lhs = [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ]
+    //       [        Aₑ           0 ]
     //
     // Don't assign upper triangle because solver only uses lower triangle.
     const SparseMatrix top_left =
-        H +
-        (A_i.transpose() * m_Σ * A_i).template triangularView<Eigen::Lower>();
+        H + (A_i.transpose() * m_exp_2v.asDiagonal() * A_i)
+                .template triangularView<Eigen::Lower>();
     m_triplets.clear();
     m_triplets.reserve(top_left.nonZeros() + A_e.nonZeros());
     append_as_triplets(m_triplets, 0, 0, {top_left, A_e});
@@ -253,24 +248,20 @@ class IPMKKTSystem {
   /// @param A_e The equality constraint Jacobian.
   /// @param A_i The inequality constraint Jacobian.
   /// @param y The equality constraint dual variables.
-  /// @param s The inequality constraint slack variables.
-  /// @param z The inequality constraint dual variables.
-  /// @param μ The barrier parameter.
+  /// @param sqrt_μ Square root of the barrier parameter.
   /// @param c_e The equality constraint values.
-  /// @param c_i_minus_s The inequality constraint values minus the slack
-  ///     variables.
+  /// @param c_i The inequality constraint values.
   /// @return The step.
   IPMStep<Scalar> solve(const SparseVector& g, const SparseMatrix& A_e,
                         const SparseMatrix& A_i, const DenseVector& y,
-                        const DenseVector& s, const DenseVector& z, Scalar μ,
-                        const DenseVector& c_e,
-                        const DenseVector& c_i_minus_s) const {
-    // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(μS⁻¹e − Σ(cᵢ − s))]
-    //        [                cₑ                ]
+                        Scalar sqrt_μ, const DenseVector& c_e,
+                        const DenseVector& c_i) const {
+    // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
+    //        [               cₑ                ]
     DenseVector rhs{g.rows() + y.rows()};
-    rhs.segment(0, g.rows()) =
-        -g + A_e.transpose() * y +
-        A_i.transpose() * (μ * s.cwiseInverse() - m_Σ * c_i_minus_s);
+    rhs.segment(0, g.rows()) = -g + A_e.transpose() * y +
+                               A_i.transpose() * (Scalar(2) * sqrt_μ * m_exp_v -
+                                                  m_exp_2v.asDiagonal() * c_i);
     rhs.segment(g.rows(), y.rows()) = -c_e;
 
     // p = [ pˣ]
@@ -281,10 +272,56 @@ class IPMKKTSystem {
     step.p_x = p.segment(0, g.rows());
     step.p_y = -p.segment(g.rows(), y.rows());
 
-    // pˢ = cᵢ − s + Aᵢpˣ
-    // pᶻ = μS⁻¹e − z − Σpˢ
-    step.p_s = c_i_minus_s + A_i * step.p_x;
-    step.p_z = μ * s.cwiseInverse() - z - m_Σ * step.p_s;
+    // pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)
+    step.p_v = DenseVector::Ones(c_i.rows()) - Scalar(1) / sqrt_μ *
+                                                   m_exp_v.asDiagonal() *
+                                                   (A_i * step.p_x + c_i);
+
+    return step;
+  }
+
+  /// Solves the system with the last factorization for a second-order
+  /// correction.
+  ///
+  /// Since e²ᵛ∘s = √(μ)eᵛ, the rhs can be written in terms of the inequality
+  /// constraint residual cᵢ − s.
+  ///
+  /// ```
+  /// rhs = −[∇f − Aₑᵀy − Aᵢᵀ(√(μ)eᵛ − e²ᵛ∘(cᵢ − s)ˢᵒᶜ)]
+  ///        [                  cₑˢᵒᶜ                  ]
+  ///
+  /// pᵛ = −1/√(μ) eᵛ∘(Aᵢpˣ + (cᵢ − s)ˢᵒᶜ)
+  /// ```
+  ///
+  /// @param g The cost function gradient.
+  /// @param A_e The equality constraint Jacobian.
+  /// @param A_i The inequality constraint Jacobian.
+  /// @param y The equality constraint dual variables.
+  /// @param sqrt_μ Square root of the barrier parameter.
+  /// @param c_e_soc The corrected equality constraint values.
+  /// @param c_i_minus_s_soc The corrected inequality constraint values minus
+  ///     the slack variables.
+  /// @return The step.
+  IPMStep<Scalar> solve_soc(const SparseVector& g, const SparseMatrix& A_e,
+                            const SparseMatrix& A_i, const DenseVector& y,
+                            Scalar sqrt_μ, const DenseVector& c_e_soc,
+                            const DenseVector& c_i_minus_s_soc) const {
+    DenseVector rhs{g.rows() + y.rows()};
+    rhs.segment(0, g.rows()) =
+        -g + A_e.transpose() * y +
+        A_i.transpose() *
+            (sqrt_μ * m_exp_v - m_exp_2v.asDiagonal() * c_i_minus_s_soc);
+    rhs.segment(g.rows(), y.rows()) = -c_e_soc;
+
+    // p = [ pˣ]
+    //     [−pʸ]
+    const DenseVector p = m_solver.solve(rhs);
+
+    IPMStep<Scalar> step;
+    step.p_x = p.segment(0, g.rows());
+    step.p_y = -p.segment(g.rows(), y.rows());
+    step.p_v = -(Scalar(1) / sqrt_μ) * m_exp_v.asDiagonal() *
+               (A_i * step.p_x + c_i_minus_s_soc);
 
     return step;
   }
@@ -306,7 +343,8 @@ class IPMKKTSystem {
 
  private:
   KKTSolver<Scalar> m_solver;
-  SparseMatrix m_Σ;
+  DenseVector m_exp_v;
+  DenseVector m_exp_2v;
   SparseMatrix m_lhs;
   gch::small_vector<Eigen::Triplet<Scalar>> m_triplets;
 };

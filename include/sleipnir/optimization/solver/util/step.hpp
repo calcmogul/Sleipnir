@@ -116,19 +116,16 @@ struct IPMStep {
 
   /// Decision variable primal step.
   DenseVector p_x;
-  /// Inequality constraint slack variable primal step.
-  DenseVector p_s;
   /// Equality constraint dual step.
   DenseVector p_y;
-  /// Inequality constraint dual step.
-  DenseVector p_z;
+  /// Log-domain variable step.
+  DenseVector p_v;
 
   /// Returns the infinity norm of the primal step.
   ///
   /// @return The infinity norm of the primal step.
   Scalar primal_inf_norm() const {
-    return std::max(p_x.template lpNorm<Eigen::Infinity>(),
-                    p_s.template lpNorm<Eigen::Infinity>());
+    return p_x.template lpNorm<Eigen::Infinity>();
   }
 
   /// Returns the infinity norm of the dual step.
@@ -136,7 +133,7 @@ struct IPMStep {
   /// @return The infinity norm of the dual step.
   Scalar dual_inf_norm() const {
     return std::max(p_y.template lpNorm<Eigen::Infinity>(),
-                    p_z.template lpNorm<Eigen::Infinity>());
+                    p_v.template lpNorm<Eigen::Infinity>());
   }
 
   /// Returns the step size below which the primal step is negligible relative
@@ -147,7 +144,8 @@ struct IPMStep {
   /// @return The step size below which the primal step is negligible relative
   ///     to the iterate.
   Scalar tiny_step_size(const DenseVector& x, const DenseVector& s) const {
-    // A primal step α[pˣ pˢ] is negligible if
+    // The slack variables take a linear step in s-space with pˢ = −s∘pᵛ. A
+    // primal step α[pˣ pˢ] is negligible if
     //
     //   max(‖αpˣ/(1 + |x|)‖_∞, ‖αpˢ/(1 + |s|)‖_∞) < 10ε
     //
@@ -160,12 +158,13 @@ struct IPMStep {
     //
     //   α < 10ε / max(‖pˣ/(1 + |x|)‖_∞, ‖pˢ/(1 + |s|)‖_∞)
     return Scalar(10) * std::numeric_limits<Scalar>::epsilon() /
-           std::max((p_x.array().abs() / (Scalar(1) + x.array().abs()))
-                        .matrix()
-                        .template lpNorm<Eigen::Infinity>(),
-                    (p_s.array().abs() / (Scalar(1) + s.array().abs()))
-                        .matrix()
-                        .template lpNorm<Eigen::Infinity>());
+           std::max(
+               (p_x.array().abs() / (Scalar(1) + x.array().abs()))
+                   .matrix()
+                   .template lpNorm<Eigen::Infinity>(),
+               ((s.array() * p_v.array()).abs() / (Scalar(1) + s.array().abs()))
+                   .matrix()
+                   .template lpNorm<Eigen::Infinity>());
   }
 };
 

@@ -49,14 +49,18 @@ struct FilterEntry {
 
   /// Constructs an interior-point method filter entry.
   ///
-  /// @param s The inequality constraint slack variables.
+  /// @param v The log-domain variables.
   /// @param function_values The cost function and constraint values.
-  /// @param μ The barrier parameter.
-  FilterEntry(const DenseVector& s,
-              const IPMFunctionValues<Scalar>& function_values, Scalar μ)
-      : FilterEntry{function_values.f - μ * s.array().log().sum(),
-                    slp::constraint_violation(function_values.c_e,
-                                              function_values.c_i, s)} {}
+  /// @param sqrt_μ Square root of the barrier parameter.
+  FilterEntry(const DenseVector& v,
+              const IPMFunctionValues<Scalar>& function_values, Scalar sqrt_μ) {
+    // s = √(μ)e⁻ᵛ
+    DenseVector s = sqrt_μ * (-v).array().exp().matrix();
+
+    cost = function_values.f - sqrt_μ * sqrt_μ * s.array().log().sum();
+    constraint_violation =
+        slp::constraint_violation(function_values.c_e, function_values.c_i, s);
+  }
 
   /// Returns true if this filter entry is dominated by another.
   ///

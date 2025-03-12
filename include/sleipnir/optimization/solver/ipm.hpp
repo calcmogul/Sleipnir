@@ -7,6 +7,7 @@
 #include <cmath>  // IWYU pragma: keep
 #include <functional>
 #include <limits>
+#include <numbers>
 #include <optional>
 #include <span>
 #include <utility>
@@ -27,11 +28,11 @@
 #include "sleipnir/optimization/solver/util/feasibility_restoration_cycle_detector.hpp"
 #include "sleipnir/optimization/solver/util/filter.hpp"
 #include "sleipnir/optimization/solver/util/first_derivatives.hpp"
-#include "sleipnir/optimization/solver/util/fraction_to_the_boundary_rule.hpp"
 #include "sleipnir/optimization/solver/util/function_values.hpp"
 #include "sleipnir/optimization/solver/util/iterates.hpp"
 #include "sleipnir/optimization/solver/util/kkt_error.hpp"
 #include "sleipnir/optimization/solver/util/kkt_system.hpp"
+#include "sleipnir/optimization/solver/util/step.hpp"
 #include "sleipnir/optimization/solver/util/time_trace.hpp"
 #include "sleipnir/util/assert.hpp"
 #include "sleipnir/util/print_diagnostics.hpp"
@@ -41,8 +42,8 @@
 
 // See docs/algorithms.md#Works_cited for citation definitions.
 //
-// See docs/algorithms.md#Interior-point_method for a derivation of the
-// interior-point method formulation being used.
+// See docs/algorithms.md#Log-domain_interior-point_method for a derivation of
+// the interior-point method formulation being used.
 
 namespace slp {
 
@@ -62,6 +63,10 @@ namespace slp {
 ///
 /// @tparam Scalar Scalar type.
 /// @param[in] matrix_callbacks Matrix callbacks.
+/// @param[in] is_nlp If true, the solver uses a more conservative barrier
+///     parameter reduction strategy that's more reliable on NLPs. Pass false
+///     for problems with quadratic or lower-order cost and linear or
+///     lower-order constraints.
 /// @param[in] iteration_callbacks The list of callbacks to call at the
 ///     beginning of each iteration.
 /// @param[in] options Solver options.
@@ -70,7 +75,7 @@ namespace slp {
 /// @return The exit status.
 template <typename Scalar>
 ExitStatus ipm(
-    const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
+    const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
     std::span<std::function<ControlFlow(const IterationInfo<Scalar>& info)>>
         iteration_callbacks,
     const Options<Scalar>& options,
@@ -80,23 +85,19 @@ ExitStatus ipm(
     Eigen::VectorX<Scalar>& x) {
   using DenseVector = Eigen::VectorX<Scalar>;
 
-  const DenseVector c_i = matrix_callbacks.c_i(x);
-
   IPMIterates<Scalar> iterates{
       .x = std::move(x),
-      // If cᵢ(x) is sufficiently feasible, start the constraint with zero
-      // violation. Otherwise, make Σ = S⁻¹Z ≈ I.
-      .s = (c_i.array() >= Scalar(1e-2)).select(c_i, Scalar(1)),
       .y = DenseVector::Zero(matrix_callbacks.num_equality_constraints),
-      .z = DenseVector::Ones(matrix_callbacks.num_inequality_constraints)};
-  Scalar μ = Scalar(0.1) * matrix_callbacks.scaling.f;
+      .v = DenseVector::Zero(matrix_callbacks.num_inequality_constraints)};
+  Scalar sqrt_μ = Scalar(0.1) * matrix_callbacks.scaling.f;
   int iterations = 0;
 
-  const auto status = ipm(matrix_callbacks, iteration_callbacks, options, false,
+  const auto status =
+      ipm(matrix_callbacks, is_nlp, iteration_callbacks, options, false,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
-                          bound_constraint_mask,
+          bound_constraint_mask,
 #endif
-                          iterates, μ, iterations);
+          iterates, sqrt_μ, iterations);
 
   x = std::move(iterates.x);
 
@@ -119,6 +120,10 @@ ExitStatus ipm(
 ///
 /// @tparam Scalar Scalar type.
 /// @param[in] matrix_callbacks Matrix callbacks.
+/// @param[in] is_nlp If true, the solver uses a more conservative barrier
+///     parameter reduction strategy that's more reliable on NLPs. Pass false
+///     for problems with quadratic or lower-order cost and linear or
+///     lower-order constraints.
 /// @param[in] iteration_callbacks The list of callbacks to call at the
 ///     beginning of each iteration.
 /// @param[in] options Solver options.
@@ -126,26 +131,27 @@ ExitStatus ipm(
 ///     restoration mode.
 /// @param[in,out] iterates The initial guess and output location for the
 ///     iterates.
-/// @param[in,out] μ The initial guess and output location for the barrier
+/// @param[in,out] sqrt_μ The initial guess and output location for the barrier
 ///     parameter.
 /// @param[in,out] iterations The iteration counter.
 /// @return The exit status.
 template <typename Scalar>
 ExitStatus ipm(
-    const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
+    const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
     std::span<std::function<ControlFlow(const IterationInfo<Scalar>& info)>>
         iteration_callbacks,
     const Options<Scalar>& options, bool in_feasibility_restoration,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
     const Eigen::ArrayX<bool>& bound_constraint_mask,
 #endif
-    IPMIterates<Scalar>& iterates, Scalar& μ, int& iterations) {
+    IPMIterates<Scalar>& iterates, Scalar& sqrt_μ, int& iterations) {
   using DenseVector = Eigen::VectorX<Scalar>;
   using SparseMatrix = Eigen::SparseMatrix<Scalar>;
 
   using std::isfinite;
+  using std::sqrt;
 
-  auto& [x, s, y, z] = iterates;
+  auto& [x, y, v] = iterates;
 
   const auto solve_start_time = std::chrono::steady_clock::now();
 
@@ -190,7 +196,7 @@ ExitStatus ipm(
       .g = matrices.g(x), .A_e = matrices.A_e(x), .A_i = matrices.A_i(x)};
   auto& [f, c_e, c_i] = function_values;
   auto& [g, A_e, A_i] = first_derivatives;
-  SparseMatrix H = matrices.H(x, y, z);
+  SparseMatrix H = matrices.H(x, y, v, sqrt_μ);
 
   // Ensure matrix callback dimensions are consistent
   slp_assert(g.rows() == matrices.num_decision_variables);
@@ -204,7 +210,7 @@ ExitStatus ipm(
   slp_assert(A_i.cols() == matrices.num_decision_variables);
 
   IPMIterates<Scalar> trial_iterates;
-  auto& [trial_x, trial_s, trial_y, trial_z] = trial_iterates;
+  auto& [trial_x, trial_y, trial_v] = trial_iterates;
 
   IPMFunctionValues<Scalar> trial_function_values;
   auto& [trial_f, trial_c_e, trial_c_i] = trial_function_values;
@@ -224,21 +230,28 @@ ExitStatus ipm(
     return ExitStatus::NONFINITE_INITIAL_GUESS;
   }
 
+  // Barrier parameter minimum
+  const Scalar sqrt_μ_min =
+      matrices.scaling.f * sqrt(options.tolerance / Scalar(10));
+
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
   // We set sʲ = cᵢʲ(x) for each bound inequality constraint index j
-  s = bound_constraint_mask.select(c_i, s);
+  //
+  //   cᵢ − √(μ)e⁻ᵛ = 0
+  //   √(μ)e⁻ᵛ = cᵢ
+  //   e⁻ᵛ = 1/√(μ) cᵢ
+  //   −v = ln(1/√(μ) cᵢ)
+  //   v = −ln(1/√(μ) cᵢ)
+  v = bound_constraint_mask.select(
+      -(c_i * (Scalar(1) / sqrt_μ_min)).array().log().matrix(), v);
 #endif
 
-  // Barrier parameter minimum
-  const Scalar μ_min = matrices.scaling.f * options.tolerance / Scalar(10);
-
-  // Fraction-to-the-boundary rule scale factor minimum
-  constexpr Scalar τ_min(0.99);
-
-  // Fraction-to-the-boundary rule scale factor τ
-  Scalar τ = τ_min;
-
-  IPMKKTSystem<Scalar> kkt_system{H, A_e, A_i};
+  // eᵛ
+  DenseVector exp_v{v.array().exp().matrix()};
+  // e⁻ᵛ
+  DenseVector exp_neg_v = exp_v.cwiseInverse();
+  // s = √(μ)e⁻ᵛ
+  DenseVector s = sqrt_μ * exp_neg_v;
 
   Filter<Scalar> filter{constraint_violation(c_e, c_i, s)};
 
@@ -248,25 +261,162 @@ ExitStatus ipm(
   // subproblem converges.
   Scalar fallback_kkt_error = std::numeric_limits<Scalar>::infinity();
 
+  IPMKKTSystem<Scalar> kkt_system{H, A_e, A_i};
+
+  setup_tracer.stop();
+
+  auto build_and_factorize_kkt_matrix = [&]() -> bool {
+    PhaseTimeTracer phase_tracer{diagnostics[KKT_MATRIX_BUILD]};
+
+    kkt_system.build(H, A_e, A_i, exp_v);
+
+    phase_tracer.next(diagnostics[KKT_MATRIX_FACTOR]);
+
+    return kkt_system.factorize();
+  };
+
+  // Solves the Newton-KKT system for the step with the given √(μ)
+  auto compute_step = [&](Scalar r) -> IPMStep<Scalar> {
+    return kkt_system.solve(g, A_e, A_i, y, r, c_e, c_i);
+  };
+
+  // The slack variables s = √(μ)e⁻ᵛ take a linear step in s-space,
+  //
+  //   pˢ = −s∘pᵛ
+  //   s⁺ = s + αpˢ = s∘(e − αpᵛ)
+  //   v⁺ = v − ln(e − αpᵛ)
+  //
+  // rather than the exponential step s∘exp(−αpᵛ). The linear step matches the
+  // Newton linearization, so cᵢ − s decreases by exactly (1 − α) per step for
+  // linear constraints instead of being thrown off by the overshoot of the
+  // exponential.
+  //
+  // Fraction-to-the-boundary rule for the slack step. Slacks only approach the
+  // boundary where pᵛ > 0, so
+  //
+  //   αᵐᵃˣ = max(α ∈ (0, 1] : s + αpˢ ≥ (1−τ)s)
+  //        = min(1, τ/max(pᵛ))
+  constexpr Scalar τ(0.995);
+  auto max_step_size = [&](const DenseVector& p_v) -> Scalar {
+    const Scalar p_v_max = p_v.size() > 0 ? p_v.maxCoeff() : Scalar(0);
+    return p_v_max > Scalar(0) ? std::min(Scalar(1), τ / p_v_max) : Scalar(1);
+  };
+  auto step_v = [&](const DenseVector& p_v, Scalar α) -> DenseVector {
+    // v⁺ = v − ln(e − αpᵛ)
+    return v - (-α * p_v).array().log1p().matrix();
+  };
+
+  // Initializes the barrier parameter for the current iterate.
+  //
+  // Returns true on success and false on failure.
+  auto init_barrier_parameter = [&] {
+    DenseVector p_v_0 = compute_step(Scalar(1e15)).p_v;
+    DenseVector p_v_1 = compute_step(Scalar(1)).p_v - p_v_0;
+
+    // See section 3.2.3 of [3]
+    if (Scalar dot = p_v_0.transpose() * p_v_1; dot < Scalar(0)) {
+      sqrt_μ = std::max(sqrt_μ_min, p_v_1.squaredNorm() / -dot);
+    } else {
+      // Initialization failed, so use a hardcoded value for μ instead
+      sqrt_μ = Scalar(10);
+    }
+  };
+
+  // Updates the barrier parameter for the current iterate and resets the
+  // filter.
+  //
   // This should be run when the error is below a desired threshold for the
-  // current barrier parameter
-  auto update_barrier_parameter_and_reset_filter = [&] {
-    μ = next_barrier_parameter(μ, μ_min);
+  // current barrier parameter.
+  auto update_barrier_parameter = [&] {
+    if (sqrt_μ == sqrt_μ_min) {
+      return;
+    }
 
-    // Update the fraction-to-the-boundary rule scaling factor.
-    //
-    //   τⱼ = max(τₘᵢₙ, 1 − μⱼ)
-    //
-    // See equation (8) of [2].
-    τ = std::max(τ_min, Scalar(1) - μ);
+    bool found_μ = false;
 
-    // Reset the filter when the barrier parameter is updated
-    filter.reset();
-    fallback_kkt_error = std::numeric_limits<Scalar>::infinity();
+    if (is_nlp) {
+      // Binary search for smallest μ such that |pᵛ|_∞ ≤ 1 starting from the
+      // current value of μ. If one doesn't exist, keep the original.
+
+      constexpr Scalar sqrt_μ_line_search_tol(1e-8);
+
+      Scalar sqrt_μ_lower(0);
+      Scalar sqrt_μ_upper = sqrt_μ;
+
+      while (sqrt_μ_upper - sqrt_μ_lower > sqrt_μ_line_search_tol) {
+        // Search bias [0, 1] that determines which side of range to check
+        constexpr Scalar search_bias(0.75);
+
+        Scalar sqrt_μ_mid = (Scalar(1) - search_bias) * sqrt_μ_lower +
+                            search_bias * sqrt_μ_upper;
+
+        // The bounds are adjacent floating-point values, so the search can't
+        // make further progress
+        if (sqrt_μ_mid == sqrt_μ_lower || sqrt_μ_mid == sqrt_μ_upper) {
+          break;
+        }
+
+        DenseVector p_v = compute_step(sqrt_μ_mid).p_v;
+        Scalar p_v_infnorm = p_v.template lpNorm<Eigen::Infinity>();
+
+        if (p_v_infnorm <= Scalar(1)) {
+          // If step down was successful, decrease upper bound and try again
+          sqrt_μ = sqrt_μ_mid;
+          sqrt_μ_upper = sqrt_μ_mid;
+          found_μ = true;
+
+          // If μ hit minimum, stop searching
+          if (sqrt_μ <= sqrt_μ_min) {
+            sqrt_μ = sqrt_μ_min;
+            break;
+          }
+        } else {
+          // Otherwise, increase lower bound and try again
+          sqrt_μ_lower = sqrt_μ_mid;
+        }
+      }
+    } else {
+      // Line search for smallest μ such that |pᵛ|_∞ ≤ 1. If one doesn't exist,
+      // keep the original.
+      //
+      // For quadratic models, this only requires two system solves instead of a
+      // binary search.
+
+      constexpr Scalar dinf_bound(0.99);
+
+      DenseVector p_v_0 = compute_step(Scalar(1e15)).p_v;
+      DenseVector p_v_1 = compute_step(Scalar(1)).p_v - p_v_0;
+
+      Scalar α_μ_min(0);
+      Scalar α_μ_max(1e15);
+
+      for (int i = 0; i < v.rows(); ++i) {
+        Scalar temp_min = (dinf_bound - p_v_0[i]) / p_v_1[i];
+        Scalar temp_max = (-dinf_bound - p_v_0[i]) / p_v_1[i];
+        if (p_v_1[i] > Scalar(0)) {
+          using std::swap;
+          swap(temp_min, temp_max);
+        }
+
+        α_μ_min = std::max(α_μ_min, temp_min);
+        α_μ_max = std::min(α_μ_max, temp_max);
+      }
+
+      if (α_μ_min <= α_μ_max) {
+        found_μ = true;
+        sqrt_μ = std::max(sqrt_μ_min, Scalar(1) / α_μ_max);
+      }
+    }
+
+    if (found_μ) {
+      // Reset the filter when the barrier parameter is updated
+      filter.reset();
+      fallback_kkt_error = std::numeric_limits<Scalar>::infinity();
+    }
   };
 
   // Step size reduction factor
-  constexpr Scalar α_reduction_factor(0.5);
+  constexpr Scalar α_reduction_factor(1.0 / std::numbers::sqrt2);
 
   int full_step_rejected_counter = 0;
 
@@ -277,10 +427,17 @@ ExitStatus ipm(
 
   // Error
   Scalar E_0 = unscaled_kkt_error_inf_norm<Scalar>(
-      matrices.scaling, iterates, function_values, first_derivatives, Scalar(0),
-      options.tolerance);
+      matrices.scaling, iterates, function_values, first_derivatives, sqrt_μ,
+      Scalar(0), options.tolerance);
 
-  setup_tracer.stop();
+  Scalar prev_p_v_infnorm = std::numeric_limits<Scalar>::infinity();
+  bool μ_initialized = false;
+
+  // Watchdog (nonmonotone) variables. If a line search fails, accept up to this
+  // many steps in a row in case the dual variable steps allow the primal steps
+  // to make progress again.
+  constexpr int watchdog_max = 5;
+  int watchdog_count = 0;
 
   // Prints initial iterate diagnostics now and closes the iterate diagnostics
   // table when the solver exits.
@@ -288,19 +445,15 @@ ExitStatus ipm(
   // Feasibility restoration's iterations are printed in the outer solver's
   // table, so it doesn't open its own.
   IterateDiagnosticsTable table{
-      options.diagnostics && !in_feasibility_restoration,
-      E_0,
-      f,
-      constraint_violation(c_e, c_i, s),
-      s.dot(z),
-      μ};
+      options.diagnostics && !in_feasibility_restoration, E_0, f,
+      constraint_violation(c_e, c_i, s), sqrt_μ * sqrt_μ};
 
   while (E_0 > options.tolerance) {
     ScopedTimeTracer inner_iter_tracer{diagnostics[ITERATION]};
 
     // Check for diverging iterates
     if (x.template lpNorm<Eigen::Infinity>() > Scalar(1e10) || !x.allFinite() ||
-        s.template lpNorm<Eigen::Infinity>() > Scalar(1e10) || !s.allFinite()) {
+        v.template lpNorm<Eigen::Infinity>() > Scalar(1e10) || !v.allFinite()) {
       return ExitStatus::DIVERGING_ITERATES;
     }
 
@@ -308,48 +461,102 @@ ExitStatus ipm(
 
     // Call iteration callbacks
     for (const auto& callback : iteration_callbacks) {
-      if (callback({iterations, x, s, y, z, g, H, A_e, A_i}) ==
+      if (callback({iterations, x, y, v, g, H, A_e, A_i}) ==
           ControlFlow::BREAK) {
         return ExitStatus::CALLBACK_REQUESTED_STOP;
       }
     }
 
-    phase_tracer.next(diagnostics[KKT_MATRIX_BUILD]);
+    phase_tracer.stop();
 
-    kkt_system.build(H, A_e, A_i, s, z);
-
-    phase_tracer.next(diagnostics[KKT_MATRIX_FACTOR]);
-
-    if (!kkt_system.factorize()) [[unlikely]] {
+    if (!build_and_factorize_kkt_matrix()) [[unlikely]] {
       return ExitStatus::FACTORIZATION_FAILED;
+    }
+
+    // Update the barrier parameter if necessary
+    const Scalar prev_sqrt_μ = sqrt_μ;
+    bool v_reset = false;
+    if (!μ_initialized) {
+      init_barrier_parameter();
+      μ_initialized = true;
+
+      if (!in_feasibility_restoration) {
+        // Initialize the slack variables to the inequality constraint values,
+        // pushed away from zero. Otherwise, every slack starts at √(μ), so the
+        // first Newton steps have to close a large residual cᵢ − s, which
+        // produces large dual steps and Hessian regularization.
+        //
+        //   s = max(cᵢ, κ)
+        //   v = −ln(s/√(μ))
+        constexpr Scalar κ(1e-2);
+        v = -(c_i.cwiseMax(κ) / sqrt_μ).array().log().matrix();
+        exp_v = v.array().exp().matrix();
+        exp_neg_v = exp_v.cwiseInverse();
+        v_reset = true;
+      }
+    } else if (is_nlp) {
+      Scalar E_μ = kkt_error_inf_norm<Scalar>(
+          iterates, function_values, first_derivatives, sqrt_μ, sqrt_μ * sqrt_μ,
+          options.tolerance);
+      if (E_μ <= barrier_subproblem_tolerance(sqrt_μ * sqrt_μ)) {
+        ScopedTimeTracer μ_update_tracer{diagnostics[BARRIER_PARAMETER_UPDATE]};
+        update_barrier_parameter();
+      }
+    } else if (prev_p_v_infnorm <= Scalar(1)) {
+      ScopedTimeTracer μ_update_tracer{diagnostics[BARRIER_PARAMETER_UPDATE]};
+      update_barrier_parameter();
+    }
+
+    // Update expressions dependent on √(μ)
+    if (sqrt_μ != prev_sqrt_μ || v_reset) {
+      // s = √(μ)e⁻ᵛ
+      s = sqrt_μ * exp_neg_v;
+
+      // When the inequality constraints are nonlinear, the Lagrangian Hessian
+      // depends on μ through z = √(μ)eᵛ
+      if (is_nlp) {
+        H = matrices.H(x, y, v, sqrt_μ);
+      }
+
+      // The Newton-KKT matrix depends on the Lagrangian Hessian, which was just
+      // updated
+      if ((is_nlp || v_reset) && !build_and_factorize_kkt_matrix())
+          [[unlikely]] {
+        return ExitStatus::FACTORIZATION_FAILED;
+      }
     }
 
     phase_tracer.next(diagnostics[KKT_SYSTEM_SOLVE]);
 
-    auto step = kkt_system.solve(g, A_e, A_i, y, s, z, μ, c_e, c_i - s);
+    // Solve the Newton-KKT system for the step
+    auto step = compute_step(sqrt_μ);
 
     phase_tracer.next(diagnostics[LINE_SEARCH]);
 
-    bool call_feasibility_restoration = false;
-
-    // αᵐᵃˣ = max(α ∈ (0, 1] : sₖ + αpₖˢ ≥ (1−τⱼ)sₖ)
-    Scalar α_max = fraction_to_the_boundary_rule<Scalar>(s, step.p_s, τ);
+    // The slack variables s = √(μ)e⁻ᵛ are part of the primal step, so x and v
+    // share a step size, capped by the fraction-to-the-boundary rule for the
+    // slack step.
+    Scalar p_v_infnorm = step.p_v.template lpNorm<Eigen::Infinity>();
+    const Scalar α_max = max_step_size(step.p_v);
     Scalar α = α_max;
 
-    // αₖᶻ = max(α ∈ (0, 1] : zₖ + αpₖᶻ ≥ (1−τⱼ)zₖ)
-    Scalar α_z = fraction_to_the_boundary_rule<Scalar>(z, step.p_z, τ);
+    bool call_feasibility_restoration = false;
 
-    const FilterEntry<Scalar> current_entry{s, function_values, μ};
+    prev_p_v_infnorm = p_v_infnorm;
+
+    const FilterEntry<Scalar> current_entry{v, function_values, sqrt_μ};
 
     // Compute the directional derivative of the log-barrier function along the
     // search direction.
     //
-    //   ϕ_μ(x, s) = f(x) − μ∑ᵢ ln(sᵢ)
+    //   ϕ_μ(x, v) = f(x) − μ∑ᵢ ln(sᵢ)
+    //             = f(x) − μ∑ᵢ ln(√(μ)e⁻ᵛⁱ)
+    //             = f(x) + μ∑ᵢ vᵢ − μ∑ᵢ ln(√(μ))
     //
-    //   D_ϕ = ∇ϕ_μ(x, s)ᵀ[pˣ pˢ]
-    //       = ∇f(x)ᵀpˣ − μ∑ᵢ pᵢˢ/sᵢ
+    //   D_ϕ = ∇ϕ_μ(x, v)ᵀ[pˣ pᵛ]
+    //       = ∇f(x)ᵀpˣ + μ∑ᵢ pᵢᵛ
     const Scalar D_ϕ =
-        g.transpose() * step.p_x - μ * s.cwiseInverse().dot(step.p_s);
+        g.transpose() * step.p_x + sqrt_μ * sqrt_μ * step.p_v.sum();
 
     const Scalar α_min = filter.min_step_size(current_entry, D_ϕ);
 
@@ -366,25 +573,22 @@ ExitStatus ipm(
     // Loop until a step is accepted
     while (!call_feasibility_restoration) {
       trial_x = x + α * step.p_x;
-      trial_c_i = matrices.c_i(trial_x);
-      if (options.feasible_ipm && c_i.cwiseGreater(Scalar(0)).all()) {
-        // If the inequality constraints are all feasible, prevent them from
-        // becoming infeasible again.
-        //
-        // See equation (19.30) of [1].
-        trial_s = trial_c_i;
-      } else {
-        trial_s = s + α * step.p_s;
-      }
       trial_y = y + α * step.p_y;
-      trial_z = z + α_z * step.p_z;
-
+      trial_v = step_v(step.p_v, α);
+      trial_c_i = matrices.c_i(trial_x);
       trial_f = matrices.f(trial_x);
       trial_c_e = matrices.c_e(trial_x);
 
-      // If f(xₖ + αpₖˣ), cₑ(xₖ + αpₖˣ), or cᵢ(xₖ + αpₖˣ) aren't finite, reduce
-      // step size immediately
-      if (!trial_function_values.all_finite()) {
+      // If the inequality constraints are all feasible, prevent them from
+      // becoming infeasible again
+      const bool keep_feasible =
+          options.feasible_ipm && c_i.cwiseGreater(Scalar(0)).all();
+
+      // If f(xₖ + αpₖˣ), cₑ(xₖ + αpₖˣ), or cᵢ(xₖ + αpₖˣ) aren't finite, or the
+      // inequality constraints must stay feasible and didn't, reduce step size
+      // immediately
+      if (!trial_function_values.all_finite() ||
+          (keep_feasible && !trial_c_i.cwiseGreater(Scalar(0)).all())) {
         // Reduce step size
         α *= α_reduction_factor;
 
@@ -395,10 +599,27 @@ ExitStatus ipm(
         continue;
       }
 
+      DenseVector trial_s;
+      if (keep_feasible) {
+        // Set the slack variables to the constraint values, which makes the
+        // inequality constraint residual zero.
+        //
+        //   cᵢ − √(μ)e⁻ᵛ = 0
+        //   √(μ)e⁻ᵛ = cᵢ
+        //   e⁻ᵛ = 1/√(μ) cᵢ
+        //   −v = ln(1/√(μ) cᵢ)
+        //   v = −ln(1/√(μ) cᵢ)
+        trial_s = trial_c_i;
+        trial_v = -(trial_c_i * (Scalar(1) / sqrt_μ)).array().log().matrix();
+      } else {
+        trial_s = sqrt_μ * (-trial_v).array().exp().matrix();
+      }
+
       // Check whether filter accepts trial iterate
-      FilterEntry trial_entry{trial_s, trial_function_values, μ};
+      FilterEntry trial_entry{trial_v, trial_function_values, sqrt_μ};
       if (filter.try_add(current_entry, trial_entry, D_ϕ, α)) {
         // Accept step
+        watchdog_count = 0;
         break;
       }
 
@@ -415,8 +636,7 @@ ExitStatus ipm(
         // Apply second-order corrections. See section 2.4 of [2].
         auto soc_step = step;
 
-        Scalar α_soc = α;
-        Scalar α_z_soc = α_z;
+        Scalar α_soc = α_max;
         DenseVector c_e_soc = c_e;
         DenseVector c_i_minus_s_soc = c_i - s;
 
@@ -436,45 +656,41 @@ ExitStatus ipm(
                   soc_tracer.current_duration(),
                   unscaled_kkt_error_inf_norm<Scalar>(
                       matrices.scaling, trial_iterates, trial_function_values,
-                      first_derivatives, Scalar(0), options.tolerance),
+                      first_derivatives, sqrt_μ, Scalar(0), options.tolerance),
                   trial_f, constraint_violation(trial_c_e, trial_c_i, trial_s),
-                  trial_s.dot(trial_z), μ, kkt_system.hessian_regularization(),
+                  sqrt_μ * sqrt_μ, kkt_system.hessian_regularization(),
                   kkt_system.constraint_jacobian_regularization(),
                   soc_step.primal_inf_norm(), soc_step.dual_inf_norm(), α_soc,
-                  Scalar(1), α_reduction_factor, α_z_soc);
+                  α_soc, α_reduction_factor, α_soc);
             }
           }};
 
           // Solve the Newton-KKT system with corrected constraint values
           //
-          //   cₑˢᵒᶜ = αˢᵒᶜcₑ(xₖ) + cₑ(xₖ + αˢᵒᶜpˣˢᵒᶜ)
+          //   cₑˢᵒᶜ = αˢᵒᶜcₑ(xₖ) + cₑ(xₖ + αˢᵒᶜpˣ)
           //   (cᵢ − s)ˢᵒᶜ =
-          //     αˢᵒᶜ(cᵢ(xₖ) − sₖ) + cᵢ(xₖ + αˢᵒᶜpˣˢᵒᶜ) − (sₖ + αˢᵒᶜpˢˢᵒᶜ)
+          //     αˢᵒᶜ(cᵢ(xₖ) − sₖ) + cᵢ(xₖ + αˢᵒᶜpˣ) − sₖ(αˢᵒᶜpᵛ)
           c_e_soc = α_soc * c_e_soc + trial_c_e;
           c_i_minus_s_soc = α_soc * c_i_minus_s_soc + trial_c_i - trial_s;
-          soc_step = kkt_system.solve(g, A_e, A_i, y, s, z, μ, c_e_soc,
-                                      c_i_minus_s_soc);
+          soc_step = kkt_system.solve_soc(g, A_e, A_i, y, sqrt_μ, c_e_soc,
+                                          c_i_minus_s_soc);
 
-          // αˢᵒᶜ = max(α ∈ (0, 1] : sₖ + αpₖˢ ≥ (1−τⱼ)sₖ)
-          // αₖᶻˢᵒᶜ = max(α ∈ (0, 1] : zₖ + αpₖᶻ ≥ (1−τⱼ)zₖ)
-          α_soc = fraction_to_the_boundary_rule<Scalar>(s, soc_step.p_s, τ);
-          α_z_soc = fraction_to_the_boundary_rule<Scalar>(z, soc_step.p_z, τ);
+          α_soc = max_step_size(soc_step.p_v);
 
           trial_x = x + α_soc * soc_step.p_x;
-          trial_s = s + α_soc * soc_step.p_s;
           trial_y = y + α_soc * soc_step.p_y;
-          trial_z = z + α_z_soc * soc_step.p_z;
+          trial_v = step_v(soc_step.p_v, α_soc);
+          trial_s = sqrt_μ * (-trial_v).array().exp().matrix();
 
           trial_f = matrices.f(trial_x);
           trial_c_e = matrices.c_e(trial_x);
           trial_c_i = matrices.c_i(trial_x);
 
           // Check whether filter accepts trial iterate
-          FilterEntry trial_entry{trial_s, trial_function_values, μ};
+          FilterEntry trial_entry{trial_v, trial_function_values, sqrt_μ};
           if (filter.try_add(current_entry, trial_entry, D_ϕ, α)) {
             step = soc_step;
-            α = α_soc;
-            α_z = α_z_soc;
+            α = α_max;
             step_acceptable = true;
             break;
           }
@@ -495,6 +711,7 @@ ExitStatus ipm(
 
         if (step_acceptable) {
           // Accept step
+          watchdog_count = 0;
           break;
         }
       }
@@ -519,12 +736,13 @@ ExitStatus ipm(
       // KKT error was reduced. If it wasn't, invoke feasibility restoration.
       if (α < α_min || α < α_tiny) {
         Scalar current_kkt_error = kkt_error_one_norm<Scalar>(
-            iterates, function_values, first_derivatives, μ);
+            iterates, function_values, first_derivatives, sqrt_μ,
+            sqrt_μ * sqrt_μ);
 
         trial_x = x + α_max * step.p_x;
-        trial_s = s + α_max * step.p_s;
         trial_y = y + α_max * step.p_y;
-        trial_z = z + α_z * step.p_z;
+        trial_v = step_v(step.p_v, α_max);
+        trial_s = sqrt_μ * (-trial_v).array().exp().matrix();
 
         trial_f = matrices.f(trial_x);
         trial_c_e = matrices.c_e(trial_x);
@@ -535,7 +753,7 @@ ExitStatus ipm(
             IPMFirstDerivatives<Scalar>{matrices.g(trial_x),
                                         matrices.A_e(trial_x),
                                         matrices.A_i(trial_x)},
-            μ);
+            sqrt_μ, sqrt_μ * sqrt_μ);
 
         // If the step using αᵐᵃˣ reduced the KKT error below the current
         // iterate's and every previous fallback step's, accept it anyway
@@ -546,6 +764,15 @@ ExitStatus ipm(
           // Accept step
           fallback_kkt_error = next_kkt_error;
           α = α_max;
+          watchdog_count = 0;
+          break;
+        }
+
+        // If the dual step is making progress, accept the whole step anyway
+        if (p_v_infnorm > Scalar(1e-7) && watchdog_count < watchdog_max) {
+          // Accept step
+          α = α_max;
+          ++watchdog_count;
           break;
         }
 
@@ -558,7 +785,7 @@ ExitStatus ipm(
 
     // If solver stalled, invoke feasibility restoration
     if (!call_feasibility_restoration && !in_feasibility_restoration) {
-      FilterEntry trial_entry{trial_s, trial_function_values, μ};
+      FilterEntry trial_entry{trial_v, trial_function_values, sqrt_μ};
       if (stall_detector.update(current_entry, trial_entry, α,
                                 filter.min_constraint_violation)) {
         call_feasibility_restoration = true;
@@ -574,7 +801,11 @@ ExitStatus ipm(
         return ExitStatus::FEASIBILITY_RESTORATION_FAILED;
       }
 
-      FilterEntry initial_entry{s, function_values, μ};
+      FilterEntry initial_entry{v, function_values, sqrt_μ};
+
+      // Square root of the feasibility restoration barrier parameter, which
+      // feasibility restoration updates in place
+      Scalar fr_sqrt_μ = sqrt_μ;
 
       // Augment the filter with the current iterate so the normal phase can't
       // return to it
@@ -600,19 +831,35 @@ ExitStatus ipm(
         DenseVector trial_x =
             info.x.segment(0, matrices.num_decision_variables);
 
+        // The feasibility restoration log-domain variables are relative to its
+        // barrier parameter, so convert them to the normal solve's barrier
+        // parameter such that the slack variables are preserved.
+        //
+        //   √(μ)e⁻ᵛ = √(fr_μ)exp(−fr_v)
+        //   v = fr_v − ln(√(fr_μ)/√(μ))
+        using std::log;
+        DenseVector trial_v =
+            (info.v.segment(0, matrices.num_inequality_constraints).array() -
+             log(fr_sqrt_μ / sqrt_μ))
+                .matrix();
+
         const IPMFunctionValues<Scalar> trial_function_values{
             matrices.f(trial_x), matrices.c_e(trial_x), matrices.c_i(trial_x)};
 
         // Feasibility restoration re-centers the slacks when it returns, so
-        // check the iterate the normal phase will resume from
+        // check the iterate the normal phase will resume from.
+        //
+        //   s = √(μ)e⁻ᵛ
+        //   v = ln(√(μ)/s)
         DenseVector trial_s =
             (trial_function_values.c_i.array() >= Scalar(1e-2))
                 .select(trial_function_values.c_i,
-                        info.s.segment(0, matrices.num_inequality_constraints));
+                        sqrt_μ * (-trial_v).array().exp().matrix());
+        trial_v = (sqrt_μ / trial_s.array()).log().matrix();
 
         // If the current iterate sufficiently reduces constraint violation and
         // is accepted by the normal filter, stop feasibility restoration
-        FilterEntry trial_entry{trial_s, trial_function_values, μ};
+        FilterEntry trial_entry{trial_v, trial_function_values, sqrt_μ};
         if (trial_entry.constraint_violation <
                 Scalar(0.9) * initial_entry.constraint_violation &&
             filter.is_acceptable(trial_entry)) {
@@ -621,12 +868,12 @@ ExitStatus ipm(
           return ControlFlow::CONTINUE;
         }
       });
-      auto status =
-          feasibility_restoration<Scalar>(matrices, callbacks, options,
+      auto status = feasibility_restoration<Scalar>(
+          matrices, is_nlp, callbacks, options,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
-                                          bound_constraint_mask,
+          bound_constraint_mask,
 #endif
-                                          iterates, μ, iterations);
+          iterates, sqrt_μ, fr_sqrt_μ, iterations);
 
       if (status != ExitStatus::SUCCESS) {
         // Report failure
@@ -643,7 +890,7 @@ ExitStatus ipm(
       // stops at its own convergence tolerance instead of driving constraint
       // violation to zero, so the filter can still hold entries with lower cost
       // and constraint violation.
-      if (!filter.is_acceptable(FilterEntry{s, function_values, μ})) {
+      if (!filter.is_acceptable(FilterEntry{v, function_values, sqrt_μ})) {
         return ExitStatus::FEASIBILITY_RESTORATION_FAILED;
       }
     } else {
@@ -657,62 +904,34 @@ ExitStatus ipm(
       function_values = trial_function_values;
     }
 
-    // A requirement for the convergence proof is that the primal-dual barrier
-    // term Hessian Σₖ₊₁ does not deviate arbitrarily much from the primal
-    // barrier term Hessian μSₖ₊₁⁻².
-    //
-    //   Σₖ₊₁ = μSₖ₊₁⁻²
-    //   Sₖ₊₁⁻¹Zₖ₊₁ = μSₖ₊₁⁻²
-    //   Zₖ₊₁ = μSₖ₊₁⁻¹
-    //
-    // We ensure this by resetting
-    //
-    //   zₖ₊₁ = clamp(zₖ₊₁, 1/κ_Σ μ/sₖ₊₁, κ_Σ μ/sₖ₊₁)
-    //
-    // for some fixed κ_Σ ≥ 1 after each step. See equation (16) of [2].
-    for (int row = 0; row < z.rows(); ++row) {
-      constexpr Scalar κ_Σ(1e10);
-      z[row] =
-          std::clamp(z[row], Scalar(1) / κ_Σ * μ / s[row], κ_Σ * μ / s[row]);
-    }
+    exp_v = v.array().exp().matrix();
+    exp_neg_v = exp_v.cwiseInverse();
+    s = sqrt_μ * exp_neg_v;
 
     // Update autodiff for Jacobians and Hessian
     A_e = matrices.A_e(x);
     A_i = matrices.A_i(x);
     g = matrices.g(x);
-    H = matrices.H(x, y, z);
+    H = matrices.H(x, y, v, sqrt_μ);
 
     // Update the error
     E_0 = unscaled_kkt_error_inf_norm<Scalar>(
-        matrices.scaling, iterates, function_values, first_derivatives,
+        matrices.scaling, iterates, function_values, first_derivatives, sqrt_μ,
         Scalar(0), options.tolerance);
-
-    // Update the barrier parameter if necessary
-    if (E_0 > options.tolerance) {
-      // While the error is below the desired threshold for this barrier
-      // parameter value, decrease the barrier parameter further
-      Scalar E_μ = kkt_error_inf_norm<Scalar>(
-          iterates, function_values, first_derivatives, μ, options.tolerance);
-      while (μ > μ_min && E_μ <= barrier_subproblem_tolerance(μ)) {
-        update_barrier_parameter_and_reset_filter();
-        E_μ = kkt_error_inf_norm<Scalar>(
-            iterates, function_values, first_derivatives, μ, options.tolerance);
-      }
-    }
 
     inner_iter_tracer.stop();
 
     if (options.diagnostics) {
-      print_iterate_diagnostics(iterations,
-                                in_feasibility_restoration
-                                    ? IterationType::FEASIBILITY_RESTORATION
-                                    : IterationType::NORMAL,
-                                inner_iter_tracer.current_duration(), E_0, f,
-                                constraint_violation(c_e, c_i, s), s.dot(z), μ,
-                                kkt_system.hessian_regularization(),
-                                kkt_system.constraint_jacobian_regularization(),
-                                step.primal_inf_norm(), step.dual_inf_norm(), α,
-                                α_max, α_reduction_factor, α_z);
+      print_iterate_diagnostics(
+          iterations,
+          in_feasibility_restoration ? IterationType::FEASIBILITY_RESTORATION
+                                     : IterationType::NORMAL,
+          inner_iter_tracer.current_duration(), E_0, f,
+          constraint_violation(c_e, c_i, s), sqrt_μ * sqrt_μ,
+          kkt_system.hessian_regularization(),
+          kkt_system.constraint_jacobian_regularization(),
+          step.primal_inf_norm(), step.dual_inf_norm(), α, α_max,
+          α_reduction_factor, α);
     }
 
     ++iterations;
@@ -736,7 +955,7 @@ ExitStatus ipm(
 }
 
 extern template SLEIPNIR_DLLEXPORT ExitStatus
-ipm(const IPMMatrixCallbacks<double>& matrix_callbacks,
+ipm(const IPMMatrixCallbacks<double>& matrix_callbacks, bool is_nlp,
     std::span<std::function<ControlFlow(const IterationInfo<double>& info)>>
         iteration_callbacks,
     const Options<double>& options,
@@ -746,13 +965,13 @@ ipm(const IPMMatrixCallbacks<double>& matrix_callbacks,
     Eigen::VectorX<double>& x);
 
 extern template SLEIPNIR_DLLEXPORT ExitStatus
-ipm(const IPMMatrixCallbacks<double>& matrix_callbacks,
+ipm(const IPMMatrixCallbacks<double>& matrix_callbacks, bool is_nlp,
     std::span<std::function<ControlFlow(const IterationInfo<double>& info)>>
         iteration_callbacks,
     const Options<double>& options, bool in_feasibility_restoration,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
     const Eigen::ArrayX<bool>& bound_constraint_mask,
 #endif
-    IPMIterates<double>& iterates, double& μ, int& iterations);
+    IPMIterates<double>& iterates, double& sqrt_μ, int& iterations);
 
 }  // namespace slp

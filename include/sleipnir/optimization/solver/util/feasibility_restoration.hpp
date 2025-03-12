@@ -28,14 +28,14 @@ namespace slp {
 
 template <typename Scalar>
 ExitStatus ipm(
-    const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
+    const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
     std::span<std::function<ControlFlow(const IterationInfo<Scalar>& info)>>
         iteration_callbacks,
     const Options<Scalar>& options, bool in_feasibility_restoration,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
     const Eigen::ArrayX<bool>& bound_constraint_mask,
 #endif
-    IPMIterates<Scalar>& iterates, Scalar& μ, int& iterations);
+    IPMIterates<Scalar>& iterates, Scalar& sqrt_μ, int& iterations);
 
 /// Computes initial values for p and n in feasibility restoration.
 ///
@@ -103,6 +103,10 @@ std::tuple<Eigen::VectorX<Scalar>, Eigen::VectorX<Scalar>> compute_p_n(
 ///
 /// @tparam Scalar Scalar type.
 /// @param[in] matrix_callbacks Matrix callbacks.
+/// @param[in] is_nlp If true, the solver uses a more conservative barrier
+///     parameter reduction strategy that's more reliable on NLPs. Pass false
+///     for problems with quadratic or lower-order cost and linear or
+///     lower-order constraints.
 /// @param[in] iteration_callbacks The list of callbacks to call at the
 ///     beginning of each iteration.
 /// @param[in] options Solver options.
@@ -111,7 +115,7 @@ std::tuple<Eigen::VectorX<Scalar>, Eigen::VectorX<Scalar>> compute_p_n(
 /// @return The exit status.
 template <typename Scalar>
 ExitStatus feasibility_restoration(
-    const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
+    const SQPMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
     std::span<std::function<ControlFlow(const IterationInfo<Scalar>& info)>>
         iteration_callbacks,
     const Options<Scalar>& options, SQPIterates<Scalar>& iterates,
@@ -151,7 +155,8 @@ ExitStatus feasibility_restoration(
   const DenseVector c_e = matrices.c_e(x);
 
   Scalar fr_μ = std::max(μ, c_e.template lpNorm<Eigen::Infinity>());
-  const Scalar ζ = sqrt(fr_μ);
+  const Scalar ζ = fr_μ;
+  Scalar fr_sqrt_μ = sqrt(fr_μ);
 
   const auto& x_r = x;
   const auto [p_e_0, n_e_0] = compute_p_n(c_e, ρ, fr_μ);
@@ -163,15 +168,16 @@ ExitStatus feasibility_restoration(
   DenseVector fr_x{num_vars + 2 * num_eq};
   fr_x << x, p_e_0, n_e_0;
 
-  // Start the constraints pₑ, nₑ ≥ 0 with zero violation
-  DenseVector fr_s{2 * num_eq};
-  fr_s << p_e_0, n_e_0;
-
   DenseVector fr_y = DenseVector::Zero(num_eq);
 
-  // Start the duals with perfect complementarity with respect to the slacks
-  DenseVector fr_z{2 * num_eq};
-  fr_z << fr_μ * p_e_0.cwiseInverse(), fr_μ * n_e_0.cwiseInverse();
+  // Start the constraints pₑ, nₑ ≥ 0 with zero violation and perfect
+  // complementarity.
+  //
+  //   √(fr_μ)exp(−fr_v) = p
+  //   fr_v = ln(√(fr_μ)/p)
+  DenseVector fr_v{2 * num_eq};
+  fr_v << (fr_sqrt_μ / p_e_0.array()).log().matrix(),
+      (fr_sqrt_μ / n_e_0.array()).log().matrix();
 
   // Inherit the parent problem's scaling for the constraints, and use no
   // scaling for the cost function since it has changed. The new rows introduced
@@ -182,7 +188,7 @@ ExitStatus feasibility_restoration(
   IPMMatrixCallbacks<Scalar> fr_matrix_callbacks{
       static_cast<int>(fr_x.rows()),
       static_cast<int>(fr_y.rows()),
-      static_cast<int>(fr_z.rows()),
+      static_cast<int>(fr_v.rows()),
       [&](const DenseVector& x_p) -> Scalar {
         auto x = x_p.segment(0, num_vars);
 
@@ -208,7 +214,8 @@ ExitStatus feasibility_restoration(
         return g.sparseView();
       },
       [&](const DenseVector& x_p, const DenseVector& y_p,
-          [[maybe_unused]] const DenseVector& z_p) -> SparseMatrix {
+          [[maybe_unused]] const DenseVector& v_p,
+          [[maybe_unused]] Scalar sqrt_μ) -> SparseMatrix {
         auto x = x_p.segment(0, num_vars);
         const auto& y = y_p;
 
@@ -237,7 +244,8 @@ ExitStatus feasibility_restoration(
         return d2f_dx2 + H_c;
       },
       [&](const DenseVector& x_p, [[maybe_unused]] const DenseVector& y_p,
-          [[maybe_unused]] const DenseVector& z_p) -> SparseMatrix {
+          [[maybe_unused]] const DenseVector& v_p,
+          [[maybe_unused]] Scalar sqrt_μ) -> SparseMatrix {
         return SparseMatrix{x_p.rows(), x_p.rows()};
       },
       [&](const DenseVector& x_p) -> DenseVector {
@@ -300,15 +308,15 @@ ExitStatus feasibility_restoration(
       },
       fr_scaling};
 
-  IPMIterates<Scalar> fr_iterates{std::move(fr_x), std::move(fr_s),
-                                  std::move(fr_y), std::move(fr_z)};
+  IPMIterates<Scalar> fr_iterates{std::move(fr_x), std::move(fr_y),
+                                  std::move(fr_v)};
 
-  auto status =
-      ipm<Scalar>(fr_matrix_callbacks, iteration_callbacks, options, true,
+  auto status = ipm<Scalar>(fr_matrix_callbacks, is_nlp, iteration_callbacks,
+                            options, true,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
-                  Eigen::ArrayX<bool>::Constant(2 * num_eq, true),
+                            Eigen::ArrayX<bool>::Constant(2 * num_eq, true),
 #endif
-                  fr_iterates, fr_μ, iterations);
+                            fr_iterates, fr_sqrt_μ, iterations);
 
   x = fr_iterates.x.segment(0, x.rows());
 
@@ -359,23 +367,32 @@ ExitStatus feasibility_restoration(
 ///
 /// @tparam Scalar Scalar type.
 /// @param[in] matrix_callbacks Matrix callbacks.
+/// @param[in] is_nlp If true, the solver uses a more conservative barrier
+///     parameter reduction strategy that's more reliable on NLPs. Pass false
+///     for problems with quadratic or lower-order cost and linear or
+///     lower-order constraints.
 /// @param[in] iteration_callbacks The list of callbacks to call at the
 ///     beginning of each iteration.
 /// @param[in] options Solver options.
 /// @param[in,out] iterates The current iterates from the normal solve.
-/// @param[in] μ Barrier parameter.
+/// @param[in] sqrt_μ Square root of the normal solve's barrier parameter.
+/// @param[out] fr_sqrt_μ Square root of the feasibility restoration barrier
+///     parameter. The feasibility restoration solve updates it in place, so
+///     iteration callbacks that capture it by reference can use it to
+///     interpret the log-domain variables of feasibility restoration iterates.
 /// @param[in,out] iterations The iteration counter.
 /// @return The exit status.
 template <typename Scalar>
 ExitStatus feasibility_restoration(
-    const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
+    const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
     std::span<std::function<ControlFlow(const IterationInfo<Scalar>& info)>>
         iteration_callbacks,
     const Options<Scalar>& options,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
     const Eigen::ArrayX<bool>& bound_constraint_mask,
 #endif
-    IPMIterates<Scalar>& iterates, Scalar μ, int& iterations) {
+    IPMIterates<Scalar>& iterates, Scalar sqrt_μ, Scalar& fr_sqrt_μ,
+    int& iterations) {
   // Feasibility restoration
   //
   //        min  ρ Σ (pₑ + nₑ + pᵢ + nᵢ) + ζ/2 (x - xᵣ)ᵀDᵣ(x - xᵣ)
@@ -401,9 +418,10 @@ ExitStatus feasibility_restoration(
   using SparseMatrix = Eigen::SparseMatrix<Scalar>;
   using SparseVector = Eigen::SparseVector<Scalar>;
 
+  using std::log;
   using std::sqrt;
 
-  auto& [x, s, y, z] = iterates;
+  auto& [x, y, v] = iterates;
 
   const auto& matrices = matrix_callbacks;
   const auto& num_vars = matrices.num_decision_variables;
@@ -412,12 +430,17 @@ ExitStatus feasibility_restoration(
 
   constexpr Scalar ρ(1e3);
 
+  // s = √(μ)e⁻ᵛ
+  DenseVector s = sqrt_μ * (-v).array().exp().matrix();
+
   const DenseVector c_e = matrices.c_e(x);
   const DenseVector c_i = matrices.c_i(x);
 
-  Scalar fr_μ = std::max({μ, c_e.template lpNorm<Eigen::Infinity>(),
-                          (c_i - s).template lpNorm<Eigen::Infinity>()});
+  Scalar fr_μ =
+      std::max({sqrt_μ * sqrt_μ, c_e.template lpNorm<Eigen::Infinity>(),
+                (c_i - s).template lpNorm<Eigen::Infinity>()});
   const Scalar ζ = sqrt(fr_μ);
+  fr_sqrt_μ = sqrt(fr_μ);
 
   const auto& x_r = x;
   const auto [p_e_0, n_e_0] = compute_p_n(c_e, ρ, fr_μ);
@@ -430,22 +453,26 @@ ExitStatus feasibility_restoration(
   DenseVector fr_x{num_vars + 2 * num_eq + 2 * num_ineq};
   fr_x << x, p_e_0, n_e_0, p_i_0, n_i_0;
 
-  // Use the original problem's slacks for cᵢ(x) − pᵢ + nᵢ ≥ 0 since
-  // cᵢ(x) − pᵢ + nᵢ = s by construction.
-  //
-  // Start the constraints pₑ, nₑ, pᵢ, nᵢ ≥ 0 with zero violation.
-  DenseVector fr_s{s.rows() + 2 * num_eq + 2 * num_ineq};
-  fr_s.segment(0, s.rows()) = s;
-  fr_s.segment(s.rows(), 2 * num_eq + 2 * num_ineq) << p_e_0, n_e_0, p_i_0,
-      n_i_0;
-
   DenseVector fr_y = DenseVector::Zero(c_e.rows());
 
-  // Start the duals with perfect complementarity with respect to the slacks
-  DenseVector fr_z{c_i.rows() + 2 * num_eq + 2 * num_ineq};
-  fr_z << fr_μ * s.cwiseInverse(), fr_μ * p_e_0.cwiseInverse(),
-      fr_μ * n_e_0.cwiseInverse(), fr_μ * p_i_0.cwiseInverse(),
-      fr_μ * n_i_0.cwiseInverse();
+  DenseVector fr_v{v.rows() + 2 * num_eq + 2 * num_ineq};
+  // Carry the slack variables over to feasibility restoration. Since it uses a
+  // different barrier parameter, shift v so s is preserved.
+  //
+  //   √(fr_μ)exp(−fr_v) = √(μ)e⁻ᵛ
+  //   fr_v = v + ln(√(fr_μ)/√(μ))
+  //
+  // Start the constraints pₑ, nₑ, pᵢ, nᵢ ≥ 0 with zero violation and perfect
+  // complementarity.
+  //
+  //   √(fr_μ)exp(−fr_v) = p
+  //   fr_v = ln(√(fr_μ)/p)
+  fr_v.segment(0, v.rows()) = (v.array() + log(fr_sqrt_μ / sqrt_μ)).matrix();
+  fr_v.segment(v.rows(), 2 * num_eq + 2 * num_ineq)
+      << (fr_sqrt_μ / p_e_0.array()).log().matrix(),
+      (fr_sqrt_μ / n_e_0.array()).log().matrix(),
+      (fr_sqrt_μ / p_i_0.array()).log().matrix(),
+      (fr_sqrt_μ / n_i_0.array()).log().matrix();
 
   // Inherit the parent problem's scaling for the constraints, and use no
   // scaling for the cost function since it has changed. The new rows introduced
@@ -459,7 +486,7 @@ ExitStatus feasibility_restoration(
   IPMMatrixCallbacks<Scalar> fr_matrix_callbacks{
       static_cast<int>(fr_x.rows()),
       static_cast<int>(fr_y.rows()),
-      static_cast<int>(fr_z.rows()),
+      static_cast<int>(fr_v.rows()),
       [&](const DenseVector& x_p) -> Scalar {
         auto x = x_p.segment(0, num_vars);
 
@@ -488,10 +515,10 @@ ExitStatus feasibility_restoration(
         return g.sparseView();
       },
       [&](const DenseVector& x_p, const DenseVector& y_p,
-          const DenseVector& z_p) -> SparseMatrix {
+          const DenseVector& v_p, Scalar sqrt_μ) -> SparseMatrix {
         auto x = x_p.segment(0, num_vars);
         const auto& y = y_p;
-        auto z = z_p.segment(0, num_ineq);
+        auto v = v_p.segment(0, num_ineq);
 
         // Cost function Hessian
         //
@@ -509,7 +536,7 @@ ExitStatus feasibility_restoration(
         // Constraint part of original problem's Lagrangian Hessian
         //
         //   −∇ₓₓ²yᵀcₑ(x) − ∇ₓₓ²zᵀcᵢ(x)
-        auto H_c = matrices.H_c(x, y, z);
+        auto H_c = matrices.H_c(x, y, v, sqrt_μ);
         H_c.conservativeResize(x_p.rows(), x_p.rows());
 
         // Lagrangian Hessian
@@ -522,7 +549,8 @@ ExitStatus feasibility_restoration(
         return d2f_dx2 + H_c;
       },
       [&](const DenseVector& x_p, [[maybe_unused]] const DenseVector& y_p,
-          [[maybe_unused]] const DenseVector& z_p) -> SparseMatrix {
+          [[maybe_unused]] const DenseVector& v_p,
+          [[maybe_unused]] Scalar sqrt_μ) -> SparseMatrix {
         return SparseMatrix{x_p.rows(), x_p.rows()};
       },
       [&](const DenseVector& x_p) -> DenseVector {
@@ -626,17 +654,25 @@ ExitStatus feasibility_restoration(
   fr_bound_constraint_mask.segment(num_ineq, 2 * num_eq + 2 * num_ineq) = true;
 #endif
 
-  IPMIterates<Scalar> fr_iterates{std::move(fr_x), std::move(fr_s),
-                                  std::move(fr_y), std::move(fr_z)};
+  IPMIterates<Scalar> fr_iterates{std::move(fr_x), std::move(fr_y),
+                                  std::move(fr_v)};
 
-  auto status =
-      ipm<Scalar>(fr_matrix_callbacks, iteration_callbacks, options, true,
+  auto status = ipm<Scalar>(fr_matrix_callbacks, is_nlp, iteration_callbacks,
+                            options, true,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
-                  fr_bound_constraint_mask,
+                            fr_bound_constraint_mask,
 #endif
-                  fr_iterates, fr_μ, iterations);
+                            fr_iterates, fr_sqrt_μ, iterations);
 
   x = fr_iterates.x.segment(0, x.rows());
+
+  // Carry the slack variables back to the normal solve, shifting v so s is
+  // preserved.
+  //
+  //   √(μ)e⁻ᵛ = √(fr_μ)exp(−fr_v)
+  //   v = fr_v − ln(√(fr_μ)/√(μ))
+  v = (fr_iterates.v.segment(0, v.rows()).array() - log(fr_sqrt_μ / sqrt_μ))
+          .matrix();
 
   // If feasibility restoration converged, check the constraint violation in the
   // original problem's scaling
@@ -670,41 +706,28 @@ ExitStatus feasibility_restoration(
   // it converged to a feasible point (e.g., because it was run to convergence)
   if (status == ExitStatus::CALLBACK_REQUESTED_STOP ||
       (status == ExitStatus::SUCCESS && !c_e_violated && !c_i_violated)) {
-    const DenseVector s_old = s;
-
     // Re-center the slacks on the original constraints cᵢ(x) if they're
     // sufficiently feasible, which zeroes their constraint violation.
-    // Otherwise, keep feasibility restoration's slacks.
+    // Otherwise, keep feasibility restoration's slacks. Then shift v to match.
     //
-    // Note that those slacks can make Σ = S⁻¹Z and μS⁻¹e very large because
-    // fr_μ drives them toward 0 independently of μ, so they can end up much
-    // smaller than μ. We can't fix that by raising the slacks because the added
-    // constraint violation would make the filter reject more returned iterates.
+    // Note that those slacks can make z = μS⁻¹e very large because fr_μ drives
+    // them toward 0 independently of μ, so they can end up much smaller than μ.
+    // We can't fix that by raising the slacks because the added constraint
+    // violation would make the filter reject more returned iterates.
     //
     // The normal phase's early-exit callback computes the slacks the same way,
     // so the returned iterate is the one the filter accepted.
+    //
+    //   √(μ)e⁻ᵛ = s
+    //   v = ln(√(μ)/s)
     const DenseVector c_i = matrices.c_i(x);
     s = (c_i.array() >= Scalar(1e-2))
-            .select(c_i, fr_iterates.s.segment(0, s.rows()));
+            .select(c_i, sqrt_μ * (-v).array().exp().matrix());
+    v = (sqrt_μ / s.array()).log().matrix();
 
     // Reset the equality constraint duals since feasibility restoration didn't
     // account for the cost function
     y.setZero();
-
-    // Update the inequality constraint duals with a Newton step for
-    // complementarity, taking the change in slacks during the restoration
-    // phase as the primal step.
-    //
-    //   pᶻ = μS⁻¹e − z − Σpˢ
-    //
-    // If the result isn't strictly positive or is too large, reset all of them
-    // to 1.
-    const DenseVector Σ = z.cwiseQuotient(s_old);
-    const DenseVector p_s = s - s_old;
-    z += μ * s_old.cwiseInverse() - z - Σ.cwiseProduct(p_s);
-    if ((z.array() <= Scalar(0)).any() || (z.array() > Scalar(1e3)).any()) {
-      z.setOnes();
-    }
 
     return ExitStatus::SUCCESS;
   } else if (status == ExitStatus::SUCCESS) {
@@ -714,9 +737,6 @@ ExitStatus feasibility_restoration(
     // infeasibility anywhere else risks false positives (e.g., a
     // point-in-time test can reject iterates the solver would otherwise
     // escape). See section 3.3, p. 14 of [2].
-
-    s = fr_iterates.s.segment(0, s.rows());
-
     if (options.diagnostics) {
       if (c_e_violated) {
         print_c_e_local_infeasibility_error(c_e_unscaled, options.tolerance);
@@ -728,7 +748,6 @@ ExitStatus feasibility_restoration(
 
     return ExitStatus::LOCALLY_INFEASIBLE;
   } else {
-    s = fr_iterates.s.segment(0, s.rows());
     return ExitStatus::FEASIBILITY_RESTORATION_FAILED;
   }
 }
