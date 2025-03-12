@@ -146,7 +146,6 @@ inline void print_c_i_local_infeasibility_error(const Eigen::VectorXd& c_i) {
  * @param error The error.
  * @param cost The cost.
  * @param infeasibility The infeasibility.
- * @param complementarity The complementarity.
  * @param μ The barrier parameter.
  * @param δ The Hessian regularization factor.
  * @param primal_α The primal step size.
@@ -159,10 +158,9 @@ template <typename Rep, typename Period = std::ratio<1>>
 void print_iteration_diagnostics(int iterations, IterationType type,
                                  const std::chrono::duration<Rep, Period>& time,
                                  double error, double cost,
-                                 double infeasibility, double complementarity,
-                                 double μ, double δ, double primal_α,
-                                 double primal_α_max, double α_reduction_factor,
-                                 double dual_α) {
+                                 double infeasibility, double μ, double δ,
+                                 double primal_α, double primal_α_max,
+                                 double α_reduction_factor, double dual_α) {
   if (iterations % 20 == 0) {
     if (iterations == 0) {
       slp::print("┏");
@@ -170,23 +168,23 @@ void print_iteration_diagnostics(int iterations, IterationType type,
       slp::print("┢");
     }
     slp::print(
-        "{:━^4}┯{:━^4}┯{:━^9}┯{:━^12}┯{:━^13}┯{:━^12}┯{:━^12}┯{:━^8}┯{:━^5}┯"
-        "{:━^8}┯{:━^8}┯{:━^2}",
-        "", "", "", "", "", "", "", "", "", "", "", "");
+        "{:━^4}┯{:━^4}┯{:━^9}┯{:━^12}┯{:━^13}┯{:━^12}┯{:━^8}┯{:━^5}┯{:━^8}┯"
+        "{:━^8}┯{:━^2}",
+        "", "", "", "", "", "", "", "", "", "", "");
     if (iterations == 0) {
       slp::println("┓");
     } else {
       slp::println("┪");
     }
     slp::println(
-        "┃{:^4}│{:^4}│{:^9}│{:^12}│{:^13}│{:^12}│{:^12}│{:^8}│{:^5}│{:^8}│{:^8}"
-        "│{:^2}┃",
-        "iter", "type", "time (ms)", "error", "cost", "infeas.", "complement.",
-        "μ", "reg", "primal α", "dual α", "↩");
+        "┃{:^4}│{:^4}│{:^9}│{:^12}│{:^13}│{:^12}│{:^8}│{:^5}│{:^8}│{:^8}│{:^2}"
+        "┃",
+        "iter", "type", "time (ms)", "error", "cost", "infeas.", "μ", "reg",
+        "primal α", "dual α", "↩");
     slp::println(
-        "┡{:━^4}┷{:━^4}┷{:━^9}┷{:━^12}┷{:━^13}┷{:━^12}┷{:━^12}┷{:━^8}┷{:━^5}┷"
-        "{:━^8}┷{:━^8}┷{:━^2}┩",
-        "", "", "", "", "", "", "", "", "", "", "", "");
+        "┡{:━^4}┷{:━^4}┷{:━^9}┷{:━^12}┷{:━^13}┷{:━^12}┷{:━^8}┷{:━^5}┷{:━^8}┷"
+        "{:━^8}┷{:━^2}┩",
+        "", "", "", "", "", "", "", "", "", "", "");
   }
 
   // For the number of backtracks, we want x such that:
@@ -204,11 +202,10 @@ void print_iteration_diagnostics(int iterations, IterationType type,
 
   constexpr std::array ITERATION_TYPES = {"norm", "✓SOC", "XSOC"};
   slp::println(
-      "│{:4} {:4} {:9.3f} {:12e} {:13e} {:12e} {:12e} {:.2e} {:<5} {:.2e} "
-      "{:.2e} {:2d}│",
+      "│{:4} {:4} {:9.3f} {:12e} {:13e} {:12e} {:.2e} {:<5} {:.2e} {:.2e} "
+      "{:2d}│",
       iterations, ITERATION_TYPES[std::to_underlying(type)], to_ms(time), error,
-      cost, infeasibility, complementarity, μ, power_of_10(δ), primal_α, dual_α,
-      backtracks);
+      cost, infeasibility, μ, power_of_10(δ), primal_α, dual_α, backtracks);
 }
 
 /**
@@ -256,7 +253,7 @@ inline void print_final_diagnostics(
     int iterations, const small_vector<SetupProfiler>& setup_profilers,
     const small_vector<SolveProfiler>& solve_profilers) {
   // Print bottom of iteration diagnostics table
-  slp::println("└{:─^108}┘", "");
+  slp::println("└{:─^95}┘", "");
 
   // Print total time
   auto setup_duration = to_ms(setup_profilers[0].duration());

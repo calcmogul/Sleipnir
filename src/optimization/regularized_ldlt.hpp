@@ -74,14 +74,14 @@ class RegularizedLDLT {
     // previous run of compute(), start at small values of δ and γ. Otherwise,
     // attempt a δ and γ half as big as the previous run so δ and γ can trend
     // downwards over time.
-    double δ = m_prev_δ == 0.0 ? 1e-4 : m_prev_δ / 2.0;
+    double δ = m_prev_δ == 0.0 ? 1e-10 : m_prev_δ / 2.0;
     double γ = 1e-10;
 
     while (true) {
       // Regularize lhs by adding a multiple of the identity matrix
       //
-      // lhs = [H + AᵢᵀΣAᵢ + δI  Aₑᵀ]
-      //       [      Aₑ         −γI]
+      // lhs = [H + Aᵢᵀdiag(e²ᵛ)Aᵢ + δI  Aₑᵀ]
+      //       [          Aₑ             −γI]
       if (m_is_sparse) {
         m_info = compute_sparse(lhs + regularization(δ, γ)).info();
         if (m_info == Eigen::Success) {
