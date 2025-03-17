@@ -75,11 +75,11 @@ inline double kkt_error(const Eigen::VectorXd& g,
   //
   // where
   //
-  //   s = √(μ)e⁻ᵛ
-  //   z = √(μ)eᵛ
+  //   s = √(μ)eᵛ
+  //   z = √(μ)e⁻ᵛ
 
-  const Eigen::VectorXd s = sqrt_μ * (-v).array().exp().matrix();
-  const Eigen::VectorXd z = sqrt_μ * v.array().exp().matrix();
+  const Eigen::VectorXd s = sqrt_μ * v.array().exp().matrix();
+  const Eigen::VectorXd z = sqrt_μ * (-v).array().exp().matrix();
 
   return (g - A_e.transpose() * y - A_i.transpose() * z).lpNorm<1>() +
          c_e.lpNorm<1>() + (c_i - s).lpNorm<1>();
