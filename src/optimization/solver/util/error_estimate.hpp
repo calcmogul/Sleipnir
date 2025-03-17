@@ -91,8 +91,8 @@ inline double error_estimate(const Eigen::VectorXd& g,
   //
   // where
   //
-  //   s = √(μ)e⁻ᵛ
-  //   z = √(μ)eᵛ
+  //   s = √(μ)eᵛ
+  //   z = √(μ)e⁻ᵛ
   //
   // The error tolerance is the max of the following infinity norms scaled by
   // s_d (see equation (5) of [2]).
@@ -101,8 +101,8 @@ inline double error_estimate(const Eigen::VectorXd& g,
   //   ‖cₑ‖_∞
   //   ‖cᵢ − s‖_∞
 
-  Eigen::VectorXd s = sqrt_μ * (-v).array().exp().matrix();
-  Eigen::VectorXd z = sqrt_μ * v.array().exp().matrix();
+  Eigen::VectorXd s = sqrt_μ * v.array().exp().matrix();
+  Eigen::VectorXd z = sqrt_μ * (-v).array().exp().matrix();
 
   // s_d = max(sₘₐₓ, (‖y‖₁ + ‖z‖₁) / (m + n)) / sₘₐₓ
   constexpr double s_max = 100.0;

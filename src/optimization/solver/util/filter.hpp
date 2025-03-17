@@ -64,8 +64,8 @@ struct FilterEntry {
    */
   FilterEntry(Variable& f, Eigen::VectorXd& v, const Eigen::VectorXd& c_e,
               const Eigen::VectorXd& c_i, double sqrt_μ) {
-    // s = √(μ)e⁻ᵛ
-    Eigen::VectorXd s = sqrt_μ * (-v).array().exp().matrix();
+    // s = √(μ)eᵛ
+    Eigen::VectorXd s = sqrt_μ * v.array().exp().matrix();
 
     cost = f.value() - sqrt_μ * sqrt_μ * s.array().log().sum();
     constraint_violation = c_e.lpNorm<1>() + (c_i - s).lpNorm<1>();

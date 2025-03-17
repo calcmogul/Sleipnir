@@ -144,10 +144,10 @@ ExitStatus interior_point(
   Eigen::VectorXd exp_v{v.array().exp().matrix()};
   // e⁻ᵛ
   Eigen::VectorXd exp_neg_v{(-v).array().exp().matrix()};
-  // e²ᵛ
-  Eigen::VectorXd exp_2v{(2 * v).array().exp().matrix()};
-  // s = √(μ)e⁻ᵛ
-  Eigen::VectorXd s = sqrt_μ * exp_neg_v;
+  // e⁻²ᵛ
+  Eigen::VectorXd exp_neg_2v{(-2 * v).array().exp().matrix()};
+  // s = √(μ)eᵛ
+  Eigen::VectorXd s = sqrt_μ * exp_v;
 
   setup_profilers.back().stop();
   setup_profilers.emplace_back("  ↳ L setup").start();
@@ -158,15 +158,15 @@ ExitStatus interior_point(
   //
   // We omit the barrier term because it won't be in ∇ₓₓL.
   //
-  //   L(x, y, v) = f(x) − yᵀcₑ(x) − √(μ)eᵛᵀ(cᵢ(x) − √(μ)e⁻ᵛ)
-  //   L(x, y, v) = f(x) − yᵀcₑ(x) − (√(μ)eᵛᵀcᵢ(x) − μ)
-  //   L(x, y, v) = f(x) − yᵀcₑ(x) − √(μ)eᵛᵀcᵢ(x) + μ
+  //   L(x, y, v) = f(x) − yᵀcₑ(x) − √(μ)e⁻ᵛᵀ(cᵢ(x) − √(μ)eᵛ)
+  //   L(x, y, v) = f(x) − yᵀcₑ(x) − (√(μ)e⁻ᵛᵀcᵢ(x) − μ)
+  //   L(x, y, v) = f(x) − yᵀcₑ(x) − √(μ)e⁻ᵛᵀcᵢ(x) + μ
   //
   // Omit constants since they won't be in ∇ₓₓL.
   //
-  //   L(x, y, v) = f(x) − yᵀcₑ(x) − √(μ)eᵛᵀcᵢ(x)
+  //   L(x, y, v) = f(x) − yᵀcₑ(x) − √(μ)e⁻ᵛᵀcᵢ(x)
   auto L = f - (y_ad.T() * c_e_ad)[0] -
-           sqrt_μ_ad * (v_ad.cwise_transform(&slp::exp).T() * c_i_ad)[0];
+           sqrt_μ_ad * ((-v_ad).cwise_transform(&slp::exp).T() * c_i_ad)[0];
 
   setup_profilers.back().stop();
   setup_profilers.emplace_back("  ↳ ∇²ₓₓL setup").start();
@@ -285,17 +285,18 @@ ExitStatus interior_point(
   auto build_and_compute_lhs = [&] -> ExitStatus {
     ScopedProfiler linear_system_build_profiler{linear_system_build_prof};
 
-    // lhs = [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ]
-    //       [        Aₑ           0 ]
+    // lhs = [H + Aᵢᵀdiag(e⁻²ᵛ)Aᵢ  Aₑᵀ]
+    //       [         Aₑ           0 ]
     //
     // Don't assign upper triangle because solver only uses lower triangle.
     const Eigen::SparseMatrix<double> top_left =
-        H + (A_i.transpose() * exp_2v.asDiagonal() * A_i)
+        H + (A_i.transpose() * exp_neg_2v.asDiagonal() * A_i)
                 .triangularView<Eigen::Lower>();
     triplets.clear();
     triplets.reserve(top_left.nonZeros() + A_e.nonZeros());
     for (int col = 0; col < H.cols(); ++col) {
-      // Append column of H + Aᵢᵀdiag(e²ᵛ)Aᵢ lower triangle in top-left quadrant
+      // Append column of H + Aᵢᵀdiag(e⁻²ᵛ)Aᵢ lower triangle in top-left
+      // quadrant
       for (Eigen::SparseMatrix<double>::InnerIterator it{top_left, col}; it;
            ++it) {
         triplets.emplace_back(it.row(), it.col(), it.value());
@@ -313,8 +314,8 @@ ExitStatus interior_point(
 
     // Solve the Newton-KKT system
     //
-    // [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
-    // [        Aₑ           0 ][−pʸ]    [               cₑ                ]
+    // [H + Aᵢᵀdiag(e⁻²ᵛ)Aᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(−e⁻²ᵛ∘cᵢ)]
+    // [         Aₑ           0 ][−pʸ]    [           cₑ            ]
     if (solver.compute(lhs).info() != Eigen::Success) [[unlikely]] {
       return ExitStatus::FACTORIZATION_FAILED;
     }
@@ -322,13 +323,12 @@ ExitStatus interior_point(
     return ExitStatus::SUCCESS;
   };
 
-  // r is sqrt_μ
-  auto build_rhs = [&](double r) {
-    // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
-    //        [               cₑ                ]
+  auto build_rhs = [&] {
+    // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(−e⁻²ᵛ∘cᵢ)]
+    //        [           cₑ            ]
     rhs.segment(0, x.rows()) =
-        -g + A_e.transpose() * y +
-        A_i.transpose() * (2.0 * r * exp_v - exp_2v.asDiagonal() * c_i);
+        -g + A_e.transpose() * y -
+        A_i.transpose() * (exp_neg_2v.asDiagonal() * c_i);
     rhs.segment(x.rows(), y.rows()) = -c_e;
   };
 
@@ -342,9 +342,9 @@ ExitStatus interior_point(
     step.p_x = p.segment(0, x.rows());
     step.p_y = -p.segment(x.rows(), y.rows());
 
-    // pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)
-    step.p_v = Eigen::VectorXd::Ones(v.rows()) -
-               1.0 / r * exp_v.asDiagonal() * (A_i * step.p_x + c_i);
+    // pᵛ = 1/√(μ) e⁻ᵛ∘(Aᵢpˣ + cᵢ) − e
+    step.p_v = 1.0 / r * exp_neg_v.asDiagonal() * (A_i * step.p_x + c_i) -
+               Eigen::VectorXd::Ones(v.rows());
 
     return step;
   };
@@ -382,9 +382,8 @@ ExitStatus interior_point(
       sqrt_μ = std::max(
           sqrt_μ_min, std::min(std::sqrt(κ_μ) * sqrt_μ, std::pow(sqrt_μ, θ_μ)));
     } else {
-      build_rhs(1e15);
+      build_rhs();
       Eigen::VectorXd p_v_0 = compute_step(1e15).p_v;
-      build_rhs(1.0);
       Eigen::VectorXd p_v_1 = compute_step(1.0).p_v - p_v_0;
 
       double α_min = 0.0;
@@ -531,7 +530,7 @@ ExitStatus interior_point(
       update_barrier_parameter();
     }
 
-    build_rhs(sqrt_μ);
+    build_rhs();
 
     ScopedProfiler linear_system_solve_profiler{linear_system_solve_prof};
 
@@ -581,15 +580,14 @@ ExitStatus interior_point(
         // If the inequality constraints are all feasible, prevent them from
         // becoming infeasible again.
         //
-        //   cᵢ − √(μ)e⁻ᵛ = 0
-        //   √(μ)e⁻ᵛ = cᵢ
-        //   e⁻ᵛ = 1/√(μ) cᵢ
-        //   −v = ln(1/√(μ) cᵢ)
-        //   v = −ln(1/√(μ) cᵢ)
+        //   cᵢ − √(μ)eᵛ = 0
+        //   √(μ)eᵛ = cᵢ
+        //   eᵛ = 1/√(μ) cᵢ
+        //   v = ln(1/√(μ) cᵢ)
         trial_s = c_i;
-        trial_v = -(c_i * (1.0 / sqrt_μ)).array().log().matrix();
+        trial_v = (c_i * (1.0 / sqrt_μ)).array().log().matrix();
       } else {
-        trial_s = sqrt_μ * (-trial_v).array().exp().matrix();
+        trial_s = sqrt_μ * trial_v.array().exp().matrix();
       }
 
       // Check whether filter accepts trial iterate
@@ -645,8 +643,8 @@ ExitStatus interior_point(
 
           // Rebuild Newton-KKT rhs with updated constraint values.
           //
-          // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
-          //        [              cₑˢᵒᶜ              ]
+          // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(−e⁻²ᵛ∘cᵢ)]
+          //        [          cₑˢᵒᶜ          ]
           //
           // where cₑˢᵒᶜ = αc(xₖ) + c(xₖ + αpₖˣ)
           c_e_soc = α_soc * c_e_soc + trial_c_e;
@@ -797,7 +795,7 @@ ExitStatus interior_point(
 
     exp_v = v.array().exp().matrix();
     exp_neg_v = (-v).array().exp().matrix();
-    exp_2v = (2 * v).array().exp().matrix();
+    exp_neg_2v = (-2 * v).array().exp().matrix();
     s = sqrt_μ * exp_neg_v;
 
     // Update autodiff for Jacobians and Hessian
