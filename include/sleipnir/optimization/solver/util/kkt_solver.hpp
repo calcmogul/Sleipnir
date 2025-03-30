@@ -36,22 +36,6 @@ class KKTSolver {
         m_sparse_solver{num_decision_variables, num_equality_constraints},
         m_dense_solver{num_decision_variables, num_equality_constraints} {}
 
-  /// Constructs a KKTSolver instance.
-  ///
-  /// @param use_sparse_solver Whether to use sparse or dense solver.
-  /// @param num_decision_variables The number of decision variables in the
-  ///     system.
-  /// @param num_equality_constraints The number of equality constraints in the
-  ///     system.
-  /// @param γ_min The minimum constraint regularization.
-  KKTSolver(bool use_sparse_solver, int num_decision_variables,
-            int num_equality_constraints, Scalar γ_min)
-      : m_use_sparse_solver{use_sparse_solver},
-        m_sparse_solver{num_decision_variables, num_equality_constraints,
-                        γ_min},
-        m_dense_solver{num_decision_variables, num_equality_constraints,
-                       γ_min} {}
-
   /// Reports whether previous computation was successful.
   ///
   /// @return Whether previous computation was successful.
@@ -76,6 +60,25 @@ class KKTSolver {
       m_sparse_solver.compute(lhs);
     } else {
       m_dense_solver.compute(lhs);
+    }
+
+    return *this;
+  }
+
+  /// Computes the factorization of the KKT matrix.
+  ///
+  /// In sparse mode, the matrix's symbolic decomposition is reused in
+  /// subsequent calls, so subsequent calls must be given a matrix with the same
+  /// sparsity pattern.
+  ///
+  /// @param lhs Left-hand side of the system.
+  /// @param reg Regularization matrix to add to lhs.
+  /// @return The factorization.
+  KKTSolver& compute(const SparseMatrix& lhs, const SparseMatrix& reg) {
+    if (m_use_sparse_solver) {
+      m_sparse_solver.compute(lhs, reg);
+    } else {
+      m_dense_solver.compute(lhs, reg);
     }
 
     return *this;
