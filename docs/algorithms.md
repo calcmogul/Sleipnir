@@ -450,3 +450,5 @@ Section 6 of [^3] describes how to check for local infeasibility.
 [^3]: Byrd, R. and Nocedal, J. and Waltz, R. "KNITRO: An Integrated Package for Nonlinear Optimization", 2005. [https://users.iems.northwestern.edu/~nocedal/PDFfiles/integrated.pdf](https://users.iems.northwestern.edu/~nocedal/PDFfiles/integrated.pdf)
 
 [^4]: Gu, C. and Zhu, D. "A Dwindling Filter Algorithm with a Modified Subproblem for Nonlinear Inequality Constrained Optimization", 2014. [https://sci-hub.st/10.1007/s11401-014-0826-z](https://sci-hub.st/10.1007/s11401-014-0826-z)
+
+[^5]: Pougkakiotis, S., Gondzio, J. "Dynamic Non-diagonal Regularization in Interior Point Methods for Linear and Convex Quadratic Programming". J Optim Theory Appl 181, 905–945 (2019). https://doi.org/10.1007/s10957-019-01491-1
