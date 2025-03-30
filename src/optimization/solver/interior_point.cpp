@@ -30,6 +30,7 @@
 #include "sleipnir/util/setup_profiler.hpp"
 #include "sleipnir/util/small_vector.hpp"
 #include "sleipnir/util/solve_profiler.hpp"
+#include "util/infnorm.hpp"
 #include "util/scope_exit.hpp"
 
 #ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
@@ -423,11 +424,19 @@ ExitStatus interior_point(
     double α = 1.0;
     double α_z = 1.0;
 
+    // Compute the regularization matrix. See [5].
+    double δ_p = μ;
+    double δ_d = Σ.diagonal().maxCoeff() * infnorm(A_e.transpose() * A_e);
+    Eigen::VectorXd vec{lhs.rows()};
+    vec.segment(0, x.rows()).setConstant(δ_p);
+    vec.segment(x.rows(), z.rows()).setConstant(-δ_d);
+    Eigen::SparseMatrix<double> reg{vec.asDiagonal()};
+
     // Solve the Newton-KKT system
     //
     // [H + AᵢᵀΣAᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(−Σcᵢ + μS⁻¹e + z)]
     // [    Aₑ       0 ][−pʸ]    [               cₑ                ]
-    if (solver.compute(lhs).info() != Eigen::Success) [[unlikely]] {
+    if (solver.compute(lhs, reg).info() != Eigen::Success) [[unlikely]] {
       return ExitStatus::FACTORIZATION_FAILED;
     }
 
