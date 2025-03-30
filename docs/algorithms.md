@@ -452,3 +452,5 @@ Section 6 of [^3] describes how to check for local infeasibility.
 [^4]: Gu, C. and Zhu, D. "A Dwindling Filter Algorithm with a Modified Subproblem for Nonlinear Inequality Constrained Optimization", 2014. [https://sci-hub.st/10.1007/s11401-014-0826-z](https://sci-hub.st/10.1007/s11401-014-0826-z)
 
 [^5]: Hinder, O. and Ye, Y. "A one-phase interior point method for nonconvex optimization", 2018. [https://arxiv.org/pdf/1801.03072.pdf](https://arxiv.org/pdf/1801.03072.pdf)
+
+[^6]: Pougkakiotis, S., Gondzio, J. "Dynamic Non-diagonal Regularization in Interior Point Methods for Linear and Convex Quadratic Programming". J Optim Theory Appl 181, 905–945 (2019). https://doi.org/10.1007/s10957-019-01491-1

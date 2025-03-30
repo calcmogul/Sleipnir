@@ -46,8 +46,15 @@ class RegularizedLDLT {
   /// @param lhs Left-hand side of the system.
   /// @return The factorization.
   RegularizedLDLT& compute(const SparseMatrix& lhs) {
-    // The regularization procedure is based on algorithm B.1 of [1]
+    return compute(lhs, SparseMatrix{lhs.rows(), lhs.cols()});
+  }
 
+  /// Computes the regularized LDLT factorization of a matrix.
+  ///
+  /// @param lhs Left-hand side of the system.
+  /// @param reg Regularization matrix to add to lhs.
+  /// @return The factorization.
+  RegularizedLDLT& compute(const SparseMatrix& lhs, const SparseMatrix& reg) {
     // Max density is 50% due to the caller only providing the lower triangle.
     // We consider less than 25% to be sparse.
     m_is_sparse = lhs.nonZeros() < 0.25 * lhs.size();
@@ -68,62 +75,27 @@ class RegularizedLDLT {
       }
     }
 
-    // Also regularize the Hessian. If the Hessian wasn't regularized in a
-    // previous run of compute(), start at small values of δ and γ. Otherwise,
-    // attempt a δ and γ half as big as the previous run so δ and γ can trend
-    // downwards over time.
-    Scalar δ = m_prev_δ == Scalar(0) ? Scalar(1e-4) : m_prev_δ / Scalar(2);
-    Scalar γ(1e-10);
-
-    while (true) {
-      // Regularize lhs by adding a multiple of the identity matrix
-      //
-      // lhs = [H + AᵢᵀΣAᵢ + δI  Aₑᵀ]
-      //       [      Aₑ         −γI]
-      if (m_is_sparse) {
-        m_info = compute_sparse(lhs + regularization(δ, γ)).info();
-        if (m_info == Eigen::Success) {
-          inertia = Inertia{m_sparse_solver.vectorD()};
-        }
-      } else {
-        m_info = m_dense_solver.compute(lhs + regularization(δ, γ)).info();
-        if (m_info == Eigen::Success) {
-          inertia = Inertia{m_dense_solver.vectorD()};
-        }
-      }
-
+    // Regularize lhs by adding a multiple of the identity matrix
+    //
+    // lhs = [H + AᵢᵀΣAᵢ + δI  Aₑᵀ]
+    //       [      Aₑ         −γI]
+    if (m_is_sparse) {
+      m_info = compute_sparse(lhs + reg).info();
       if (m_info == Eigen::Success) {
-        if (inertia == ideal_inertia) {
-          // If the inertia is ideal, store δ and return
-          m_prev_δ = δ;
-          return *this;
-        } else if (inertia.zero > 0) {
-          // If there's zero eigenvalues, increase δ and γ by an order of
-          // magnitude and try again
-          δ *= Scalar(10);
-          γ *= Scalar(10);
-        } else if (inertia.negative > ideal_inertia.negative) {
-          // If there's too many negative eigenvalues, increase δ by an order of
-          // magnitude and try again
-          δ *= Scalar(10);
-        } else if (inertia.positive > ideal_inertia.positive) {
-          // If there's too many positive eigenvalues, increase γ by an order of
-          // magnitude and try again
-          γ *= Scalar(10);
-        }
-      } else {
-        // If the decomposition failed, increase δ and γ by an order of
-        // magnitude and try again
-        δ *= Scalar(10);
-        γ *= Scalar(10);
+        inertia = Inertia{m_sparse_solver.vectorD()};
       }
+    } else {
+      m_info = m_dense_solver.compute(lhs + reg).info();
+      if (m_info == Eigen::Success) {
+        inertia = Inertia{m_dense_solver.vectorD()};
+      }
+    }
 
-      // If the Hessian perturbation is too high, report failure. This can be
-      // caused by ill-conditioning.
-      if (δ > Scalar(1e20) || γ > Scalar(1e20)) {
-        m_info = Eigen::NumericalIssue;
-        return *this;
-      }
+    if (m_info == Eigen::Success && inertia == ideal_inertia) {
+      return *this;
+    } else {
+      m_info = Eigen::NumericalIssue;
+      return *this;
     }
   }
 
@@ -199,20 +171,6 @@ class RegularizedLDLT {
     m_sparse_solver.factorize(lhs);
 
     return m_sparse_solver;
-  }
-
-  /// Returns regularization matrix.
-  ///
-  /// @param δ The Hessian regularization factor.
-  /// @param γ The equality constraint Jacobian regularization factor.
-  /// @return Regularization matrix.
-  SparseMatrix regularization(Scalar δ, Scalar γ) {
-    DenseVector vec{m_num_decision_variables + m_num_equality_constraints};
-    vec.segment(0, m_num_decision_variables).setConstant(δ);
-    vec.segment(m_num_decision_variables, m_num_equality_constraints)
-        .setConstant(-γ);
-
-    return SparseMatrix{vec.asDiagonal()};
   }
 };
 
