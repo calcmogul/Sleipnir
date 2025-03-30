@@ -19,6 +19,7 @@
 #include "sleipnir/optimization/solver/util/append_as_triplets.hpp"
 #include "sleipnir/optimization/solver/util/feasibility_restoration.hpp"
 #include "sleipnir/optimization/solver/util/filter.hpp"
+#include "sleipnir/optimization/solver/util/infnorm.hpp"
 #include "sleipnir/optimization/solver/util/is_locally_infeasible.hpp"
 #include "sleipnir/optimization/solver/util/kkt_error.hpp"
 #include "sleipnir/optimization/solver/util/regularized_ldlt.hpp"
@@ -313,11 +314,19 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
     Scalar α(1);
     bool call_feasibility_restoration = false;
 
+    // Compute the regularization matrix. See [6].
+    constexpr Scalar δ_p(0);
+    Scalar δ_d = infnorm<Scalar>(A_e.transpose() * A_e);
+    Eigen::Vector<Scalar, Eigen::Dynamic> vec{lhs.rows()};
+    vec.segment(0, x.rows()).setConstant(δ_p);
+    vec.segment(x.rows(), y.rows()).setConstant(-δ_d);
+    Eigen::SparseMatrix<Scalar> reg{vec.asDiagonal()};
+
     // Solve the Newton-KKT system
     //
     // [H   Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy]
     // [Aₑ   0 ][−pʸ]    [   cₑ    ]
-    if (solver.compute(lhs).info() != Eigen::Success) [[unlikely]] {
+    if (solver.compute(lhs, reg).info() != Eigen::Success) [[unlikely]] {
       return ExitStatus::FACTORIZATION_FAILED;
     }
 
