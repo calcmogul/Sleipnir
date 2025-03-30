@@ -21,6 +21,7 @@
 #include "sleipnir/optimization/solver/util/feasibility_restoration.hpp"
 #include "sleipnir/optimization/solver/util/filter.hpp"
 #include "sleipnir/optimization/solver/util/fraction_to_the_boundary_rule.hpp"
+#include "sleipnir/optimization/solver/util/infnorm.hpp"
 #include "sleipnir/optimization/solver/util/is_locally_infeasible.hpp"
 #include "sleipnir/optimization/solver/util/kkt_error.hpp"
 #include "sleipnir/optimization/solver/util/regularized_ldlt.hpp"
@@ -444,11 +445,20 @@ ExitStatus interior_point(
     Scalar α_z(1);
     bool call_feasibility_restoration = false;
 
+    // Compute the regularization matrix. See [6].
+    Scalar δ_p = μ;
+    Scalar δ_d =
+        Σ.diagonal().maxCoeff() * infnorm<Scalar>(A_e.transpose() * A_e);
+    Eigen::Vector<Scalar, Eigen::Dynamic> vec{lhs.rows()};
+    vec.segment(0, x.rows()).setConstant(δ_p);
+    vec.segment(x.rows(), z.rows()).setConstant(-δ_d);
+    Eigen::SparseMatrix<Scalar> reg{vec.asDiagonal()};
+
     // Solve the Newton-KKT system
     //
     // [H + AᵢᵀΣAᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(−Σcᵢ + μS⁻¹e + z)]
     // [    Aₑ       0 ][−pʸ]    [               cₑ                ]
-    if (solver.compute(lhs).info() != Eigen::Success) [[unlikely]] {
+    if (solver.compute(lhs, reg).info() != Eigen::Success) [[unlikely]] {
       return ExitStatus::FACTORIZATION_FAILED;
     }
 
