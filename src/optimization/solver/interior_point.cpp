@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cmath>
 #include <expected>
+#include <fstream>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -514,8 +515,19 @@ ExitStatus interior_point(
   double prev_p_v_infnorm = std::numeric_limits<double>::infinity();
   bool μ_initialized = false;
 
+  std::ofstream x_results{"x_results.csv"};
+  x_results << "iterations,v\n";
+  std::ofstream v_results{"v_results.csv"};
+  v_results << "iterations,v\n";
+  std::ofstream mu_results{"mu_results.csv"};
+  mu_results << "iterations,μ\n";
+
   while (E_0 > options.tolerance &&
          acceptable_iter_counter < options.max_acceptable_iterations) {
+    x_results << iterations << ',' << x[0] << '\n';
+    v_results << iterations << ',' << v[0] << '\n';
+    mu_results << iterations << ',' << (sqrt_μ * sqrt_μ) << '\n';
+
     ScopedProfiler inner_iter_profiler{inner_iter_prof};
     ScopedProfiler feasibility_check_profiler{feasibility_check_prof};
 

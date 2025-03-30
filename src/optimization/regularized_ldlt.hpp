@@ -11,6 +11,7 @@
 #include <Eigen/SparseCore>
 
 #include "optimization/inertia.hpp"
+#include "sleipnir/util/print.hpp"
 
 // See docs/algorithms.md#Works_cited for citation definitions
 
@@ -66,8 +67,11 @@ class RegularizedLDLT {
       // If the inertia is ideal, don't regularize the system
       if (inertia == ideal_inertia) {
         m_prev_δ = 0.0;
+        slp::println("ideal inertia @ δ = 0, γ = 0");
         return *this;
       }
+    } else {
+      slp::println("factorization failed @ δ = 0, γ = 0");
     }
 
     // Also regularize the Hessian. If the Hessian wasn't regularized in a
@@ -97,6 +101,7 @@ class RegularizedLDLT {
       if (m_info == Eigen::Success) {
         if (inertia == ideal_inertia) {
           // If the inertia is ideal, store δ and return
+          slp::println("ideal inertia @ δ = {}, γ = {}", δ, γ);
           m_prev_δ = δ;
           return *this;
         } else if (inertia.zero > 0) {
@@ -116,6 +121,7 @@ class RegularizedLDLT {
       } else {
         // If the decomposition failed, increase δ and γ by an order of
         // magnitude and try again
+        slp::println("factorization failed @ δ = {}, γ = {}", δ, γ);
         δ *= 10.0;
         γ *= 10.0;
       }
