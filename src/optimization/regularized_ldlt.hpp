@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cmath>
 
 #include <Eigen/Cholesky>
@@ -52,8 +53,12 @@ class RegularizedLDLT {
     // We consider less than 25% to be sparse.
     m_is_sparse = lhs.nonZeros() < 0.25 * lhs.size();
 
-    m_info = m_is_sparse ? compute_sparse(lhs).info()
-                         : m_dense_solver.compute(lhs).info();
+    m_D_inv = scaling(lhs);
+
+    Eigen::SparseMatrix<double> scaled_lhs = m_D_inv * lhs * m_D_inv;
+
+    m_info = m_is_sparse ? compute_sparse(scaled_lhs).info()
+                         : m_dense_solver.compute(scaled_lhs).info();
 
     Inertia inertia;
 
@@ -72,7 +77,7 @@ class RegularizedLDLT {
     // previous run of compute(), start at small values of δ and γ. Otherwise,
     // attempt a δ and γ half as big as the previous run so δ and γ can trend
     // downwards over time.
-    double δ = m_prev_δ == 0.0 ? 1e-4 : m_prev_δ / 2.0;
+    double δ = m_prev_δ == 0.0 ? 1e-10 : m_prev_δ / 2.0;
     double γ = 1e-10;
 
     while (true) {
@@ -80,13 +85,15 @@ class RegularizedLDLT {
       //
       // lhs = [H + AᵢᵀΣAᵢ + δI  Aₑᵀ]
       //       [      Aₑ         −γI]
+      Eigen::SparseMatrix<double> reg_lhs = scaled_lhs + regularization(δ, γ);
+
       if (m_is_sparse) {
-        m_info = compute_sparse(lhs + regularization(δ, γ)).info();
+        m_info = compute_sparse(reg_lhs).info();
         if (m_info == Eigen::Success) {
           inertia = Inertia{m_sparse_solver.vectorD()};
         }
       } else {
-        m_info = m_dense_solver.compute(lhs + regularization(δ, γ)).info();
+        m_info = m_dense_solver.compute(reg_lhs).info();
         if (m_info == Eigen::Success) {
           inertia = Inertia{m_dense_solver.vectorD()};
         }
@@ -135,10 +142,11 @@ class RegularizedLDLT {
    */
   template <typename Rhs>
   Eigen::VectorXd solve(const Eigen::MatrixBase<Rhs>& rhs) {
+    // x = D⁻¹ solve(D⁻¹AD⁻¹, D⁻¹b)
     if (m_is_sparse) {
-      return m_sparse_solver.solve(rhs);
+      return m_D_inv * m_sparse_solver.solve(m_D_inv * rhs);
     } else {
-      return m_dense_solver.solve(rhs);
+      return m_D_inv * m_dense_solver.solve((m_D_inv * rhs).eval());
     }
   }
 
@@ -150,10 +158,11 @@ class RegularizedLDLT {
    */
   template <typename Rhs>
   Eigen::VectorXd solve(const Eigen::SparseMatrixBase<Rhs>& rhs) {
+    // x = D⁻¹ solve(D⁻¹AD⁻¹, D⁻¹b)
     if (m_is_sparse) {
-      return m_sparse_solver.solve(rhs);
+      return m_D_inv * m_sparse_solver.solve(m_D_inv * rhs);
     } else {
-      return m_dense_solver.solve(rhs.toDense());
+      return m_D_inv * m_dense_solver.solve((m_D_inv * rhs).toDense());
     }
   }
 
@@ -171,6 +180,10 @@ class RegularizedLDLT {
   SparseSolver m_sparse_solver;
   DenseSolver m_dense_solver;
   bool m_is_sparse = true;
+
+  /// The scaling matrix D⁻¹ in D⁻¹AD⁻¹x = D⁻¹b. This improves numerical
+  /// conditioning.
+  Eigen::SparseMatrix<double> m_D_inv;
 
   Eigen::ComputationInfo m_info = Eigen::Success;
 
@@ -207,6 +220,40 @@ class RegularizedLDLT {
     m_sparse_solver.factorize(lhs);
 
     return m_sparse_solver;
+  }
+
+  /**
+   * Returns scaling matrix D⁻¹.
+   *
+   * @param lhs Matrix to scale.
+   */
+  Eigen::SparseMatrix<double> scaling(const Eigen::SparseMatrix<double>& lhs) {
+    //   Ax = b
+    //   D⁻¹Ax = D⁻¹b
+    //   D⁻¹AD⁻¹Dx = D⁻¹b
+    //   (D⁻¹AD⁻¹)Dx = D⁻¹b
+    //   Dx = solve(D⁻¹AD⁻¹, D⁻¹b)
+    //   x = D⁻¹ solve(D⁻¹AD⁻¹, D⁻¹b)
+
+    // Find ∞-norm of each row
+    Eigen::VectorXd d = Eigen::VectorXd::Constant(lhs.rows(), 0.0);
+    for (int col = 0; col < lhs.cols(); ++col) {
+      for (Eigen::SparseMatrix<double>::InnerIterator it{lhs, col}; it; ++it) {
+        // The extra column assignment is needed for full coverage of the
+        // symmetric matrix when only given its lower triangle
+        d[it.row()] = std::max(d[it.row()], std::abs(it.value()));
+        d[it.col()] = std::max(d[it.col()], std::abs(it.value()));
+      }
+    }
+
+    // If a row had zero norm, set norm to 1
+    for (int row = 0; row < lhs.rows(); ++row) {
+      if (d[row] == 0.0) {
+        d[row] = 1.0;
+      }
+    }
+
+    return Eigen::SparseMatrix<double>{d.cwiseInverse().asDiagonal()};
   }
 
   /**
