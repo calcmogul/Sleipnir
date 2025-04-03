@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <algorithm>
+
 #include <Eigen/Cholesky>
 #include <Eigen/Core>
 #include <Eigen/SparseCholesky>
@@ -52,8 +54,12 @@ class RegularizedLDLT {
     // We consider less than 25% to be sparse.
     m_is_sparse = lhs.nonZeros() < 0.25 * lhs.size();
 
-    m_info = m_is_sparse ? compute_sparse(lhs).info()
-                         : m_dense_solver.compute(lhs).info();
+    m_D_inv = scaling(lhs);
+
+    SparseMatrix scaled_lhs = m_D_inv * lhs * m_D_inv;
+
+    m_info = m_is_sparse ? compute_sparse(scaled_lhs).info()
+                         : m_dense_solver.compute(scaled_lhs).info();
 
     Inertia inertia;
 
@@ -72,7 +78,7 @@ class RegularizedLDLT {
     // previous run of compute(), start at small values of δ and γ. Otherwise,
     // attempt a δ and γ half as big as the previous run so δ and γ can trend
     // downwards over time.
-    Scalar δ = m_prev_δ == Scalar(0) ? Scalar(1e-4) : m_prev_δ / Scalar(2);
+    Scalar δ = m_prev_δ == Scalar(0) ? Scalar(1e-10) : m_prev_δ / Scalar(2);
     Scalar γ(1e-10);
 
     while (true) {
@@ -80,13 +86,15 @@ class RegularizedLDLT {
       //
       // lhs = [H + AᵢᵀΣAᵢ + δI  Aₑᵀ]
       //       [      Aₑ         −γI]
+      SparseMatrix reg_lhs = scaled_lhs + regularization(δ, γ);
+
       if (m_is_sparse) {
-        m_info = compute_sparse(lhs + regularization(δ, γ)).info();
+        m_info = compute_sparse(reg_lhs).info();
         if (m_info == Eigen::Success) {
           inertia = Inertia{m_sparse_solver.vectorD()};
         }
       } else {
-        m_info = m_dense_solver.compute(lhs + regularization(δ, γ)).info();
+        m_info = m_dense_solver.compute(reg_lhs).info();
         if (m_info == Eigen::Success) {
           inertia = Inertia{m_dense_solver.vectorD()};
         }
@@ -133,10 +141,11 @@ class RegularizedLDLT {
   /// @return The solution.
   template <typename Rhs>
   DenseVector solve(const Eigen::MatrixBase<Rhs>& rhs) {
+    // x = D⁻¹ solve(D⁻¹AD⁻¹, D⁻¹b)
     if (m_is_sparse) {
-      return m_sparse_solver.solve(rhs);
+      return m_D_inv * m_sparse_solver.solve(m_D_inv * rhs);
     } else {
-      return m_dense_solver.solve(rhs);
+      return m_D_inv * m_dense_solver.solve((m_D_inv * rhs).eval());
     }
   }
 
@@ -146,10 +155,11 @@ class RegularizedLDLT {
   /// @return The solution.
   template <typename Rhs>
   DenseVector solve(const Eigen::SparseMatrixBase<Rhs>& rhs) {
+    // x = D⁻¹ solve(D⁻¹AD⁻¹, D⁻¹b)
     if (m_is_sparse) {
-      return m_sparse_solver.solve(rhs);
+      return m_D_inv * m_sparse_solver.solve(m_D_inv * rhs);
     } else {
-      return m_dense_solver.solve(rhs.toDense());
+      return m_D_inv * m_dense_solver.solve((m_D_inv * rhs).toDense());
     }
   }
 
@@ -165,6 +175,10 @@ class RegularizedLDLT {
   SparseSolver m_sparse_solver;
   DenseSolver m_dense_solver;
   bool m_is_sparse = true;
+
+  /// The scaling matrix D⁻¹ in D⁻¹AD⁻¹x = D⁻¹b. This improves numerical
+  /// conditioning.
+  SparseMatrix m_D_inv;
 
   Eigen::ComputationInfo m_info = Eigen::Success;
 
@@ -199,6 +213,39 @@ class RegularizedLDLT {
     m_sparse_solver.factorize(lhs);
 
     return m_sparse_solver;
+  }
+
+  /// Returns scaling matrix D⁻¹.
+  ///
+  /// @param lhs Matrix to scale.
+  SparseMatrix scaling(const SparseMatrix& lhs) {
+    //   Ax = b
+    //   D⁻¹Ax = D⁻¹b
+    //   D⁻¹AD⁻¹Dx = D⁻¹b
+    //   (D⁻¹AD⁻¹)Dx = D⁻¹b
+    //   Dx = solve(D⁻¹AD⁻¹, D⁻¹b)
+    //   x = D⁻¹ solve(D⁻¹AD⁻¹, D⁻¹b)
+
+    // Find ∞-norm of each row
+    DenseVector d = DenseVector::Constant(lhs.rows(), Scalar(0));
+    for (int col = 0; col < lhs.cols(); ++col) {
+      for (typename SparseMatrix::InnerIterator it{lhs, col}; it; ++it) {
+        // The extra column assignment is needed for full coverage of the
+        // symmetric matrix when only given its lower triangle
+        using std::abs;
+        d[it.row()] = std::max(d[it.row()], abs(it.value()));
+        d[it.col()] = std::max(d[it.col()], abs(it.value()));
+      }
+    }
+
+    // If a row had zero norm, set norm to 1
+    for (int row = 0; row < lhs.rows(); ++row) {
+      if (d[row] == Scalar(0)) {
+        d[row] = Scalar(1);
+      }
+    }
+
+    return SparseMatrix{d.cwiseInverse().asDiagonal()};
   }
 
   /// Returns regularization matrix.
