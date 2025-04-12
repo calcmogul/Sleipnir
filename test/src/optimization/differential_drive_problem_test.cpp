@@ -40,8 +40,8 @@ TEMPLATE_TEST_CASE("Problem - Differential drive", "[Problem]",
 
   // Initial guess
   for (int k = 0; k < N; ++k) {
-    X[0, k].set_value(lerp(x_initial[0], x_final[0], T(k) / T(N)));
-    X[1, k].set_value(lerp(x_initial[1], x_final[1], T(k) / T(N)));
+    X(0, k).set_value(lerp(x_initial[0], x_final[0], T(k) / T(N)));
+    X(1, k).set_value(lerp(x_initial[1], x_final[1], T(k) / T(N)));
   }
 
   // u = [left voltage, right voltage]ᵀ
@@ -93,10 +93,10 @@ TEMPLATE_TEST_CASE("Problem - Differential drive", "[Problem]",
     u = U.col(k).value();
 
     // Input constraints
-    CHECK(U[0, k].value() >= -u_max);
-    CHECK(U[0, k].value() <= u_max);
-    CHECK(U[1, k].value() >= -u_max);
-    CHECK(U[1, k].value() <= u_max);
+    CHECK(U(0, k).value() >= -u_max);
+    CHECK(U(0, k).value() <= u_max);
+    CHECK(U(1, k).value() >= -u_max);
+    CHECK(U(1, k).value() <= u_max);
 
     // Verify state
     CHECK_THAT(X.value(0, k), WithinAbs(x[0], T(1e-8)));

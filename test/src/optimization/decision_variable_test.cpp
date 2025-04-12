@@ -170,9 +170,9 @@ TEMPLATE_TEST_CASE("decision_variable - Symmetric matrix",
   CHECK(A.value(1, 1) == T(0));
 
   // Assign to lower triangle
-  A[0, 0].set_value(T(1));
-  A[1, 0].set_value(T(2));
-  A[1, 1].set_value(T(3));
+  A(0, 0).set_value(T(1));
+  A(1, 0).set_value(T(2));
+  A(1, 1).set_value(T(3));
 
   // Confirm whole matrix changed
   CHECK(A.value(0, 0) == T(1));

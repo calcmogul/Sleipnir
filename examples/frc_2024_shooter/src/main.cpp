@@ -60,7 +60,7 @@ slp::VariableMatrix<double> f(const slp::VariableMatrix<double>& x) {
   // A is the cross-sectional area of a circle in m²
   // m is the object mass in kg
   constexpr double ρ = 1.204;  // kg/m³
-  auto v = x[slp::Slice{3, 6}, _];
+  auto v = x(slp::Slice{3, 6}, _);
   slp::Variable v2 = v.T() * v;
   auto v_norm = sqrt(v2);
   auto v_hat = v / v_norm;
