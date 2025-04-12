@@ -57,7 +57,7 @@ class VariableBlock : public SleipnirBase {
 
       for (int row = 0; row < rows(); ++row) {
         for (int col = 0; col < cols(); ++col) {
-          (*this)[row, col] = values[row, col];
+          (*this)(row, col) = values(row, col);
         }
       }
     }
@@ -92,7 +92,7 @@ class VariableBlock : public SleipnirBase {
 
       for (int row = 0; row < rows(); ++row) {
         for (int col = 0; col < cols(); ++col) {
-          (*this)[row, col] = values[row, col];
+          (*this)(row, col) = values(row, col);
         }
       }
     }
@@ -155,7 +155,7 @@ class VariableBlock : public SleipnirBase {
   VariableBlock<Mat>& operator=(ScalarLike auto value) {
     slp_assert(rows() == 1 && cols() == 1);
 
-    (*this)[0, 0] = value;
+    (*this)(0, 0) = value;
 
     return *this;
   }
@@ -170,7 +170,7 @@ class VariableBlock : public SleipnirBase {
   void set_value(Scalar value) {
     slp_assert(rows() == 1 && cols() == 1);
 
-    (*this)[0, 0].set_value(value);
+    (*this)(0, 0).set_value(value);
   }
 
   /**
@@ -185,7 +185,7 @@ class VariableBlock : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)[row, col] = values[row, col];
+        (*this)(row, col) = values(row, col);
       }
     }
 
@@ -204,7 +204,7 @@ class VariableBlock : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)[row, col].set_value(values[row, col]);
+        (*this)(row, col).set_value(values(row, col));
       }
     }
   }
@@ -220,7 +220,7 @@ class VariableBlock : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)[row, col] = values[row, col];
+        (*this)(row, col) = values(row, col);
       }
     }
     return *this;
@@ -237,7 +237,7 @@ class VariableBlock : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)[row, col] = std::move(values[row, col]);
+        (*this)(row, col) = std::move(values(row, col));
       }
     }
     return *this;
@@ -250,13 +250,13 @@ class VariableBlock : public SleipnirBase {
    * @param col The scalar subblock's column.
    * @return A scalar subblock at the given row and column.
    */
-  Variable<Scalar>& operator[](int row, int col)
+  Variable<Scalar>& operator()(int row, int col)
     requires(!std::is_const_v<Mat>)
   {
     slp_assert(row >= 0 && row < rows());
     slp_assert(col >= 0 && col < cols());
-    return (*m_mat)[m_row_slice.start + row * m_row_slice.step,
-                    m_col_slice.start + col * m_col_slice.step];
+    return (*m_mat)(m_row_slice.start + row * m_row_slice.step,
+                    m_col_slice.start + col * m_col_slice.step);
   }
 
   /**
@@ -266,11 +266,11 @@ class VariableBlock : public SleipnirBase {
    * @param col The scalar subblock's column.
    * @return A scalar subblock at the given row and column.
    */
-  const Variable<Scalar>& operator[](int row, int col) const {
+  const Variable<Scalar>& operator()(int row, int col) const {
     slp_assert(row >= 0 && row < rows());
     slp_assert(col >= 0 && col < cols());
-    return (*m_mat)[m_row_slice.start + row * m_row_slice.step,
-                    m_col_slice.start + col * m_col_slice.step];
+    return (*m_mat)(m_row_slice.start + row * m_row_slice.step,
+                    m_col_slice.start + col * m_col_slice.step);
   }
 
   /**
@@ -283,7 +283,7 @@ class VariableBlock : public SleipnirBase {
     requires(!std::is_const_v<Mat>)
   {
     slp_assert(index >= 0 && index < rows() * cols());
-    return (*this)[index / cols(), index % cols()];
+    return (*this)(index / cols(), index % cols());
   }
 
   /**
@@ -294,7 +294,7 @@ class VariableBlock : public SleipnirBase {
    */
   const Variable<Scalar>& operator[](int index) const {
     slp_assert(index >= 0 && index < rows() * cols());
-    return (*this)[index / cols(), index % cols()];
+    return (*this)(index / cols(), index % cols());
   }
 
   /**
@@ -312,8 +312,8 @@ class VariableBlock : public SleipnirBase {
     slp_assert(col_offset >= 0 && col_offset <= cols());
     slp_assert(block_rows >= 0 && block_rows <= rows() - row_offset);
     slp_assert(block_cols >= 0 && block_cols <= cols() - col_offset);
-    return (*this)[Slice{row_offset, row_offset + block_rows, 1},
-                   Slice{col_offset, col_offset + block_cols, 1}];
+    return (*this)({row_offset, row_offset + block_rows, 1},
+                   {col_offset, col_offset + block_cols, 1});
   }
 
   /**
@@ -331,8 +331,8 @@ class VariableBlock : public SleipnirBase {
     slp_assert(col_offset >= 0 && col_offset <= cols());
     slp_assert(block_rows >= 0 && block_rows <= rows() - row_offset);
     slp_assert(block_cols >= 0 && block_cols <= cols() - col_offset);
-    return (*this)[Slice{row_offset, row_offset + block_rows, 1},
-                   Slice{col_offset, col_offset + block_cols, 1}];
+    return (*this)({row_offset, row_offset + block_rows, 1},
+                   {col_offset, col_offset + block_cols, 1});
   }
 
   /**
@@ -342,10 +342,10 @@ class VariableBlock : public SleipnirBase {
    * @param col_slice The column slice.
    * @return A slice of the variable matrix.
    */
-  VariableBlock<Mat> operator[](Slice row_slice, Slice col_slice) {
+  VariableBlock<Mat> operator()(Slice row_slice, Slice col_slice) {
     int row_slice_length = row_slice.adjust(m_row_slice_length);
     int col_slice_length = col_slice.adjust(m_col_slice_length);
-    return (*this)[row_slice, row_slice_length, col_slice, col_slice_length];
+    return (*this)(row_slice, row_slice_length, col_slice, col_slice_length);
   }
 
   /**
@@ -355,11 +355,11 @@ class VariableBlock : public SleipnirBase {
    * @param col_slice The column slice.
    * @return A slice of the variable matrix.
    */
-  const VariableBlock<const Mat> operator[](Slice row_slice,
+  const VariableBlock<const Mat> operator()(Slice row_slice,
                                             Slice col_slice) const {
     int row_slice_length = row_slice.adjust(m_row_slice_length);
     int col_slice_length = col_slice.adjust(m_col_slice_length);
-    return (*this)[row_slice, row_slice_length, col_slice, col_slice_length];
+    return (*this)(row_slice, row_slice_length, col_slice, col_slice_length);
   }
 
   /**
@@ -374,7 +374,7 @@ class VariableBlock : public SleipnirBase {
    * @param col_slice_length The column slice length.
    * @return A slice of the variable matrix.
    */
-  VariableBlock<Mat> operator[](Slice row_slice, int row_slice_length,
+  VariableBlock<Mat> operator()(Slice row_slice, int row_slice_length,
                                 Slice col_slice, int col_slice_length) {
     return VariableBlock{
         *m_mat,
@@ -400,7 +400,7 @@ class VariableBlock : public SleipnirBase {
    * @param col_slice_length The column slice length.
    * @return A slice of the variable matrix.
    */
-  const VariableBlock<const Mat> operator[](Slice row_slice,
+  const VariableBlock<const Mat> operator()(Slice row_slice,
                                             int row_slice_length,
                                             Slice col_slice,
                                             int col_slice_length) const {
@@ -519,7 +519,7 @@ class VariableBlock : public SleipnirBase {
   VariableBlock<Mat>& operator*=(const ScalarLike auto& rhs) {
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)[row, col] *= rhs;
+        (*this)(row, col) *= rhs;
       }
     }
 
@@ -537,7 +537,7 @@ class VariableBlock : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)[row, col] /= rhs[0, 0];
+        (*this)(row, col) /= rhs(0, 0);
       }
     }
 
@@ -553,7 +553,7 @@ class VariableBlock : public SleipnirBase {
   VariableBlock<Mat>& operator/=(const ScalarLike auto& rhs) {
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)[row, col] /= rhs;
+        (*this)(row, col) /= rhs;
       }
     }
 
@@ -571,7 +571,7 @@ class VariableBlock : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)[row, col] += rhs[row, col];
+        (*this)(row, col) += rhs(row, col);
       }
     }
 
@@ -589,7 +589,7 @@ class VariableBlock : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)[row, col] += rhs;
+        (*this)(row, col) += rhs;
       }
     }
 
@@ -607,7 +607,7 @@ class VariableBlock : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)[row, col] -= rhs[row, col];
+        (*this)(row, col) -= rhs(row, col);
       }
     }
 
@@ -625,7 +625,7 @@ class VariableBlock : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)[row, col] -= rhs;
+        (*this)(row, col) -= rhs;
       }
     }
 
@@ -651,7 +651,7 @@ class VariableBlock : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        result[col, row] = (*this)[row, col];
+        result(col, row) = (*this)(row, col);
       }
     }
 
@@ -679,7 +679,7 @@ class VariableBlock : public SleipnirBase {
    * @param col The column of the element to return.
    * @return An element of the variable matrix.
    */
-  Scalar value(int row, int col) { return (*this)[row, col].value(); }
+  Scalar value(int row, int col) { return (*this)(row, col).value(); }
 
   /**
    * Returns an element of the variable block.
@@ -703,7 +703,7 @@ class VariableBlock : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        result[row, col] = value(row, col);
+        result(row, col) = value(row, col);
       }
     }
 
@@ -723,7 +723,7 @@ class VariableBlock : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        result[row, col] = unary_op((*this)[row, col]);
+        result(row, col) = unary_op((*this)(row, col));
       }
     }
 
