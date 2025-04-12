@@ -30,9 +30,9 @@ constexpr Eigen::Vector3d g{{0.0}, {0.0}, {9.806}};  // m/s²
 
 slp::VariableMatrix<double> cross(const slp::VariableMatrix<double>& a,
                                   const slp::VariableMatrix<double>& b) {
-  return slp::VariableMatrix<double>({{a[1, 0] * b[2, 0] - a[2, 0] * b[1, 0]},
-                                      {a[2, 0] * b[0, 0] - a[0, 0] * b[2, 0]},
-                                      {a[0, 0] * b[1, 0] - a[1, 0] * b[0, 0]}});
+  return slp::VariableMatrix<double>({{a(1, 0) * b(2, 0) - a(2, 0) * b(1, 0)},
+                                      {a(2, 0) * b(0, 0) - a(0, 0) * b(2, 0)},
+                                      {a(0, 0) * b(1, 0) - a(1, 0) * b(0, 0)}});
 }
 
 slp::VariableMatrix<double> f(const slp::VariableMatrix<double>& x) {
@@ -52,7 +52,7 @@ slp::VariableMatrix<double> f(const slp::VariableMatrix<double>& x) {
   // A is the cross-sectional area of a circle in m²
   // m is the object mass in kg
   constexpr double ρ = 1.204;  // kg/m³
-  auto v = x[slp::Slice{3, 6}, _];
+  auto v = x(slp::Slice{3, 6}, _);
   slp::Variable v2 = v.T() * v;
   auto v_norm = sqrt(v2);
   auto v_hat = v / v_norm;
@@ -199,9 +199,9 @@ int main() {
   //
   //   max((x - x_c)² + (y - y_c)² - r_t²,
   //       (z - z_c)² tan²(γ) - (x - x_c)² - (y - y_c)²) ≥ 0
-  auto& x_c = target_wrt_field[0, 0];
-  auto& y_c = target_wrt_field[1, 0];
-  auto z_c = target_wrt_field[2, 0] - target_radius / std::tan(cone_angle);
+  auto& x_c = target_wrt_field(0, 0);
+  auto& y_c = target_wrt_field(1, 0);
+  auto z_c = target_wrt_field(2, 0) - target_radius / std::tan(cone_angle);
   for (int k = 0; k < N; ++k) {
     auto& x = p_x[k];
     auto& y = p_y[k];
