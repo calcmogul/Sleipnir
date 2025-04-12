@@ -232,7 +232,7 @@ class VariableMatrix : public SleipnirBase {
     m_storage.reserve(rows() * cols());
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        m_storage.emplace_back(values[row, col]);
+        m_storage.emplace_back(values(row, col));
       }
     }
   }
@@ -248,7 +248,7 @@ class VariableMatrix : public SleipnirBase {
     m_storage.reserve(rows() * cols());
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        m_storage.emplace_back(values[row, col]);
+        m_storage.emplace_back(values(row, col));
       }
     }
   }
@@ -298,7 +298,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < values.rows(); ++row) {
       for (int col = 0; col < values.cols(); ++col) {
-        (*this)[row, col] = values(row, col);
+        (*this)(row, col) = values(row, col);
       }
     }
 
@@ -316,7 +316,7 @@ class VariableMatrix : public SleipnirBase {
   VariableMatrix& operator=(ScalarLike auto value) {
     slp_assert(rows() == 1 && cols() == 1);
 
-    (*this)[0, 0] = value;
+    (*this)(0, 0) = value;
 
     return *this;
   }
@@ -333,7 +333,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < values.rows(); ++row) {
       for (int col = 0; col < values.cols(); ++col) {
-        (*this)[row, col].set_value(values(row, col));
+        (*this)(row, col).set_value(values(row, col));
       }
     }
   }
@@ -345,7 +345,7 @@ class VariableMatrix : public SleipnirBase {
    * @param col The column.
    * @return The element at the given row and column.
    */
-  Variable<Scalar>& operator[](int row, int col) {
+  Variable<Scalar>& operator()(int row, int col) {
     slp_assert(row >= 0 && row < rows());
     slp_assert(col >= 0 && col < cols());
     return m_storage[row * cols() + col];
@@ -358,7 +358,7 @@ class VariableMatrix : public SleipnirBase {
    * @param col The column.
    * @return The element at the given row and column.
    */
-  const Variable<Scalar>& operator[](int row, int col) const {
+  const Variable<Scalar>& operator()(int row, int col) const {
     slp_assert(row >= 0 && row < rows());
     slp_assert(col >= 0 && col < cols());
     return m_storage[row * cols() + col];
@@ -431,7 +431,7 @@ class VariableMatrix : public SleipnirBase {
    * @param col_slice The column slice.
    * @return A slice of the variable matrix.
    */
-  VariableBlock<VariableMatrix> operator[](Slice row_slice, Slice col_slice) {
+  VariableBlock<VariableMatrix> operator()(Slice row_slice, Slice col_slice) {
     int row_slice_length = row_slice.adjust(rows());
     int col_slice_length = col_slice.adjust(cols());
     return VariableBlock{*this, std::move(row_slice), row_slice_length,
@@ -445,7 +445,7 @@ class VariableMatrix : public SleipnirBase {
    * @param col_slice The column slice.
    * @return A slice of the variable matrix.
    */
-  const VariableBlock<const VariableMatrix> operator[](Slice row_slice,
+  const VariableBlock<const VariableMatrix> operator()(Slice row_slice,
                                                        Slice col_slice) const {
     int row_slice_length = row_slice.adjust(rows());
     int col_slice_length = col_slice.adjust(cols());
@@ -466,7 +466,7 @@ class VariableMatrix : public SleipnirBase {
    * @return A slice of the variable matrix.
    *
    */
-  VariableBlock<VariableMatrix> operator[](Slice row_slice,
+  VariableBlock<VariableMatrix> operator()(Slice row_slice,
                                            int row_slice_length,
                                            Slice col_slice,
                                            int col_slice_length) {
@@ -486,7 +486,7 @@ class VariableMatrix : public SleipnirBase {
    * @param col_slice_length The column slice length.
    * @return A slice of the variable matrix.
    */
-  const VariableBlock<const VariableMatrix> operator[](
+  const VariableBlock<const VariableMatrix> operator()(
       Slice row_slice, int row_slice_length, Slice col_slice,
       int col_slice_length) const {
     return VariableBlock{*this, std::move(row_slice), row_slice_length,
@@ -586,9 +586,9 @@ class VariableMatrix : public SleipnirBase {
       for (int j = 0; j < rhs.cols(); ++j) {
         Variable sum{Scalar(0)};
         for (int k = 0; k < lhs.cols(); ++k) {
-          sum += lhs(i, k) * rhs[k, j];
+          sum += lhs(i, k) * rhs(k, j);
         }
-        result[i, j] = sum;
+        result(i, j) = sum;
       }
     }
 
@@ -611,9 +611,9 @@ class VariableMatrix : public SleipnirBase {
       for (int j = 0; j < rhs.cols(); ++j) {
         Variable sum{Scalar(0)};
         for (int k = 0; k < lhs.cols(); ++k) {
-          sum += lhs[i, k] * rhs(k, j);
+          sum += lhs(i, k) * rhs(k, j);
         }
-        result[i, j] = sum;
+        result(i, j) = sum;
       }
     }
 
@@ -636,9 +636,9 @@ class VariableMatrix : public SleipnirBase {
       for (int j = 0; j < rhs.cols(); ++j) {
         Variable sum{Scalar(0)};
         for (int k = 0; k < lhs.cols(); ++k) {
-          sum += lhs[i, k] * rhs[k, j];
+          sum += lhs(i, k) * rhs(k, j);
         }
-        result[i, j] = sum;
+        result(i, j) = sum;
       }
     }
 #if __GNUC__ >= 12
@@ -661,7 +661,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result[row, col] = lhs(row, col) * rhs;
+        result(row, col) = lhs(row, col) * rhs;
       }
     }
 
@@ -680,7 +680,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result[row, col] = lhs[row, col] * rhs;
+        result(row, col) = lhs(row, col) * rhs;
       }
     }
 
@@ -700,7 +700,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result[row, col] = rhs(row, col) * lhs;
+        result(row, col) = rhs(row, col) * lhs;
       }
     }
 
@@ -719,7 +719,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result[row, col] = rhs[row, col] * lhs;
+        result(row, col) = rhs(row, col) * lhs;
       }
     }
 
@@ -739,13 +739,9 @@ class VariableMatrix : public SleipnirBase {
       for (int j = 0; j < rhs.cols(); ++j) {
         Variable sum{Scalar(0)};
         for (int k = 0; k < cols(); ++k) {
-          if constexpr (SleipnirMatrixLike<decltype(rhs), Scalar>) {
-            sum += (*this)[i, k] * rhs[k, j];
-          } else {
-            sum += (*this)[i, k] * rhs(k, j);
-          }
+          sum += (*this)(i, k) * rhs(k, j);
         }
-        (*this)[i, j] = sum;
+        (*this)(i, j) = sum;
       }
     }
 
@@ -761,7 +757,7 @@ class VariableMatrix : public SleipnirBase {
   VariableMatrix& operator*=(const ScalarLike auto& rhs) {
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < rhs.cols(); ++col) {
-        (*this)[row, col] *= rhs;
+        (*this)(row, col) *= rhs;
       }
     }
 
@@ -782,7 +778,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result[row, col] = lhs(row, col) / rhs;
+        result(row, col) = lhs(row, col) / rhs;
       }
     }
 
@@ -803,7 +799,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result[row, col] = lhs[row, col] / rhs;
+        result(row, col) = lhs(row, col) / rhs;
       }
     }
 
@@ -824,7 +820,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result[row, col] = lhs[row, col] / rhs;
+        result(row, col) = lhs(row, col) / rhs;
       }
     }
 
@@ -840,7 +836,7 @@ class VariableMatrix : public SleipnirBase {
   VariableMatrix& operator/=(const ScalarLike auto& rhs) {
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)[row, col] /= rhs;
+        (*this)(row, col) /= rhs;
       }
     }
 
@@ -862,7 +858,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result[row, col] = lhs(row, col) + rhs[row, col];
+        result(row, col) = lhs(row, col) + rhs(row, col);
       }
     }
 
@@ -884,7 +880,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result[row, col] = lhs[row, col] + rhs(row, col);
+        result(row, col) = lhs(row, col) + rhs(row, col);
       }
     }
 
@@ -906,7 +902,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result[row, col] = lhs[row, col] + rhs[row, col];
+        result(row, col) = lhs(row, col) + rhs(row, col);
       }
     }
 
@@ -924,11 +920,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        if constexpr (SleipnirMatrixLike<decltype(rhs), Scalar>) {
-          (*this)[row, col] += rhs[row, col];
-        } else {
-          (*this)[row, col] += rhs(row, col);
-        }
+        (*this)(row, col) += rhs(row, col);
       }
     }
 
@@ -946,7 +938,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)[row, col] += rhs;
+        (*this)(row, col) += rhs;
       }
     }
 
@@ -968,7 +960,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result[row, col] = lhs(row, col) - rhs[row, col];
+        result(row, col) = lhs(row, col) - rhs(row, col);
       }
     }
 
@@ -990,7 +982,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result[row, col] = lhs[row, col] - rhs(row, col);
+        result(row, col) = lhs(row, col) - rhs(row, col);
       }
     }
 
@@ -1012,7 +1004,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result[row, col] = lhs[row, col] - rhs[row, col];
+        result(row, col) = lhs(row, col) - rhs(row, col);
       }
     }
 
@@ -1030,11 +1022,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        if constexpr (SleipnirMatrixLike<decltype(rhs), Scalar>) {
-          (*this)[row, col] -= rhs[row, col];
-        } else {
-          (*this)[row, col] -= rhs(row, col);
-        }
+        (*this)(row, col) -= rhs(row, col);
       }
     }
 
@@ -1052,7 +1040,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)[row, col] -= rhs;
+        (*this)(row, col) -= rhs;
       }
     }
 
@@ -1070,7 +1058,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result[row, col] = -lhs[row, col];
+        result(row, col) = -lhs(row, col);
       }
     }
 
@@ -1083,7 +1071,7 @@ class VariableMatrix : public SleipnirBase {
   // NOLINTNEXTLINE (google-explicit-constructor)
   operator Variable<Scalar>() const {
     slp_assert(rows() == 1 && cols() == 1);
-    return (*this)[0, 0];
+    return (*this)(0, 0);
   }
 
   /**
@@ -1096,7 +1084,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        result[col, row] = (*this)[row, col];
+        result(col, row) = (*this)(row, col);
       }
     }
 
@@ -1124,7 +1112,7 @@ class VariableMatrix : public SleipnirBase {
    * @param col The column of the element to return.
    * @return An element of the variable matrix.
    */
-  Scalar value(int row, int col) { return (*this)[row, col].value(); }
+  Scalar value(int row, int col) { return (*this)(row, col).value(); }
 
   /**
    * Returns an element of the variable matrix.
@@ -1165,7 +1153,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        result[row, col] = unary_op((*this)[row, col]);
+        result(row, col) = unary_op((*this)(row, col));
       }
     }
 
@@ -1434,7 +1422,7 @@ VariableMatrix<Scalar> cwise_reduce(
 
   for (int row = 0; row < lhs.rows(); ++row) {
     for (int col = 0; col < lhs.cols(); ++col) {
-      result[row, col] = binary_op(lhs[row, col], rhs[row, col]);
+      result(row, col) = binary_op(lhs(row, col), rhs(row, col));
     }
   }
 
@@ -1573,17 +1561,17 @@ VariableMatrix<Scalar> solve(const VariableMatrix<Scalar>& A,
 
   if (A.rows() == 1 && A.cols() == 1) {
     // Compute optimal inverse instead of using Eigen's general solver
-    return B[0, 0] / A[0, 0];
+    return B(0, 0) / A(0, 0);
   } else if (A.rows() == 2 && A.cols() == 2) {
     // Compute optimal inverse instead of using Eigen's general solver
     //
     // [a  b]⁻¹  ___1___ [ d  −b]
     // [c  d]  = ad − bc [−c   a]
 
-    const auto& a = A[0, 0];
-    const auto& b = A[0, 1];
-    const auto& c = A[1, 0];
-    const auto& d = A[1, 1];
+    const auto& a = A(0, 0);
+    const auto& b = A(0, 1);
+    const auto& c = A(1, 0);
+    const auto& d = A(1, 1);
 
     VariableMatrix adj_A{{d, -b}, {-c, a}};
     auto det_A = a * d - b * c;
@@ -1600,15 +1588,15 @@ VariableMatrix<Scalar> solve(const VariableMatrix<Scalar>& A,
     //
     // https://www.wolframalpha.com/input?i=inverse+%7B%7Ba%2C+b%2C+c%7D%2C+%7Bd%2C+e%2C+f%7D%2C+%7Bg%2C+h%2C+i%7D%7D
 
-    const auto& a = A[0, 0];
-    const auto& b = A[0, 1];
-    const auto& c = A[0, 2];
-    const auto& d = A[1, 0];
-    const auto& e = A[1, 1];
-    const auto& f = A[1, 2];
-    const auto& g = A[2, 0];
-    const auto& h = A[2, 1];
-    const auto& i = A[2, 2];
+    const auto& a = A(0, 0);
+    const auto& b = A(0, 1);
+    const auto& c = A(0, 2);
+    const auto& d = A(1, 0);
+    const auto& e = A(1, 1);
+    const auto& f = A(1, 2);
+    const auto& g = A(2, 0);
+    const auto& h = A(2, 1);
+    const auto& i = A(2, 2);
 
     auto ae = a * e;
     auto af = a * f;
@@ -1648,22 +1636,22 @@ VariableMatrix<Scalar> solve(const VariableMatrix<Scalar>& A,
     //
     // https://www.wolframalpha.com/input?i=inverse+%7B%7Ba%2C+b%2C+c%2C+d%7D%2C+%7Be%2C+f%2C+g%2C+h%7D%2C+%7Bi%2C+j%2C+k%2C+l%7D%2C+%7Bm%2C+n%2C+o%2C+p%7D%7D
 
-    const auto& a = A[0, 0];
-    const auto& b = A[0, 1];
-    const auto& c = A[0, 2];
-    const auto& d = A[0, 3];
-    const auto& e = A[1, 0];
-    const auto& f = A[1, 1];
-    const auto& g = A[1, 2];
-    const auto& h = A[1, 3];
-    const auto& i = A[2, 0];
-    const auto& j = A[2, 1];
-    const auto& k = A[2, 2];
-    const auto& l = A[2, 3];
-    const auto& m = A[3, 0];
-    const auto& n = A[3, 1];
-    const auto& o = A[3, 2];
-    const auto& p = A[3, 3];
+    const auto& a = A(0, 0);
+    const auto& b = A(0, 1);
+    const auto& c = A(0, 2);
+    const auto& d = A(0, 3);
+    const auto& e = A(1, 0);
+    const auto& f = A(1, 1);
+    const auto& g = A(1, 2);
+    const auto& h = A(1, 3);
+    const auto& i = A(2, 0);
+    const auto& j = A(2, 1);
+    const auto& k = A(2, 2);
+    const auto& l = A(2, 3);
+    const auto& m = A(3, 0);
+    const auto& n = A(3, 1);
+    const auto& o = A(3, 2);
+    const auto& p = A(3, 3);
 
     auto afk = a * f * k;
     auto afl = a * f * l;
@@ -1794,14 +1782,14 @@ VariableMatrix<Scalar> solve(const VariableMatrix<Scalar>& A,
     MatrixXv eigen_A{A.rows(), A.cols()};
     for (int row = 0; row < A.rows(); ++row) {
       for (int col = 0; col < A.cols(); ++col) {
-        eigen_A(row, col) = A[row, col];
+        eigen_A(row, col) = A(row, col);
       }
     }
 
     MatrixXv eigen_B{B.rows(), B.cols()};
     for (int row = 0; row < B.rows(); ++row) {
       for (int col = 0; col < B.cols(); ++col) {
-        eigen_B(row, col) = B[row, col];
+        eigen_B(row, col) = B(row, col);
       }
     }
 
@@ -1810,7 +1798,7 @@ VariableMatrix<Scalar> solve(const VariableMatrix<Scalar>& A,
     VariableMatrix<Scalar> X{detail::empty, A.cols(), B.cols()};
     for (int row = 0; row < X.rows(); ++row) {
       for (int col = 0; col < X.cols(); ++col) {
-        X[row, col] = eigen_X(row, col);
+        X(row, col) = eigen_X(row, col);
       }
     }
 
