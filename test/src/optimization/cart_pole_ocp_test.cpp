@@ -45,8 +45,8 @@ TEMPLATE_TEST_CASE("OCP - Cart-pole", "[OCP]", SCALAR_TYPES_UNDER_TEST) {
 
   // Initial guess
   for (int k = 0; k < N + 1; ++k) {
-    X[0, k].set_value(lerp(x_initial[0], x_final[0], T(k) / T(N)));
-    X[1, k].set_value(lerp(x_initial[1], x_final[1], T(k) / T(N)));
+    X(0, k).set_value(lerp(x_initial[0], x_final[0], T(k) / T(N)));
+    X(1, k).set_value(lerp(x_initial[1], x_final[1], T(k) / T(N)));
   }
 
   // Initial conditions
@@ -96,12 +96,12 @@ TEMPLATE_TEST_CASE("OCP - Cart-pole", "[OCP]", SCALAR_TYPES_UNDER_TEST) {
   Eigen::Matrix<T, 1, 1> u{T(0)};
   for (int k = 0; k < N; ++k) {
     // Cart position constraints
-    CHECK(X[0, k] >= T(0));
-    CHECK(X[0, k] <= d_max);
+    CHECK(X(0, k) >= T(0));
+    CHECK(X(0, k) <= d_max);
 
     // Input constraints
-    CHECK(U[0, k] >= -u_max);
-    CHECK(U[0, k] <= u_max);
+    CHECK(U(0, k) >= -u_max);
+    CHECK(U(0, k) <= u_max);
 
     // Verify state
     CHECK_THAT(X.value(0, k), WithinAbs(x[0], T(1e-2)));
