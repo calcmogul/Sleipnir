@@ -55,7 +55,7 @@ slp::VariableMatrix<double> f(const slp::VariableMatrix<double>& x) {
   //   m is the mass in kg
   //   v̂ is the velocity direction unit vector
   constexpr double ρ = 1.204;  // kg/m³
-  auto v = x[slp::Slice{3, 6}, _];
+  auto v = x(slp::Slice{3, 6}, _);
   slp::Variable v2 = v.T() * v;
   constexpr double C_D = 0.5;
   constexpr double r = 0.15;                      // m
