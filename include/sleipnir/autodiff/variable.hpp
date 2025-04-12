@@ -68,7 +68,7 @@ class Variable : public SleipnirBase {
   ///
   /// @param value The value of the Variable.
   // NOLINTNEXTLINE (google-explicit-constructor)
-  Variable(SleipnirMatrixLike<Scalar> auto value) : expr{value[0, 0].expr} {
+  Variable(SleipnirMatrixLike<Scalar> auto value) : expr{value(0, 0).expr} {
     slp_assert(value.rows() == 1 && value.cols() == 1);
   }
 
@@ -725,7 +725,7 @@ auto make_constraints(LHS&& lhs, RHS&& rhs) {
   for (int row = 0; row < rhs.rows(); ++row) {
     for (int col = 0; col < rhs.cols(); ++col) {
       // Make right-hand side zero
-      constraints.emplace_back(lhs - rhs[row, col]);
+      constraints.emplace_back(lhs - rhs(row, col));
     }
   }
 
@@ -741,7 +741,7 @@ auto make_constraints(LHS&& lhs, RHS&& rhs) {
   for (int row = 0; row < lhs.rows(); ++row) {
     for (int col = 0; col < lhs.cols(); ++col) {
       // Make right-hand side zero
-      constraints.emplace_back(lhs[row, col] - rhs);
+      constraints.emplace_back(lhs(row, col) - rhs);
     }
   }
 
@@ -759,7 +759,7 @@ auto make_constraints(LHS&& lhs, RHS&& rhs) {
   for (int row = 0; row < lhs.rows(); ++row) {
     for (int col = 0; col < lhs.cols(); ++col) {
       // Make right-hand side zero
-      constraints.emplace_back(lhs[row, col] - rhs[row, col]);
+      constraints.emplace_back(lhs(row, col) - rhs(row, col));
     }
   }
 

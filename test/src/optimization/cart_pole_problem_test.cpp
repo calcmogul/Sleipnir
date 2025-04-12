@@ -44,8 +44,8 @@ TEMPLATE_TEST_CASE("Problem - Cart-pole", "[Problem]",
 
   // Initial guess
   for (int k = 0; k < N + 1; ++k) {
-    X[0, k].set_value(lerp(x_initial[0], x_final[0], T(k) / T(N)));
-    X[1, k].set_value(lerp(x_initial[1], x_final[1], T(k) / T(N)));
+    X(0, k).set_value(lerp(x_initial[0], x_final[0], T(k) / T(N)));
+    X(1, k).set_value(lerp(x_initial[1], x_final[1], T(k) / T(N)));
   }
 
   // u = f_x
@@ -104,12 +104,12 @@ TEMPLATE_TEST_CASE("Problem - Cart-pole", "[Problem]",
   // Verify solution
   for (int k = 0; k < N; ++k) {
     // Cart position constraints
-    CHECK(X[0, k] >= T(0));
-    CHECK(X[0, k] <= d_max);
+    CHECK(X(0, k) >= T(0));
+    CHECK(X(0, k) <= d_max);
 
     // Input constraints
-    CHECK(U[0, k] >= -u_max);
-    CHECK(U[0, k] <= u_max);
+    CHECK(U(0, k) >= -u_max);
+    CHECK(U(0, k) <= u_max);
 
     // Dynamics constraints
     Eigen::Vector<T, Eigen::Dynamic> expected_x_k1 =
