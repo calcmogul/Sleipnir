@@ -104,9 +104,9 @@ class Jacobian {
       auto grad = m_graphs[row].generate_tree(m_wrt);
       for (int col = 0; col < m_wrt.rows(); ++col) {
         if (grad[col].expr != nullptr) {
-          result[row, col] = std::move(grad[col]);
+          result(row, col) = std::move(grad[col]);
         } else {
-          result[row, col] = Variable{Scalar(0)};
+          result(row, col) = Variable{Scalar(0)};
         }
       }
     }
