@@ -40,11 +40,11 @@ TEMPLATE_TEST_CASE("Problem - Double integrator", "[Problem]",
   // Kinematics constraint assuming constant acceleration between timesteps
   for (int k = 0; k < N; ++k) {
     constexpr T t = dt.count();
-    auto p_k1 = X[0, k + 1];
-    auto v_k1 = X[1, k + 1];
-    auto p_k = X[0, k];
-    auto v_k = X[1, k];
-    auto a_k = U[0, k];
+    auto p_k1 = X(0, k + 1);
+    auto v_k1 = X(1, k + 1);
+    auto p_k = X(0, k);
+    auto v_k = X(1, k);
+    auto a_k = U(0, k);
 
     // pₖ₊₁ = pₖ + vₖt + 1/2aₖt²
     problem.subject_to(p_k1 == p_k + v_k * t + 0.5 * a_k * t * t);
@@ -66,7 +66,7 @@ TEMPLATE_TEST_CASE("Problem - Double integrator", "[Problem]",
   // Cost function - minimize position error
   slp::Variable J = T(0);
   for (int k = 0; k < N + 1; ++k) {
-    J += pow(r - X[0, k], 2);
+    J += pow(r - X(0, k), 2);
   }
   problem.minimize(J);
 
