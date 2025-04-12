@@ -97,7 +97,7 @@ class Problem {
     for (int row = 0; row < rows; ++row) {
       for (int col = 0; col < cols; ++col) {
         m_decision_variables.emplace_back();
-        vars[row, col] = m_decision_variables.back();
+        vars(row, col) = m_decision_variables.back();
       }
     }
 
@@ -132,8 +132,8 @@ class Problem {
     for (int row = 0; row < rows; ++row) {
       for (int col = 0; col <= row; ++col) {
         m_decision_variables.emplace_back();
-        vars[row, col] = m_decision_variables.back();
-        vars[col, row] = m_decision_variables.back();
+        vars(row, col) = m_decision_variables.back();
+        vars(col, row) = m_decision_variables.back();
       }
     }
 

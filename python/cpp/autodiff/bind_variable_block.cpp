@@ -102,7 +102,7 @@ void bind_variable_block(
         }
 
         auto lhs =
-            self[row_slice, row_slice_length, col_slice, col_slice_length];
+            self(row_slice, row_slice_length, col_slice, col_slice_length);
         if (auto rhs = try_cast<VariableMatrix<double>>(value)) {
           lhs = rhs.value();
         } else if (auto rhs =
@@ -138,7 +138,7 @@ void bind_variable_block(
         return self[row];
       },
       nb::keep_alive<0, 1>(), "row"_a,
-      DOC(slp, VariableBlock, operator, array, 3));
+      DOC(slp, VariableBlock, operator, call, 3));
   cls.def(
       "__getitem__",
       [](VariableBlock<VariableMatrix<double>>& self,
@@ -164,7 +164,7 @@ void bind_variable_block(
           if (col < 0) {
             col += self.cols();
           }
-          return nb::cast(self[row, col]);
+          return nb::cast(self(row, col));
         }
 
         Slice row_slice;
@@ -203,9 +203,9 @@ void bind_variable_block(
         }
 
         return nb::cast(
-            self[row_slice, row_slice_length, col_slice, col_slice_length]);
+            self(row_slice, row_slice_length, col_slice, col_slice_length));
       },
-      nb::keep_alive<0, 1>(), DOC(slp, VariableBlock, operator, array),
+      nb::keep_alive<0, 1>(), DOC(slp, VariableBlock, operator, call),
       "slices"_a);
   cls.def("row",
           nb::overload_cast<int>(&VariableBlock<VariableMatrix<double>>::row),
