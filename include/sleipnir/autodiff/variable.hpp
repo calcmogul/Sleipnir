@@ -512,11 +512,7 @@ gch::small_vector<Variable> make_constraints(LHS&& lhs, RHS&& rhs) {
     for (int row = 0; row < rhs.rows(); ++row) {
       for (int col = 0; col < rhs.cols(); ++col) {
         // Make right-hand side zero
-        if constexpr (EigenMatrixLike<std::decay_t<RHS>>) {
-          constraints.emplace_back(lhs - rhs(row, col));
-        } else {
-          constraints.emplace_back(lhs - rhs[row, col]);
-        }
+        constraints.emplace_back(lhs - rhs(row, col));
       }
     }
   } else if constexpr (MatrixLike<LHS> && ScalarLike<RHS>) {
@@ -525,11 +521,7 @@ gch::small_vector<Variable> make_constraints(LHS&& lhs, RHS&& rhs) {
     for (int row = 0; row < lhs.rows(); ++row) {
       for (int col = 0; col < lhs.cols(); ++col) {
         // Make right-hand side zero
-        if constexpr (EigenMatrixLike<std::decay_t<LHS>>) {
-          constraints.emplace_back(lhs(row, col) - rhs);
-        } else {
-          constraints.emplace_back(lhs[row, col] - rhs);
-        }
+        constraints.emplace_back(lhs(row, col) - rhs);
       }
     }
   } else if constexpr (MatrixLike<LHS> && MatrixLike<RHS>) {
@@ -539,19 +531,7 @@ gch::small_vector<Variable> make_constraints(LHS&& lhs, RHS&& rhs) {
     for (int row = 0; row < lhs.rows(); ++row) {
       for (int col = 0; col < lhs.cols(); ++col) {
         // Make right-hand side zero
-        if constexpr (EigenMatrixLike<std::decay_t<LHS>> &&
-                      EigenMatrixLike<std::decay_t<RHS>>) {
-          constraints.emplace_back(lhs(row, col) - rhs(row, col));
-        } else if constexpr (EigenMatrixLike<std::decay_t<LHS>> &&
-                             SleipnirMatrixLike<std::decay_t<RHS>>) {
-          constraints.emplace_back(lhs(row, col) - rhs[row, col]);
-        } else if constexpr (SleipnirMatrixLike<std::decay_t<LHS>> &&
-                             EigenMatrixLike<std::decay_t<RHS>>) {
-          constraints.emplace_back(lhs[row, col] - rhs(row, col));
-        } else if constexpr (SleipnirMatrixLike<std::decay_t<LHS>> &&
-                             SleipnirMatrixLike<std::decay_t<RHS>>) {
-          constraints.emplace_back(lhs[row, col] - rhs[row, col]);
-        }
+        constraints.emplace_back(lhs(row, col) - rhs(row, col));
       }
     }
   }
