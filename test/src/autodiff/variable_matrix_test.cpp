@@ -35,20 +35,20 @@ TEST_CASE("VariableMatrix - Assignment to default", "[VariableMatrix]") {
 
   CHECK(mat.rows() == 2);
   CHECK(mat.cols() == 2);
-  CHECK(mat[0, 0] == 0.0);
-  CHECK(mat[0, 1] == 0.0);
-  CHECK(mat[1, 0] == 0.0);
-  CHECK(mat[1, 1] == 0.0);
+  CHECK(mat(0, 0) == 0.0);
+  CHECK(mat(0, 1) == 0.0);
+  CHECK(mat(1, 0) == 0.0);
+  CHECK(mat(1, 1) == 0.0);
 
-  mat[0, 0] = 1.0;
-  mat[0, 1] = 2.0;
-  mat[1, 0] = 3.0;
-  mat[1, 1] = 4.0;
+  mat(0, 0) = 1.0;
+  mat(0, 1) = 2.0;
+  mat(1, 0) = 3.0;
+  mat(1, 1) = 4.0;
 
-  CHECK(mat[0, 0] == 1.0);
-  CHECK(mat[0, 1] == 2.0);
-  CHECK(mat[1, 0] == 3.0);
-  CHECK(mat[1, 1] == 4.0);
+  CHECK(mat(0, 0) == 1.0);
+  CHECK(mat(0, 1) == 2.0);
+  CHECK(mat(1, 0) == 3.0);
+  CHECK(mat(1, 1) == 4.0);
 }
 
 TEST_CASE("VariableMatrix - Assignment aliasing", "[VariableMatrix]") {
@@ -65,7 +65,7 @@ TEST_CASE("VariableMatrix - Assignment aliasing", "[VariableMatrix]") {
   CHECK(A == expected_B);
   CHECK(B == expected_B);
 
-  B[0, 0].set_value(2.0);
+  B(0, 0).set_value(2.0);
   expected_B(0, 0) = 2.0;
 
   CHECK(A == expected_B);
@@ -105,7 +105,7 @@ TEST_CASE("VariableMatrix - Slicing", "[VariableMatrix]") {
 
   // Slice from start
   {
-    auto s = mat[slp::Slice{1, _}, slp::Slice{2, _}];
+    auto s = mat({1, _}, {2, _});
     CHECK(s.rows() == 3);
     CHECK(s.cols() == 2);
     // Single-arg index operator on forward slice
@@ -116,30 +116,30 @@ TEST_CASE("VariableMatrix - Slicing", "[VariableMatrix]") {
     CHECK(s[4] == 15.0);
     CHECK(s[5] == 16.0);
     // Double-arg index operator on forward slice
-    CHECK(s[0, 0] == 7.0);
-    CHECK(s[0, 1] == 8.0);
-    CHECK(s[1, 0] == 11.0);
-    CHECK(s[1, 1] == 12.0);
-    CHECK(s[2, 0] == 15.0);
-    CHECK(s[2, 1] == 16.0);
+    CHECK(s(0, 0) == 7.0);
+    CHECK(s(0, 1) == 8.0);
+    CHECK(s(1, 0) == 11.0);
+    CHECK(s(1, 1) == 12.0);
+    CHECK(s(2, 0) == 15.0);
+    CHECK(s(2, 1) == 16.0);
   }
 
   // Slice from end
   {
-    auto s = mat[slp::Slice{-1, _}, slp::Slice{-2, _}];
+    auto s = mat({-1, _}, {-2, _});
     CHECK(s.rows() == 1);
     CHECK(s.cols() == 2);
     // Single-arg index operator on reverse slice
     CHECK(s[0] == 15.0);
     CHECK(s[1] == 16.0);
     // Double-arg index operator on reverse slice
-    CHECK(s[0, 0] == 15.0);
-    CHECK(s[0, 1] == 16.0);
+    CHECK(s(0, 0) == 15.0);
+    CHECK(s(0, 1) == 16.0);
   }
 
   // Slice from start with step of 2
   {
-    auto s = mat[_, slp::Slice{_, _, 2}];
+    auto s = mat(_, {_, _, 2});
     CHECK(s.rows() == 4);
     CHECK(s.cols() == 2);
     CHECK(s ==
@@ -148,7 +148,7 @@ TEST_CASE("VariableMatrix - Slicing", "[VariableMatrix]") {
 
   // Slice from end with negative step for row and column
   {
-    auto s = mat[slp::Slice{_, _, -1}, slp::Slice{_, _, -2}];
+    auto s = mat({_, _, -1}, {_, _, -2});
     CHECK(s.rows() == 4);
     CHECK(s.cols() == 2);
     CHECK(s ==
@@ -157,7 +157,7 @@ TEST_CASE("VariableMatrix - Slicing", "[VariableMatrix]") {
 
   // Slice from start and column -1
   {
-    auto s = mat[slp::Slice{1, _}, -1];
+    auto s = mat({1, _}, -1);
     CHECK(s.rows() == 3);
     CHECK(s.cols() == 1);
     CHECK(s == Eigen::MatrixXd{{8.0}, {12.0}, {16.0}});
@@ -165,7 +165,7 @@ TEST_CASE("VariableMatrix - Slicing", "[VariableMatrix]") {
 
   // Slice from start and column -2
   {
-    auto s = mat[slp::Slice{1, _}, -2];
+    auto s = mat({1, _}, -2);
     CHECK(s.rows() == 3);
     CHECK(s.cols() == 1);
     CHECK(s == Eigen::MatrixXd{{7.0}, {11.0}, {15.0}});
@@ -178,24 +178,18 @@ TEST_CASE("VariableMatrix - Subslicing", "[VariableMatrix]") {
   slp::VariableMatrix A{{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}};
 
   // Block assignment
-  CHECK(A[slp::Slice{1, 3}, slp::Slice{1, 3}].rows() == 2);
-  CHECK(A[slp::Slice{1, 3}, slp::Slice{1, 3}].cols() == 2);
-  A[slp::Slice{1, 3}, slp::Slice{1, 3}] =
-      Eigen::MatrixXd{{10.0, 11.0}, {12.0, 13.0}};
+  CHECK(A({1, 3}, {1, 3}).rows() == 2);
+  CHECK(A({1, 3}, {1, 3}).cols() == 2);
+  A({1, 3}, {1, 3}) = Eigen::MatrixXd{{10.0, 11.0}, {12.0, 13.0}};
 
   Eigen::MatrixXd expected1{
       {1.0, 2.0, 3.0}, {4.0, 10.0, 11.0}, {7.0, 12.0, 13.0}};
   CHECK(expected1 == A.value());
 
   // Block-of-block assignment
-  CHECK(
-      A[slp::Slice{1, 3}, slp::Slice{1, 3}][slp::Slice{1, _}, slp::Slice{1, _}]
-          .rows() == 1);
-  CHECK(
-      A[slp::Slice{1, 3}, slp::Slice{1, 3}][slp::Slice{1, _}, slp::Slice{1, _}]
-          .cols() == 1);
-  A[slp::Slice{1, 3}, slp::Slice{1, 3}][slp::Slice{1, _}, slp::Slice{1, _}] =
-      14.0;
+  CHECK(A({1, 3}, {1, 3})({1, _}, {1, _}).rows() == 1);
+  CHECK(A({1, 3}, {1, 3})({1, _}, {1, _}).cols() == 1);
+  A({1, 3}, {1, 3})({1, _}, {1, _}) = 14.0;
 
   Eigen::MatrixXd expected2{
       {1.0, 2.0, 3.0}, {4.0, 10.0, 11.0}, {7.0, 12.0, 14.0}};
@@ -268,10 +262,9 @@ TEST_CASE("VariableMatrix - Value", "[VariableMatrix]") {
   CHECK(A.T().block(1, 1, 2, 2).value(2) == 6.0);
 
   // Slice
-  CHECK(A[slp::Slice{1, 3}, slp::Slice{1, 3}].value() ==
-        expected.block(1, 1, 2, 2));
-  CHECK(A[slp::Slice{1, 3}, slp::Slice{1, 3}].value(2) == 8.0);
-  CHECK(A[slp::Slice{1, 3}, slp::Slice{1, 3}].T().value(2) == 6.0);
+  CHECK(A({1, 3}, {1, 3}).value() == expected.block(1, 1, 2, 2));
+  CHECK(A({1, 3}, {1, 3}).value(2) == 8.0);
+  CHECK(A({1, 3}, {1, 3}).T().value(2) == 6.0);
 
   // Block-of-block
   CHECK(A.block(1, 1, 2, 2).block(0, 1, 2, 1).value() ==
@@ -280,12 +273,10 @@ TEST_CASE("VariableMatrix - Value", "[VariableMatrix]") {
   CHECK(A.block(1, 1, 2, 2).T().block(0, 1, 2, 1).value(1) == 9.0);
 
   // Slice-of-slice
-  CHECK(A[slp::Slice{1, 3}, slp::Slice{1, 3}][_, slp::Slice{1, _}].value() ==
+  CHECK(A({1, 3}, {1, 3})(_, {1, _}).value() ==
         expected.block(1, 1, 2, 2).block(0, 1, 2, 1));
-  CHECK(A[slp::Slice{1, 3}, slp::Slice{1, 3}][_, slp::Slice{1, _}].value(1) ==
-        9.0);
-  CHECK(A[slp::Slice{1, 3}, slp::Slice{1, 3}].T()[_, slp::Slice{1, _}].value(
-            1) == 9.0);
+  CHECK(A({1, 3}, {1, 3})(_, {1, _}).value(1) == 9.0);
+  CHECK(A({1, 3}, {1, 3}).T()(_, {1, _}).value(1) == 9.0);
 }
 
 TEST_CASE("VariableMatrix - cwise_transform()", "[VariableMatrix]") {
