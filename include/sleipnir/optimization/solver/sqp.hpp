@@ -181,7 +181,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
   gch::small_vector<Eigen::Triplet<Scalar>> triplets;
 
   RegularizedLDLT<Scalar> solver{num_decision_variables,
-                                 num_equality_constraints};
+                                 num_equality_constraints, 0};
 
   // Variables for determining when a step is acceptable
   constexpr Scalar α_reduction_factor(0.5);
