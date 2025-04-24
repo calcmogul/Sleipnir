@@ -136,7 +136,7 @@ ExitStatus newton(
 
   Filter<Scalar> filter;
 
-  RegularizedLDLT<Scalar> solver{num_decision_variables, 0};
+  RegularizedLDLT<Scalar> solver{num_decision_variables, 0, 0};
 
   // Variables for determining when a step is acceptable
   constexpr Scalar α_reduction_factor(0.5);
