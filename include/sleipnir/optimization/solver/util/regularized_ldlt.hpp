@@ -28,10 +28,14 @@ class RegularizedLDLT {
    *   system.
    * @param num_equality_constraints The number of equality constraints in the
    *   system.
+   * @param num_inequality_constraints The number of inequality constraints in
+   *   the system.
    */
-  RegularizedLDLT(int num_decision_variables, int num_equality_constraints)
+  RegularizedLDLT(int num_decision_variables, int num_equality_constraints,
+                  int num_inequality_constraints)
       : m_num_decision_variables{num_decision_variables},
-        m_num_equality_constraints{num_equality_constraints} {}
+        m_num_equality_constraints{num_equality_constraints},
+        m_num_inequality_constraints{num_inequality_constraints} {}
 
   /**
    * Reports whether previous computation was successful.
@@ -79,8 +83,9 @@ class RegularizedLDLT {
     while (true) {
       // Regularize lhs by adding a multiple of the identity matrix
       //
-      // lhs = [H + AᵢᵀΣAᵢ + δI  Aₑᵀ]
-      //       [      Aₑ         −γI]
+      //       [H + δI  Aₑᵀ   Aᵢᵀ]
+      // lhs = [  Aₑ    −γI    0 ]
+      //       [  Aᵢ     0   −Σ⁻¹]
       if (m_is_sparse) {
         m_info = compute_sparse(lhs + regularization(δ, γ)).info();
         if (m_info == Eigen::Success) {
@@ -184,9 +189,13 @@ class RegularizedLDLT {
   /// The number of equality constraints in the system.
   int m_num_equality_constraints = 0;
 
+  /// The number of inequality constraints in the system.
+  int m_num_inequality_constraints = 0;
+
   /// The ideal system inertia.
-  Inertia ideal_inertia{m_num_decision_variables, m_num_equality_constraints,
-                        0};
+  Inertia ideal_inertia{
+      m_num_decision_variables,
+      m_num_equality_constraints + m_num_inequality_constraints, 0};
 
   /// The value of δ from the previous run of compute().
   Scalar m_prev_δ{0};
@@ -222,10 +231,14 @@ class RegularizedLDLT {
    */
   Eigen::SparseMatrix<Scalar> regularization(Scalar δ, Scalar γ) {
     Eigen::Vector<Scalar, Eigen::Dynamic> vec{m_num_decision_variables +
-                                              m_num_equality_constraints};
+                                              m_num_equality_constraints +
+                                              m_num_inequality_constraints};
     vec.segment(0, m_num_decision_variables).setConstant(δ);
     vec.segment(m_num_decision_variables, m_num_equality_constraints)
         .setConstant(-γ);
+    vec.segment(m_num_decision_variables + m_num_equality_constraints,
+                m_num_inequality_constraints)
+        .setConstant(Scalar(0));
 
     return Eigen::SparseMatrix<Scalar>{vec.asDiagonal()};
   }
