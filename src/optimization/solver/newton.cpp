@@ -106,7 +106,7 @@ ExitStatus newton(const NewtonMatrixCallbacks& matrix_callbacks,
 
   Filter filter;
 
-  RegularizedLDLT solver{num_decision_variables, 0};
+  RegularizedLDLT solver{num_decision_variables, 0, 0};
 
   // Variables for determining when a step is acceptable
   constexpr double α_reduction_factor = 0.5;

@@ -158,7 +158,7 @@ ExitStatus sqp(const SQPMatrixCallbacks& matrix_callbacks,
   // Kept outside the loop so its storage can be reused
   gch::small_vector<Eigen::Triplet<double>> triplets;
 
-  RegularizedLDLT solver{num_decision_variables, num_equality_constraints};
+  RegularizedLDLT solver{num_decision_variables, num_equality_constraints, 0};
 
   // Variables for determining when a step is acceptable
   constexpr double α_reduction_factor = 0.5;
