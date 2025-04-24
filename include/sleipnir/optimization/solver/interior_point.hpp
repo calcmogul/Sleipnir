@@ -261,7 +261,8 @@ ExitStatus interior_point(
   gch::small_vector<Eigen::Triplet<Scalar>> triplets;
 
   RegularizedLDLT<Scalar> solver{num_decision_variables,
-                                 num_equality_constraints};
+                                 num_equality_constraints,
+                                 num_inequality_constraints};
 
   // Variables for determining when a step is acceptable
   constexpr Scalar α_reduction_factor(0.5);
@@ -329,37 +330,53 @@ ExitStatus interior_point(
     // S = diag(s)
     // Z = diag(z)
     // Σ = S⁻¹Z
-    const SparseMatrix Σ{s.cwiseInverse().asDiagonal() * z.asDiagonal()};
+    // Σ⁻¹ = Z⁻¹S
+    const SparseMatrix Σinv{z.cwiseInverse().asDiagonal() * s.asDiagonal()};
 
-    // lhs = [H + AᵢᵀΣAᵢ  Aₑᵀ]
-    //       [    Aₑ       0 ]
+    //       [H   Aₑᵀ  Aᵢᵀ ]
+    // lhs = [Aₑ   0    0  ]
+    //       [Aᵢ   0   −Σ⁻¹]
     //
     // Don't assign upper triangle because solver only uses lower triangle.
-    const SparseMatrix top_left =
-        H + (A_i.transpose() * Σ * A_i).template triangularView<Eigen::Lower>();
     triplets.clear();
-    triplets.reserve(top_left.nonZeros() + A_e.nonZeros());
+    triplets.reserve(H.nonZeros() + A_e.nonZeros() + A_i.nonZeros() +
+                     Σinv.nonZeros());
     for (int col = 0; col < H.cols(); ++col) {
-      // Append column of H + AᵢᵀΣAᵢ lower triangle in top-left quadrant
-      for (typename SparseMatrix::InnerIterator it{top_left, col}; it; ++it) {
+      // Append column of H lower triangle in top-left
+      for (typename SparseMatrix::InnerIterator it{H, col}; it; ++it) {
         triplets.emplace_back(it.row(), it.col(), it.value());
       }
-      // Append column of Aₑ in bottom-left quadrant
+      // Append column of Aₑ in middle-left
       for (typename SparseMatrix::InnerIterator it{A_e, col}; it; ++it) {
         triplets.emplace_back(H.rows() + it.row(), it.col(), it.value());
       }
+      // Append column of Aᵢ in bottom-left
+      for (typename SparseMatrix::InnerIterator it{A_i, col}; it; ++it) {
+        triplets.emplace_back(H.rows() + A_e.rows() + it.row(), it.col(),
+                              it.value());
+      }
     }
-    SparseMatrix lhs(num_decision_variables + num_equality_constraints,
-                     num_decision_variables + num_equality_constraints);
+    // Append −Σ⁻¹ in bottom-right
+    for (int col = 0; col < Σinv.cols(); ++col) {
+      for (typename Eigen::SparseMatrix<Scalar>::InnerIterator it{Σinv, col};
+           it; ++it) {
+        triplets.emplace_back(H.rows() + A_e.rows() + it.row(),
+                              H.cols() + A_e.rows() + it.col(), -it.value());
+      }
+    }
+    SparseMatrix lhs(num_decision_variables + num_equality_constraints +
+                         num_inequality_constraints,
+                     num_decision_variables + num_equality_constraints +
+                         num_inequality_constraints);
     lhs.setFromSortedTriplets(triplets.begin(), triplets.end());
 
-    // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(−Σcᵢ + μS⁻¹e + z)]
-    //        [               cₑ                ]
-    DenseVector rhs{x.rows() + y.rows()};
-    rhs.segment(0, x.rows()) =
-        -g + A_e.transpose() * y +
-        A_i.transpose() * (-Σ * c_i + μ * s.cwiseInverse() + z);
+    //        [∇f(x) − Aₑᵀy − Aᵢᵀz]
+    // rhs = −[        cₑ         ]
+    //        [    cᵢ − μZ⁻¹e     ]
+    DenseVector rhs{x.rows() + y.rows() + z.rows()};
+    rhs.segment(0, x.rows()) = -g + A_e.transpose() * y + A_i.transpose() * z;
     rhs.segment(x.rows(), y.rows()) = -c_e;
+    rhs.segment(x.rows() + y.rows(), z.rows()) = -c_i + μ * z.cwiseInverse();
 
     kkt_matrix_build_profiler.stop();
     ScopedProfiler kkt_matrix_decomp_profiler{kkt_matrix_decomp_prof};
@@ -371,8 +388,9 @@ ExitStatus interior_point(
 
     // Solve the Newton-KKT system
     //
-    // [H + AᵢᵀΣAᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(−Σcᵢ + μS⁻¹e + z)]
-    // [    Aₑ       0 ][−pʸ]    [               cₑ                ]
+    // [H   Aₑᵀ  Aᵢᵀ ][ pˣ]    [∇f(x) − Aₑᵀy − Aᵢᵀz]
+    // [Aₑ   0    0  ][−pʸ] = −[        cₑ         ]
+    // [Aᵢ   0   −Σ⁻¹][−pᶻ]    [    cᵢ − μZ⁻¹e     ]
     if (solver.compute(lhs).info() != Eigen::Success) [[unlikely]] {
       return ExitStatus::FACTORIZATION_FAILED;
     }
@@ -383,14 +401,14 @@ ExitStatus interior_point(
     auto compute_step = [&](Step& step) {
       // p = [ pˣ]
       //     [−pʸ]
+      //     [−pᶻ]
       DenseVector p = solver.solve(rhs);
       step.p_x = p.segment(0, x.rows());
       step.p_y = -p.segment(x.rows(), y.rows());
+      step.p_z = -p.segment(x.rows() + y.rows(), z.rows());
 
       // pˢ = cᵢ − s + Aᵢpˣ
-      // pᶻ = −Σcᵢ + μS⁻¹e − ΣAᵢpˣ
       step.p_s = c_i - s + A_i * step.p_x;
-      step.p_z = -Σ * c_i + μ * s.cwiseInverse() - Σ * A_i * step.p_x;
     };
     compute_step(step);
 
@@ -495,12 +513,13 @@ ExitStatus interior_point(
 
           // Rebuild Newton-KKT rhs with updated constraint values.
           //
-          // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(−Σcᵢ + μS⁻¹e + z)]
-          //        [              cₑˢᵒᶜ              ]
+          //        [∇f(x) − Aₑᵀy − Aᵢᵀz]
+          // rhs = −[      cₑˢᵒᶜ        ]
+          //        [    cᵢ − μZ⁻¹e     ]
           //
           // where cₑˢᵒᶜ = αc(xₖ) + c(xₖ + αpₖˣ)
           c_e_soc = α_soc * c_e_soc + trial_c_e;
-          rhs.bottomRows(y.rows()) = -c_e_soc;
+          rhs.segment(x.rows(), y.rows()) = -c_e_soc;
 
           // Solve the Newton-KKT system
           compute_step(soc_step);
