@@ -34,7 +34,6 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
                const Eigen::ArrayX<bool>& bound_constraint_mask,
 #endif
                Eigen::Vector<Scalar, Eigen::Dynamic>& x,
-               Eigen::Vector<Scalar, Eigen::Dynamic>& y,
                Eigen::Vector<Scalar, Eigen::Dynamic>& v, Scalar& sqrt_μ,
                int& iterations);
 
@@ -140,12 +139,19 @@ ExitStatus feasibility_restoration(
   // by
   //
   //   Dᵣ = diag(min(1, 1/xᵣ[i]²) for i in x.rows())
+  //
+  // The interior-point method only supports inequality constraints, so the
+  // equality constraint is split into two inequality constraints.
+  //
+  //   cₑ(x) - pₑ + nₑ ≥ 0
+  //   −(cₑ(x) - pₑ + nₑ) ≥ 0
 
   using DenseVector = Eigen::Vector<Scalar, Eigen::Dynamic>;
   using DiagonalMatrix = Eigen::DiagonalMatrix<Scalar, Eigen::Dynamic>;
   using SparseMatrix = Eigen::SparseMatrix<Scalar>;
   using SparseVector = Eigen::SparseVector<Scalar>;
 
+  using std::log;
   using std::sqrt;
 
   const auto& matrices = matrix_callbacks;
@@ -158,7 +164,7 @@ ExitStatus feasibility_restoration(
   const DenseVector c_e = matrices.c_e(x);
 
   Scalar fr_μ = std::max(μ, c_e.template lpNorm<Eigen::Infinity>());
-  const Scalar ζ = fr_μ;
+  const Scalar ζ = sqrt(fr_μ);
   Scalar fr_sqrt_μ = sqrt(fr_μ);
 
   const auto& x_r = x;
@@ -171,26 +177,36 @@ ExitStatus feasibility_restoration(
   DenseVector fr_x{num_vars + 2 * num_eq};
   fr_x << x, p_e_0, n_e_0;
 
-  DenseVector fr_y = DenseVector::Zero(num_eq);
-
+  DenseVector fr_v{4 * num_eq};
+  // The split equality constraints start with zero violation, so the relaxed
+  // constraint cᵢ − s + μw = 0 gives s = μ. Their duals then start at
+  // z = μ/s = 1, so y = z₊ − z₋ = 0.
+  //
+  //   √(fr_μ)exp(−fr_v) = fr_μ
+  //   fr_v = −ln(√(fr_μ))
+  //
   // Start the constraints pₑ, nₑ ≥ 0 with zero violation and perfect
   // complementarity.
   //
   //   √(fr_μ)exp(−fr_v) = p
   //   fr_v = ln(√(fr_μ)/p)
-  DenseVector fr_v{2 * num_eq};
-  fr_v << (fr_sqrt_μ / p_e_0.array()).log().matrix(),
+  fr_v << DenseVector::Constant(2 * num_eq, -log(fr_sqrt_μ)),
+      (fr_sqrt_μ / p_e_0.array()).log().matrix(),
       (fr_sqrt_μ / n_e_0.array()).log().matrix();
 
   // Inherit the parent problem's scaling for the constraints, and use no
   // scaling for the cost function since it has changed. The new rows introduced
   // are not scaled.
-  const ProblemScaling<Scalar> fr_scaling{Scalar(1), matrices.scaling.c_e,
-                                          DenseVector::Ones(2 * num_eq)};
+  const DenseVector d_c_e = matrices.scaling.c_e.size() > 0
+                                ? matrices.scaling.c_e
+                                : DenseVector::Ones(num_eq).eval();
+  DenseVector fr_d_c_i{4 * num_eq};
+  fr_d_c_i << d_c_e, d_c_e, DenseVector::Ones(2 * num_eq);
+  const ProblemScaling<Scalar> fr_scaling{Scalar(1), DenseVector{}, fr_d_c_i};
 
   IPMMatrixCallbacks<Scalar> fr_matrix_callbacks{
       static_cast<int>(fr_x.rows()),
-      static_cast<int>(fr_y.rows()),
+      0,
       static_cast<int>(fr_v.rows()),
       [&](const DenseVector& x_p) -> Scalar {
         auto x = x_p.segment(0, num_vars);
@@ -198,7 +214,6 @@ ExitStatus feasibility_restoration(
         // Cost function
         //
         //   ρ Σ (pₑ + nₑ) + ζ/2 (x - xᵣ)ᵀDᵣ(x - xᵣ)
-
         auto diff = x - x_r;
         return ρ * x_p.segment(num_vars, 2 * num_eq).array().sum() +
                ζ / Scalar(2) * diff.transpose() * D_r * diff;
@@ -216,11 +231,9 @@ ExitStatus feasibility_restoration(
         g.segment(num_vars, 2 * num_eq).setConstant(ρ);
         return g.sparseView();
       },
-      [&](const DenseVector& x_p, const DenseVector& y_p,
-          [[maybe_unused]] const DenseVector& v_p,
-          [[maybe_unused]] Scalar sqrt_μ) -> SparseMatrix {
+      [&](const DenseVector& x_p, const DenseVector& v_p,
+          Scalar sqrt_μ) -> SparseMatrix {
         auto x = x_p.segment(0, num_vars);
-        const auto& y = y_p;
 
         // Cost function Hessian
         //
@@ -232,6 +245,14 @@ ExitStatus feasibility_restoration(
         append_as_triplets(triplets, 0, 0, {SparseMatrix{ζ * D_r}});
         SparseMatrix d2f_dx2{x_p.rows(), x_p.rows()};
         d2f_dx2.setFromSortedTriplets(triplets.begin(), triplets.end());
+
+        // The split equality constraints' duals z₊ and z₋ combine into the
+        // original problem's equality constraint duals.
+        //
+        //   y = z₊ − z₋
+        //   z = √(μ)eᵛ
+        DenseVector z = sqrt_μ * v_p.segment(0, 2 * num_eq).array().exp();
+        DenseVector y = z.segment(0, num_eq) - z.segment(num_eq, num_eq);
 
         // Constraint part of original problem's Lagrangian Hessian
         //
@@ -246,8 +267,7 @@ ExitStatus feasibility_restoration(
         //   [ 0   0  0]
         return d2f_dx2 + H_c;
       },
-      [&](const DenseVector& x_p, [[maybe_unused]] const DenseVector& y_p,
-          [[maybe_unused]] const DenseVector& v_p,
+      [&](const DenseVector& x_p, [[maybe_unused]] const DenseVector& v_p,
           [[maybe_unused]] Scalar sqrt_μ) -> SparseMatrix {
         return SparseMatrix{x_p.rows(), x_p.rows()};
       },
@@ -256,67 +276,66 @@ ExitStatus feasibility_restoration(
         auto p_e = x_p.segment(num_vars, num_eq);
         auto n_e = x_p.segment(num_vars + num_eq, num_eq);
 
-        // Equality constraints
+        // Inequality constraints
         //
-        //   cₑ(x) - pₑ + nₑ = 0
-        return matrices.c_e(x) - p_e + n_e;
+        //   cₑ(x) - pₑ + nₑ ≥ 0
+        //   −(cₑ(x) - pₑ + nₑ) ≥ 0
+        //   pₑ ≥ 0
+        //   nₑ ≥ 0
+        DenseVector r_e = matrices.c_e(x) - p_e + n_e;
+
+        DenseVector c_i_p{4 * num_eq};
+        c_i_p << r_e, -r_e, x_p.segment(num_vars, 2 * num_eq);
+        return c_i_p;
       },
       [&](const DenseVector& x_p) -> SparseMatrix {
         auto x = x_p.segment(0, num_vars);
 
-        // Equality constraint Jacobian
+        // Inequality constraint Jacobian
         //
-        //   [Aₑ  −I  I]
+        //   [ Aₑ  −I   I]
+        //   [−Aₑ   I  −I]
+        //   [ 0    I   0]
+        //   [ 0    0   I]
 
         SparseMatrix A_e = matrices.A_e(x);
 
         gch::small_vector<Eigen::Triplet<Scalar>> triplets;
-        triplets.reserve(A_e.nonZeros() + 2 * num_eq);
+        triplets.reserve(2 * A_e.nonZeros() + 6 * num_eq);
 
-        append_as_triplets(triplets, 0, 0, {A_e});
-        append_diagonal_as_triplets(
-            triplets, 0, num_vars,
-            DenseVector::Constant(num_eq, Scalar(-1)).eval());
-        append_diagonal_as_triplets(
-            triplets, 0, num_vars + num_eq,
-            DenseVector::Constant(num_eq, Scalar(1)).eval());
+        SparseMatrix I_eq{
+            DenseVector::Constant(num_eq, Scalar(1)).asDiagonal()};
+        SparseMatrix Z_eq{num_eq, num_eq};
 
-        SparseMatrix A_e_p{A_e.rows(), x_p.rows()};
-        A_e_p.setFromSortedTriplets(triplets.begin(), triplets.end());
-        return A_e_p;
-      },
-      [&](const DenseVector& x_p) -> DenseVector {
-        // Inequality constraints
-        //
-        //   pₑ ≥ 0
-        //   nₑ ≥ 0
-        return x_p.segment(num_vars, 2 * num_eq);
-      },
-      [&](const DenseVector& x_p) -> SparseMatrix {
-        // Inequality constraint Jacobian
-        //
-        //   [0  I  0]
-        //   [0  0  I]
+        // Column 0
+        append_as_triplets(triplets, 0, 0, {A_e, (-A_e).eval()});
 
-        gch::small_vector<Eigen::Triplet<Scalar>> triplets;
-        triplets.reserve(2 * num_eq);
+        // Column 1
+        append_as_triplets(triplets, 0, num_vars,
+                           {(-I_eq).eval(), I_eq, I_eq, Z_eq});
 
-        append_diagonal_as_triplets(
-            triplets, 0, num_vars,
-            DenseVector::Constant(2 * num_eq, Scalar(1)).eval());
+        // Column 2
+        append_as_triplets(triplets, 0, num_vars + num_eq,
+                           {I_eq, (-I_eq).eval(), Z_eq, I_eq});
 
-        SparseMatrix A_i_p{2 * num_eq, x_p.rows()};
+        SparseMatrix A_i_p{4 * num_eq, x_p.rows()};
         A_i_p.setFromSortedTriplets(triplets.begin(), triplets.end());
         return A_i_p;
       },
       fr_scaling};
 
+#ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
+  Eigen::ArrayX<bool> fr_bound_constraint_mask{4 * num_eq};
+  fr_bound_constraint_mask.segment(0, 2 * num_eq) = false;
+  fr_bound_constraint_mask.segment(2 * num_eq, 2 * num_eq) = true;
+#endif
+
   auto status = ipm<Scalar>(fr_matrix_callbacks, is_nlp, iteration_callbacks,
                             options, true,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
-                            Eigen::ArrayX<bool>::Constant(2 * num_eq, true),
+                            fr_bound_constraint_mask,
 #endif
-                            fr_x, fr_y, fr_v, fr_sqrt_μ, iterations);
+                            fr_x, fr_v, fr_sqrt_μ, iterations);
 
   x = fr_x.segment(0, x.rows());
 
@@ -367,8 +386,6 @@ ExitStatus feasibility_restoration(
 ///     beginning of each iteration.
 /// @param[in] options Solver options.
 /// @param[in,out] x The current decision variables from the normal solve.
-/// @param[in,out] y The current equality constraint duals from the normal
-///     solve.
 /// @param[in,out] v The current log-domain variables from the normal solve.
 /// @param[in] sqrt_μ Square root of the normal solve's barrier parameter.
 /// @param[out] fr_sqrt_μ Square root of the feasibility restoration barrier
@@ -387,7 +404,6 @@ ExitStatus feasibility_restoration(
     const Eigen::ArrayX<bool>& bound_constraint_mask,
 #endif
     Eigen::Vector<Scalar, Eigen::Dynamic>& x,
-    Eigen::Vector<Scalar, Eigen::Dynamic>& y,
     Eigen::Vector<Scalar, Eigen::Dynamic>& v, Scalar sqrt_μ, Scalar& fr_sqrt_μ,
     int& iterations) {
   // Feasibility restoration
@@ -398,7 +414,7 @@ ExitStatus feasibility_restoration(
   //       pᵢ,nᵢ
   //
   //   s.t. cₑ(x) - pₑ + nₑ = 0
-  //        cᵢ(x) - pᵢ + nᵢ ≥ 0
+  //        cᵢ(x) + μw - pᵢ + nᵢ ≥ 0
   //        pₑ ≥ 0
   //        nₑ ≥ 0
   //        pᵢ ≥ 0
@@ -409,6 +425,11 @@ ExitStatus feasibility_restoration(
   // by
   //
   //   Dᵣ = diag(min(1, 1/xᵣ[i]²) for i in x.rows())
+  //
+  // The normal solve's step and filter target the relaxed constraint
+  // cᵢ − s + μw = 0 (w = e), so feasibility restoration restores that rather
+  // than cᵢ ≥ 0. Otherwise, its slacks go to zero, and the normal filter sees a
+  // constraint violation of ‖μw‖₁ no matter how feasible the iterate is.
 
   using DenseVector = Eigen::Vector<Scalar, Eigen::Dynamic>;
   using DiagonalMatrix = Eigen::DiagonalMatrix<Scalar, Eigen::Dynamic>;
@@ -420,7 +441,6 @@ ExitStatus feasibility_restoration(
 
   const auto& matrices = matrix_callbacks;
   const auto& num_vars = matrices.num_decision_variables;
-  const auto& num_eq = matrices.num_equality_constraints;
   const auto& num_ineq = matrices.num_inequality_constraints;
 
   constexpr Scalar ρ(1e3);
@@ -428,59 +448,56 @@ ExitStatus feasibility_restoration(
   // s = √(μ)e⁻ᵛ
   DenseVector s = sqrt_μ * (-v).array().exp().matrix();
 
-  const DenseVector c_e = matrices.c_e(x);
   const DenseVector c_i = matrices.c_i(x);
 
-  Scalar fr_μ =
-      std::max({sqrt_μ * sqrt_μ, c_e.template lpNorm<Eigen::Infinity>(),
-                (c_i - s).template lpNorm<Eigen::Infinity>()});
+  // Normal solve's barrier parameter for the infeasibility perturbation μw
+  const Scalar μ = sqrt_μ * sqrt_μ;
+
+  // cᵢ − s + μw
+  const DenseVector r_i = ((c_i - s).array() + μ).matrix();
+
+  Scalar fr_μ = std::max({μ, r_i.template lpNorm<Eigen::Infinity>()});
   const Scalar ζ = sqrt(fr_μ);
   fr_sqrt_μ = sqrt(fr_μ);
 
   const auto& x_r = x;
-  const auto [p_e_0, n_e_0] = compute_p_n(c_e, ρ, fr_μ);
-  const auto [p_i_0, n_i_0] = compute_p_n((c_i - s).eval(), ρ, fr_μ);
+  const auto [p_i_0, n_i_0] = compute_p_n(r_i, ρ, fr_μ);
 
   // Dᵣ = diag(min(1, 1/xᵣ[i]²) for i in x.rows())
   const DiagonalMatrix D_r =
       x.cwiseSquare().cwiseInverse().cwiseMin(Scalar(1)).asDiagonal();
 
-  DenseVector fr_x{num_vars + 2 * num_eq + 2 * num_ineq};
-  fr_x << x, p_e_0, n_e_0, p_i_0, n_i_0;
+  DenseVector fr_x{num_vars + 2 * num_ineq};
+  fr_x << x, p_i_0, n_i_0;
 
-  DenseVector fr_y = DenseVector::Zero(c_e.rows());
-
-  DenseVector fr_v{v.rows() + 2 * num_eq + 2 * num_ineq};
+  DenseVector fr_v{v.rows() + 2 * num_ineq};
   // Carry the slack variables over to feasibility restoration. Since it uses a
   // different barrier parameter, shift v so s is preserved.
   //
   //   √(fr_μ)exp(−fr_v) = √(μ)e⁻ᵛ
   //   fr_v = v + ln(√(fr_μ)/√(μ))
   //
-  // Start the constraints pₑ, nₑ, pᵢ, nᵢ ≥ 0 with zero violation and perfect
+  // Start the constraints pᵢ, nᵢ ≥ 0 with zero violation and perfect
   // complementarity.
   //
   //   √(fr_μ)exp(−fr_v) = p
   //   fr_v = ln(√(fr_μ)/p)
   fr_v.segment(0, v.rows()) = (v.array() + log(fr_sqrt_μ / sqrt_μ)).matrix();
-  fr_v.segment(v.rows(), 2 * num_eq + 2 * num_ineq)
-      << (fr_sqrt_μ / p_e_0.array()).log().matrix(),
-      (fr_sqrt_μ / n_e_0.array()).log().matrix(),
-      (fr_sqrt_μ / p_i_0.array()).log().matrix(),
+  fr_v.segment(v.rows(), 2 * num_ineq)
+      << (fr_sqrt_μ / p_i_0.array()).log().matrix(),
       (fr_sqrt_μ / n_i_0.array()).log().matrix();
 
   // Inherit the parent problem's scaling for the constraints, and use no
   // scaling for the cost function since it has changed. The new rows introduced
   // are not scaled.
-  DenseVector fr_d_c_i{c_i.rows() + 2 * num_eq + 2 * num_ineq};
-  fr_d_c_i << matrices.scaling.c_i,
-      DenseVector::Ones(2 * num_eq + 2 * num_ineq);
+  DenseVector fr_d_c_i{c_i.rows() + 2 * num_ineq};
+  fr_d_c_i << matrices.scaling.c_i, DenseVector::Ones(2 * num_ineq);
   const ProblemScaling<Scalar> fr_scaling{Scalar(1), matrices.scaling.c_e,
                                           fr_d_c_i};
 
   IPMMatrixCallbacks<Scalar> fr_matrix_callbacks{
       static_cast<int>(fr_x.rows()),
-      static_cast<int>(fr_y.rows()),
+      0,
       static_cast<int>(fr_v.rows()),
       [&](const DenseVector& x_p) -> Scalar {
         auto x = x_p.segment(0, num_vars);
@@ -489,9 +506,7 @@ ExitStatus feasibility_restoration(
         //
         //   ρ Σ (pₑ + nₑ + pᵢ + nᵢ) + ζ/2 (x - xᵣ)ᵀDᵣ(x - xᵣ)
         auto diff = x - x_r;
-        return ρ * x_p.segment(num_vars, 2 * num_eq + 2 * num_ineq)
-                       .array()
-                       .sum() +
+        return ρ * x_p.segment(num_vars, 2 * num_ineq).array().sum() +
                ζ / Scalar(2) * diff.transpose() * D_r * diff;
       },
       [&](const DenseVector& x_p) -> SparseVector {
@@ -506,13 +521,12 @@ ExitStatus feasibility_restoration(
         //   [     ρ     ]
         DenseVector g{x_p.rows()};
         g.segment(0, num_vars) = ζ * D_r * (x - x_r);
-        g.segment(num_vars, 2 * num_eq + 2 * num_ineq).setConstant(ρ);
+        g.segment(num_vars, 2 * num_ineq).setConstant(ρ);
         return g.sparseView();
       },
-      [&](const DenseVector& x_p, const DenseVector& y_p,
-          const DenseVector& v_p, Scalar sqrt_μ) -> SparseMatrix {
+      [&](const DenseVector& x_p, const DenseVector& v_p,
+          Scalar sqrt_μ) -> SparseMatrix {
         auto x = x_p.segment(0, num_vars);
-        const auto& y = y_p;
         auto v = v_p.segment(0, num_ineq);
 
         // Cost function Hessian
@@ -530,8 +544,8 @@ ExitStatus feasibility_restoration(
 
         // Constraint part of original problem's Lagrangian Hessian
         //
-        //   −∇ₓₓ²yᵀcₑ(x) − ∇ₓₓ²zᵀcᵢ(x)
-        auto H_c = matrices.H_c(x, y, v, sqrt_μ);
+        //   −∇ₓₓ²zᵀcᵢ(x)
+        auto H_c = matrices.H_c(x, v, sqrt_μ);
         H_c.conservativeResize(x_p.rows(), x_p.rows());
 
         // Lagrangian Hessian
@@ -543,61 +557,27 @@ ExitStatus feasibility_restoration(
         //   [ 0   0  0  0  0]
         return d2f_dx2 + H_c;
       },
-      [&](const DenseVector& x_p, [[maybe_unused]] const DenseVector& y_p,
-          [[maybe_unused]] const DenseVector& v_p,
+      [&](const DenseVector& x_p, [[maybe_unused]] const DenseVector& v_p,
           [[maybe_unused]] Scalar sqrt_μ) -> SparseMatrix {
         return SparseMatrix{x_p.rows(), x_p.rows()};
       },
       [&](const DenseVector& x_p) -> DenseVector {
         auto x = x_p.segment(0, num_vars);
-        auto p_e = x_p.segment(num_vars, num_eq);
-        auto n_e = x_p.segment(num_vars + num_eq, num_eq);
-
-        // Equality constraints
-        //
-        //   cₑ(x) - pₑ + nₑ = 0
-        return matrices.c_e(x) - p_e + n_e;
-      },
-      [&](const DenseVector& x_p) -> SparseMatrix {
-        auto x = x_p.segment(0, num_vars);
-
-        // Equality constraint Jacobian
-        //
-        //   [Aₑ  −I  I  0  0]
-
-        SparseMatrix A_e = matrices.A_e(x);
-
-        gch::small_vector<Eigen::Triplet<Scalar>> triplets;
-        triplets.reserve(A_e.nonZeros() + 2 * num_eq);
-
-        append_as_triplets(triplets, 0, 0, {A_e});
-        append_diagonal_as_triplets(
-            triplets, 0, num_vars,
-            DenseVector::Constant(num_eq, Scalar(-1)).eval());
-        append_diagonal_as_triplets(
-            triplets, 0, num_vars + num_eq,
-            DenseVector::Constant(num_eq, Scalar(1)).eval());
-
-        SparseMatrix A_e_p{A_e.rows(), x_p.rows()};
-        A_e_p.setFromSortedTriplets(triplets.begin(), triplets.end());
-        return A_e_p;
-      },
-      [&](const DenseVector& x_p) -> DenseVector {
-        auto x = x_p.segment(0, num_vars);
-        auto p_i = x_p.segment(num_vars + 2 * num_eq, num_ineq);
-        auto n_i = x_p.segment(num_vars + 2 * num_eq + num_ineq, num_ineq);
+        auto p_i = x_p.segment(num_vars, num_ineq);
+        auto n_i = x_p.segment(num_vars + num_ineq, num_ineq);
 
         // Inequality constraints
         //
-        //   cᵢ(x) - pᵢ + nᵢ ≥ 0
+        //   cᵢ(x) + μw - pᵢ + nᵢ ≥ 0
         //   pₑ ≥ 0
         //   nₑ ≥ 0
         //   pᵢ ≥ 0
         //   nᵢ ≥ 0
-        DenseVector c_i_p{c_i.rows() + 2 * num_eq + 2 * num_ineq};
-        c_i_p.segment(0, num_ineq) = matrices.c_i(x) - p_i + n_i;
-        c_i_p.segment(p_i.rows(), 2 * num_eq + 2 * num_ineq) =
-            x_p.segment(num_vars, 2 * num_eq + 2 * num_ineq);
+        DenseVector c_i_p{c_i.rows() + 2 * num_ineq};
+        c_i_p.segment(0, num_ineq) =
+            (matrices.c_i(x).array() + μ).matrix() - p_i + n_i;
+        c_i_p.segment(p_i.rows(), 2 * num_ineq) =
+            x_p.segment(num_vars, 2 * num_ineq);
         return c_i_p;
       },
       [&](const DenseVector& x_p) -> SparseMatrix {
@@ -614,39 +594,38 @@ ExitStatus feasibility_restoration(
         SparseMatrix A_i = matrices.A_i(x);
 
         gch::small_vector<Eigen::Triplet<Scalar>> triplets;
-        triplets.reserve(A_i.nonZeros() + 2 * num_eq + 4 * num_ineq);
+        triplets.reserve(A_i.nonZeros() + 4 * num_ineq);
 
         // Column 0
         append_as_triplets(triplets, 0, 0, {A_i});
 
         // Columns 1 and 2
-        append_diagonal_as_triplets(
-            triplets, num_ineq, num_vars,
-            DenseVector::Constant(2 * num_eq, Scalar(1)).eval());
+        append_diagonal_as_triplets(triplets, num_ineq, num_vars,
+                                    DenseVector::Constant(0, Scalar(1)).eval());
 
         SparseMatrix I_ineq{
             DenseVector::Constant(num_ineq, Scalar(1)).asDiagonal()};
 
         // Column 3
-        SparseMatrix Z_col3{2 * num_eq, num_ineq};
-        append_as_triplets(triplets, 0, num_vars + 2 * num_eq,
+        SparseMatrix Z_col3{0, num_ineq};
+        append_as_triplets(triplets, 0, num_vars,
                            {(-I_ineq).eval(), Z_col3, I_ineq});
 
         // Column 4
-        SparseMatrix Z_col4{2 * num_eq + num_ineq, num_ineq};
-        append_as_triplets(triplets, 0, num_vars + 2 * num_eq + num_ineq,
+        SparseMatrix Z_col4{num_ineq, num_ineq};
+        append_as_triplets(triplets, 0, num_vars + num_ineq,
                            {I_ineq, Z_col4, I_ineq});
 
-        SparseMatrix A_i_p{2 * num_eq + 3 * num_ineq, x_p.rows()};
+        SparseMatrix A_i_p{3 * num_ineq, x_p.rows()};
         A_i_p.setFromSortedTriplets(triplets.begin(), triplets.end());
         return A_i_p;
       },
       fr_scaling};
 
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
-  Eigen::ArrayX<bool> fr_bound_constraint_mask{2 * num_eq + 3 * num_ineq};
+  Eigen::ArrayX<bool> fr_bound_constraint_mask{3 * num_ineq};
   fr_bound_constraint_mask.segment(0, num_ineq) = bound_constraint_mask;
-  fr_bound_constraint_mask.segment(num_ineq, 2 * num_eq + 2 * num_ineq) = true;
+  fr_bound_constraint_mask.segment(num_ineq, 2 * num_ineq) = true;
 #endif
 
   auto status = ipm<Scalar>(fr_matrix_callbacks, is_nlp, iteration_callbacks,
@@ -654,7 +633,7 @@ ExitStatus feasibility_restoration(
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
                             fr_bound_constraint_mask,
 #endif
-                            fr_x, fr_y, fr_v, fr_sqrt_μ, iterations);
+                            fr_x, fr_v, fr_sqrt_μ, iterations);
 
   x = fr_x.segment(0, x.rows());
 
@@ -666,18 +645,10 @@ ExitStatus feasibility_restoration(
   v = (fr_v.segment(0, v.rows()).array() - log(fr_sqrt_μ / sqrt_μ)).matrix();
 
   if (status == ExitStatus::CALLBACK_REQUESTED_STOP) {
-    // s = √(μ)e⁻ᵛ
-    s = sqrt_μ * (-v).array().exp().matrix();
-
-    auto g = matrices.g(x);
-    auto A_e = matrices.A_e(x);
-    auto A_i = matrices.A_i(x);
-
-    // The log-domain parameterization ties z to s via z = μS⁻¹e, so only the
-    // equality constraint dual estimate is used. Applying the inequality
-    // constraint dual estimate would require changing v, which would move s
-    // away from the iterate the normal filter just accepted.
-    y = lagrange_multiplier_estimate(g, A_e, A_i, s, sqrt_μ * sqrt_μ).y;
+    // The log-domain parameterization ties z to s via z = μS⁻¹e, so there are
+    // no dual estimates to apply. Applying an inequality constraint dual
+    // estimate would require changing v, which would move s away from the
+    // iterate the normal filter just accepted.
 
     return ExitStatus::SUCCESS;
   } else if (status == ExitStatus::SUCCESS) {
@@ -687,11 +658,6 @@ ExitStatus feasibility_restoration(
     // infeasibility anywhere else risks false positives (e.g., a
     // point-in-time test can reject iterates the solver would otherwise
     // escape). See section 3.3, p. 14 of [2].
-    DenseVector c_e = matrices.c_e(x);
-    if (matrices.scaling.c_e.size() > 0) {
-      c_e = matrices.scaling.c_e.cwiseInverse().cwiseProduct(c_e);
-    }
-
     DenseVector c_i = matrices.c_i(x);
     if (matrices.scaling.c_i.size() > 0) {
       c_i = matrices.scaling.c_i.cwiseInverse().cwiseProduct(c_i);
@@ -701,19 +667,12 @@ ExitStatus feasibility_restoration(
     // negative
     const DenseVector c_i_violation = (-c_i).cwiseMax(Scalar(0));
 
-    const bool c_e_violated =
-        c_e.template lpNorm<Eigen::Infinity>() > Scalar(options.tolerance);
     const bool c_i_violated = c_i_violation.template lpNorm<Eigen::Infinity>() >
                               Scalar(options.tolerance);
 
-    if (c_e_violated || c_i_violated) {
+    if (c_i_violated) {
       if (options.diagnostics) {
-        if (c_e_violated) {
-          print_c_e_local_infeasibility_error(c_e, Scalar(options.tolerance));
-        }
-        if (c_i_violated) {
-          print_c_i_local_infeasibility_error(c_i, Scalar(options.tolerance));
-        }
+        print_c_i_local_infeasibility_error(c_i, Scalar(options.tolerance));
       }
 
       return ExitStatus::LOCALLY_INFEASIBLE;

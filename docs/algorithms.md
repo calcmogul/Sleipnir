@@ -184,7 +184,7 @@ This is a primal-dual interior-point method whose slack and dual variables are p
   z = √(μ)eᵛ
 ```
 
-This keeps s and z positive and satisfies the complementarity condition s∘z = μe exactly, so z is tied to the slacks via z = μS⁻¹e and no fraction-to-the-boundary rule is needed for the dual variables. The barrier parameter update also follows [^5].
+This keeps s and z positive and satisfies the complementarity condition s∘z = μe exactly, so z is tied to the slacks via z = μS⁻¹e and no fraction-to-the-boundary rule is needed for the dual variables. To keep the duals bounded, the constraints are relaxed by μw and reduced at the same rate as the barrier parameter, as in the one-phase method of [^4]. The barrier parameter update follows [^4] as well; see [Barrier parameter update](#barrier-parameter-update).
 
 [^5] is for convex QPs, though, and its convergence guarantees depend on that structure. With a quadratic cost and linear constraints, x is eliminated exactly by the linear solve, so the method reduces to Newton's method on v alone with a simple step size rule. That doesn't hold for nonlinear programs, so the step rules follow the filter line-search method of [^2] instead. The slacks take a linear step in s rather than an additive step in v, the step size is capped by a fraction-to-the-boundary rule on the slacks, and step acceptance is determined by a filter. The resulting algorithm is closer to a standard primal-dual interior-point method than to the method of [^5], and it doesn't inherit the latter's convergence guarantees.
 
@@ -305,75 +305,63 @@ Next, we'll apply Newton's method to the optimality conditions. Let H be ∂²L/
 Group them into a matrix equation.
 
 ```
-  [H   −Aₑᵀ  −√(μ)Aᵢᵀeᵛ][pˣ]    [∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ]
-  [Aₑ   0         0    ][pʸ] = −[          cₑ         ]
-  [Aᵢ   0     √(μ)e⁻ᵛ  ][pᵛ]    [    cᵢ − √(μ)e⁻ᵛ     ]
+  [H   −√(μ)Aᵢᵀeᵛ][pˣ] = −[∇f − √(μ)Aᵢᵀeᵛ − μβ₁e]
+  [Aᵢ   √(μ)e⁻ᵛ  ][pᵛ]    [  cᵢ − √(μ)e⁻ᵛ + μw  ]
 ```
 
-Invert pʸ.
+Solve the second row for pᵛ.
 
 ```
-  [H   Aₑᵀ  −√(μ)Aᵢᵀeᵛ][ pˣ]    [∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ]
-  [Aₑ   0       0     ][−pʸ] = −[         cₑ          ]
-  [Aᵢ   0    √(μ)e⁻ᵛ  ][ pᵛ]    [    cᵢ − √(μ)e⁻ᵛ     ]
-```
-
-Solve the third row for pᵛ.
-
-```
-  Aᵢpˣ + √(μ)e⁻ᵛ∘pᵛ = −cᵢ + √(μ)e⁻ᵛ
-  √(μ)e⁻ᵛ∘pᵛ = −Aᵢpˣ − cᵢ + √(μ)e⁻ᵛ
-  pᵛ = −1/√(μ) Aᵢeᵛ∘pˣ − 1/√(μ) eᵛ∘cᵢ + e
-  pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)
+  Aᵢpˣ + √(μ)e⁻ᵛ∘pᵛ = −cᵢ + √(μ)e⁻ᵛ − μw
+  √(μ)e⁻ᵛ∘pᵛ = −Aᵢpˣ − cᵢ + √(μ)e⁻ᵛ − μw
+  pᵛ = −1/√(μ) Aᵢeᵛ∘pˣ − 1/√(μ) eᵛ∘cᵢ + e − √(μ)eᵛ∘w
+  pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ) − √(μ)eᵛ∘w
 ```
 
 Substitute the explicit formula for pᵛ into the first row.
 
 ```
-  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘pᵛ = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
-  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘(e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)) = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
+  Hpˣ − √(μ)Aᵢᵀeᵛ∘pᵛ = −∇f + √(μ)Aᵢᵀeᵛ + μβ₁e
+  Hpˣ − √(μ)Aᵢᵀeᵛ∘(e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ) − √(μ)eᵛ∘w) = −∇f + √(μ)Aᵢᵀeᵛ + μβ₁e
 ```
 
 Expand and simplify.
 
 ```
-  Hpˣ − Aₑᵀpʸ − Aᵢᵀeᵛ∘(√(μ) − eᵛ∘(Aᵢpˣ + cᵢ)) = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
-  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ + Aᵢᵀe²ᵛ∘(Aᵢpˣ + cᵢ) = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
-  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ + Aᵢᵀdiag(e²ᵛ)Aᵢpˣ + Aᵢᵀe²ᵛ∘cᵢ = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
-  Hpˣ − Aₑᵀpʸ + Aᵢᵀdiag(e²ᵛ)Aᵢpˣ + Aᵢᵀe²ᵛ∘cᵢ = −∇f + Aₑᵀy + 2√(μ)Aᵢᵀeᵛ
-  Hpˣ − Aₑᵀpʸ + Aᵢᵀdiag(e²ᵛ)Aᵢpˣ = −∇f + Aₑᵀy + 2√(μ)Aᵢᵀeᵛ − Aᵢᵀe²ᵛ∘cᵢ
-  (Hpˣ + Aᵢᵀdiag(e²ᵛ)Aᵢ)pˣ − Aₑᵀpʸ = −∇f + Aₑᵀy + 2√(μ)Aᵢᵀeᵛ − Aᵢᵀe²ᵛ∘cᵢ
-  (Hpˣ + Aᵢᵀdiag(e²ᵛ)Aᵢ)pˣ − Aₑᵀpʸ = −∇f + Aₑᵀy + Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)
+  Hpˣ − Aᵢᵀeᵛ∘(√(μ) − eᵛ∘(Aᵢpˣ + cᵢ) − eᵛ∘μw) = −∇f + √(μ)Aᵢᵀeᵛ + μβ₁e
+  Hpˣ − √(μ)Aᵢᵀeᵛ + Aᵢᵀe²ᵛ∘(Aᵢpˣ + cᵢ) + Aᵢᵀe²ᵛ∘μw = −∇f + √(μ)Aᵢᵀeᵛ + μβ₁e
+  Hpˣ − √(μ)Aᵢᵀeᵛ + Aᵢᵀdiag(e²ᵛ)Aᵢpˣ + Aᵢᵀe²ᵛ∘(cᵢ + μw) = −∇f + √(μ)Aᵢᵀeᵛ + μβ₁e
+  Hpˣ + Aᵢᵀdiag(e²ᵛ)Aᵢpˣ + Aᵢᵀe²ᵛ∘(cᵢ + μw) = −∇f + 2√(μ)Aᵢᵀeᵛ + μβ₁e
+  Hpˣ + Aᵢᵀdiag(e²ᵛ)Aᵢpˣ = −∇f + 2√(μ)Aᵢᵀeᵛ − Aᵢᵀe²ᵛ∘(cᵢ + μw) + μβ₁e
+  (Hpˣ + Aᵢᵀdiag(e²ᵛ)Aᵢ)pˣ = −∇f + 2√(μ)Aᵢᵀeᵛ − Aᵢᵀe²ᵛ∘(cᵢ + μw) + μβ₁e
+  (Hpˣ + Aᵢᵀdiag(e²ᵛ)Aᵢ)pˣ = −∇f + Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘(cᵢ + μw)) + μβ₁e
 ```
 
-Substitute the new first and third rows into the system.
+Substitute the new first and second rows into the system.
 
 ```
-  [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ  0][ pˣ]    [∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
-  [        Aₑ           0   0][−pʸ] = −[               cₑ                ]
-  [        0            0   I][ pᵛ]    [    e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)    ]
+  [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  0][pˣ] = −[∇f − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘(cᵢ + μw)) − μβ₁e]
+  [        0           I][pᵛ]    [  e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ) − √(μ)eᵛ∘w  ]
 ```
 
-Eliminate the third row and column.
+Eliminate the second row and column.
 
 ```
-  [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
-  [        Aₑ           0 ][−pʸ]    [               cₑ                ]
+  [H + Aᵢᵀdiag(e²ᵛ)Aᵢ][pˣ] = −[∇f − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘(cᵢ + μw)) − μβ₁e]
 ```
 
 ### Final results
 
-In summary, the reduced 2x2 block system gives the iterates pₖˣ and pₖʸ.
+In summary, the following system gives the iterate pₖˣ.
 
 ```
-  [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
-  [        Aₑ           0 ][−pʸ]    [               cₑ                ]
+  [H + Aᵢᵀdiag(e²ᵛ)Aᵢ][pˣ] = −[∇f − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘(cᵢ + μw)) − μβ₁e]
 ```
 
 The iterate pᵛ is given by
 
 ```
-  pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)
+  pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ) − √(μ)eᵛ∘w
 ```
 
 The iterates are applied like so
@@ -408,6 +396,48 @@ where τ = 0.995. Only slacks with pᵢᵛ > 0 approach the boundary, so slacks 
 ```
 
 Local infeasibility is only declared when the feasibility restoration phase converges to a minimizer of the constraint violation that still violates the constraints; testing for infeasibility at arbitrary iterates risks false positives. See section 3.3, p. 14 of [^2].
+
+The step targets the relaxed constraint cᵢ − s + μw = 0 (w = e), so the filter measures constraint violation as ‖cᵢ − s + μw‖₁, and feasibility restoration relaxes cᵢ(x) + μw − p + n ≥ 0 instead of cᵢ(x) − p + n ≥ 0. Otherwise, the violation measure can't fall below μ‖w‖₁ near the barrier subproblem's solution, and the filter rejects productive steps.
+
+### Barrier parameter update
+
+The barrier parameter is updated when the barrier subproblem is approximately solved (its KKT error, including the μw and μβ₁e perturbations, is at most 10μ) and the previous step satisfied |pᵛ|_∞ ≤ 1.
+
+Lowering μ on its own doesn't work with the relaxed constraints. At the barrier subproblem's solution, an active constraint sits at cᵢ ≈ s − μw, so lowering μ requires each active slack to absorb the drop in μw in one step. That fails when sᵢ ≪ μ. Instead, μ is reduced along with the relaxed infeasibility by an aggressive step as in [^4]. Linearize the perturbed KKT conditions in x, v, and μ with dμ = −ημ for η ∈ (0, 1], so the barrier parameter after a step of size α is
+
+```
+  μ⁺ = (1 − αη)μ
+```
+
+Substituting z = √(μ)eᵛ and s = √(μ)e⁻ᵛ, the derivatives with respect to μ are z/(2μ) and −s/(2μ). Eliminating pᵛ as before gives a system with the same matrix as the normal step.
+
+```
+  [H + Aᵢᵀdiag(e²ᵛ)Aᵢ][pˣ] = −[∇f − Aᵢᵀ((2 − η)√(μ)eᵛ − e²ᵛ∘(cᵢ + (1 − η)μw)) − (1 − η)μβ₁e]
+```
+
+The slacks take the linear step sₖ₊₁ = sₖ∘(e − αqᵛ) where
+
+```
+  qᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ + (1 − η)μw)
+```
+
+Since sₖ₊₁ = √(μ⁺)exp(−vₖ₊₁),
+
+```
+  vₖ₊₁ = vₖ − ln(e − αqᵛ) + ½ln(1 − αη)
+```
+
+η = 0 recovers the normal step. For linear constraints, cᵢ − s + μw shrinks by exactly (1 − αη) along with μ, so the relaxed infeasibility and μ go to zero at the same rate, which keeps the duals bounded.
+
+A pure affine step (η = 1) is quickly blocked by the fraction-to-the-boundary rule, so η is chosen with Mehrotra's heuristic
+
+```
+  η = 1 − (1 − α_aff)³
+```
+
+where α_aff is the fraction-to-the-boundary step size of the η = 1 direction. α starts at the fraction-to-the-boundary step size of qᵛ, capped so μ⁺ ≥ μₘᵢₙ, and is halved until the barrier subproblem's KKT error at the trial iterate is at most 10μ⁺. The filter is reset after a successful step.
+
+If no step reduces μ by at least 1% (αη ≥ 0.01), the central path is blocked by the boundary (e.g., the barrier subproblem's solution is on a branch that becomes infeasible as μ → 0). Repeated short steps would converge to a μ > 0 instead, so μ is reduced to 0.2μ with the slacks held fixed (v shifted by ln(√(μ⁺)/√(μ))). The iterate then violates the tighter relaxation, which the normal step and feasibility restoration can reduce.
 
 ## Problem scaling
 

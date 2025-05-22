@@ -47,17 +47,20 @@ struct FilterEntry {
   ///
   /// @param f The cost function value.
   /// @param v The log-domain variables.
-  /// @param c_e The equality constraint values (nonzero means violation).
   /// @param c_i The inequality constraint values (negative means violation).
   /// @param sqrt_μ Square root of the barrier parameter.
-  FilterEntry(Scalar f, DenseVector& v, const DenseVector& c_e,
-              const DenseVector& c_i, Scalar sqrt_μ) {
+  FilterEntry(Scalar f, DenseVector& v, const DenseVector& c_i, Scalar sqrt_μ) {
     // s = √(μ)e⁻ᵛ
     DenseVector s = sqrt_μ * (-v).array().exp().matrix();
 
     cost = f - sqrt_μ * sqrt_μ * s.array().log().sum();
+
+    // The Newton step targets the relaxed constraint cᵢ − s + μw = 0 (w = e),
+    // so measure violation of that instead of cᵢ − s = 0. Otherwise, the
+    // violation measure can't fall below μ‖w‖₁ near the barrier subproblem's
+    // solution, and the filter rejects productive steps.
     constraint_violation =
-        c_e.template lpNorm<1>() + (c_i - s).template lpNorm<1>();
+        ((c_i - s).array() + sqrt_μ * sqrt_μ).matrix().template lpNorm<1>();
   }
 
   /// Returns true if this filter entry is dominated by another.

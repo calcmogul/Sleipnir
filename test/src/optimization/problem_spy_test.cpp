@@ -105,26 +105,6 @@ TEMPLATE_TEST_CASE("Problem - Spy", "[Problem]", SCALAR_TYPES_UNDER_TEST) {
     }
   }
 
-  // Check A_e.spy
-  {
-    auto spy = open("A_e.spy");
-
-    REQUIRE(read_str(spy) == "Equality constraint Jacobian");  // Title
-    REQUIRE(read_str(spy) == "Constraints");                   // Row label
-    REQUIRE(read_str(spy) == "Decision variables");            // Col label
-    REQUIRE(read_i32(spy) == 1);                               // Rows
-    REQUIRE(read_i32(spy) == 2);                               // Cols
-
-    // Coords
-    for (int i = 0; i < iterations; ++i) {
-      REQUIRE(read_i32(spy) == 1);  // Num coords
-      CHECK(read_coord(spy) == Coord{0, 1, '+'});
-      if (spy.eof()) {
-        FAIL("Reached end of file prematurely");
-      }
-    }
-  }
-
   // Check A_i.spy
   {
     auto spy = open("A_i.spy");
@@ -132,14 +112,19 @@ TEMPLATE_TEST_CASE("Problem - Spy", "[Problem]", SCALAR_TYPES_UNDER_TEST) {
     REQUIRE(read_str(spy) == "Inequality constraint Jacobian");  // Title
     REQUIRE(read_str(spy) == "Constraints");                     // Row label
     REQUIRE(read_str(spy) == "Decision variables");              // Col label
-    REQUIRE(read_i32(spy) == 2);                                 // Rows
+    REQUIRE(read_i32(spy) == 4);                                 // Rows
     REQUIRE(read_i32(spy) == 2);                                 // Cols
 
     // Coords
+    //
+    // The equality constraint y = 2 is split into the inequality constraints
+    // y − 2 ≥ 0 and −(y − 2) ≥ 0 after the original inequality constraints.
     for (int i = 0; i < iterations; ++i) {
-      REQUIRE(read_i32(spy) == 2);  // Num coords
+      REQUIRE(read_i32(spy) == 4);  // Num coords
       CHECK(read_coord(spy) == Coord{0, 0, '+'});
       CHECK(read_coord(spy) == Coord{1, 0, '-'});
+      CHECK(read_coord(spy) == Coord{2, 1, '+'});
+      CHECK(read_coord(spy) == Coord{3, 1, '-'});
       if (spy.eof()) {
         FAIL("Reached end of file prematurely");
       }
