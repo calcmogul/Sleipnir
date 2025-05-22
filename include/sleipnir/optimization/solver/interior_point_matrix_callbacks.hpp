@@ -63,9 +63,9 @@ struct InteriorPointMatrixCallbacks {
   /// </table>
   std::function<SparseVector(const DenseVector& x)> g;
 
-  /// Lagrangian Hessian ∇ₓₓ²L(x, y, v, √(μ)) getter.
+  /// Lagrangian Hessian ∇ₓₓ²L(x, v, √(μ)) getter.
   ///
-  /// L(xₖ, yₖ, vₖ, √(μ))) = f(xₖ) − yₖᵀcₑ(xₖ) − √(μ)eᵛᵀcᵢ(xₖ)
+  /// L(xₖ, vₖ, √(μ)) = f(xₖ) − √(μ)eᵛᵀcᵢ(xₖ)
   ///
   /// <table>
   ///   <tr>
@@ -76,11 +76,6 @@ struct InteriorPointMatrixCallbacks {
   ///   <tr>
   ///     <td>x</td>
   ///     <td>num_decision_variables</td>
-  ///     <td>1</td>
-  ///   </tr>
-  ///   <tr>
-  ///     <td>y</td>
-  ///     <td>num_equality_constraints</td>
   ///     <td>1</td>
   ///   </tr>
   ///   <tr>
@@ -89,63 +84,14 @@ struct InteriorPointMatrixCallbacks {
   ///     <td>1</td>
   ///   </tr>
   ///   <tr>
-  ///     <td>∇ₓₓ²L(x, y, v, √(μ))</td>
+  ///     <td>∇ₓₓ²L(x, v, √(μ))</td>
   ///     <td>num_decision_variables</td>
   ///     <td>num_decision_variables</td>
   ///   </tr>
   /// </table>
-  std::function<SparseMatrix(const DenseVector& x, const DenseVector& y,
-                             const DenseVector& v, Scalar sqrt_μ)>
+  std::function<SparseMatrix(const DenseVector& x, const DenseVector& v,
+                             Scalar sqrt_μ)>
       H;
-
-  /// Equality constraint value cₑ(x) getter.
-  ///
-  /// <table>
-  ///   <tr>
-  ///     <th>Variable</th>
-  ///     <th>Rows</th>
-  ///     <th>Columns</th>
-  ///   </tr>
-  ///   <tr>
-  ///     <td>x</td>
-  ///     <td>num_decision_variables</td>
-  ///     <td>1</td>
-  ///   </tr>
-  ///   <tr>
-  ///     <td>cₑ(x)</td>
-  ///     <td>num_equality_constraints</td>
-  ///     <td>1</td>
-  ///   </tr>
-  /// </table>
-  std::function<DenseVector(const DenseVector& x)> c_e;
-
-  /// Equality constraint Jacobian ∂cₑ/∂x getter.
-  ///
-  /// ```
-  ///         [∇ᵀcₑ₁(xₖ)]
-  /// Aₑ(x) = [∇ᵀcₑ₂(xₖ)]
-  ///         [    ⋮    ]
-  ///         [∇ᵀcₑₘ(xₖ)]
-  /// ```
-  ///
-  /// <table>
-  ///   <tr>
-  ///     <th>Variable</th>
-  ///     <th>Rows</th>
-  ///     <th>Columns</th>
-  ///   </tr>
-  ///   <tr>
-  ///     <td>x</td>
-  ///     <td>num_decision_variables</td>
-  ///     <td>1</td>
-  ///   </tr>
-  ///   <tr>
-  ///     <td>Aₑ(x)</td>
-  ///     <td>num_equality_constraints</td>
-  ///     <td>num_decision_variables</td>
-  ///   </tr>
-  /// </table>
-  std::function<SparseMatrix(const DenseVector& x)> A_e;
 
   /// Inequality constraint value cᵢ(x) getter.
   ///
