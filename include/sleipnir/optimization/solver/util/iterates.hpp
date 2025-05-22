@@ -27,9 +27,6 @@ struct IPMIterates {
   /// The decision variables.
   Eigen::VectorX<Scalar> x;
 
-  /// The equality constraint dual variables.
-  Eigen::VectorX<Scalar> y;
-
   /// The log-domain variables.
   ///
   /// The inequality constraint slack variables are s = √(μ)e⁻ᵛ and the

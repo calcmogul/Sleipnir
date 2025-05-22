@@ -18,6 +18,13 @@
 
 namespace slp {
 
+/// Coefficient β₁ of the interior-point method's μβ₁e stationarity
+/// perturbation.
+///
+/// @tparam Scalar Scalar type.
+template <typename Scalar>
+constexpr Scalar ipm_β_1(1e-4);
+
 /// Returns the ∞-norm of the KKT condition errors for Newton's method.
 ///
 /// @tparam Scalar Scalar type.
@@ -130,11 +137,12 @@ Scalar kkt_error_one_norm(
 /// @tparam Scalar Scalar type.
 /// @param iterates The iterates.
 /// @param function_values Cost function and constraint values.
-/// @param first_derivatives Cost function gradient and constraint Jacobians.
+/// @param first_derivatives Cost function gradient and constraint Jacobian.
 /// @param sqrt_μ Square root of the barrier parameter for the iterate.
 /// @param μ_target The barrier parameter against which to measure
-///     complementarity. Pass zero for the error of the original problem and μ
-///     for the error of the barrier subproblem.
+///     complementarity and the μw and μβ₁e perturbations. Pass zero for the
+///     error of the original problem and μ for the error of the barrier
+///     subproblem.
 /// @param tolerance Solver tolerance.
 template <typename Scalar>
 Scalar kkt_error_inf_norm(const IPMIterates<Scalar>& iterates,
@@ -144,21 +152,21 @@ Scalar kkt_error_inf_norm(const IPMIterates<Scalar>& iterates,
   using std::abs;
   using std::pow;
 
-  const auto& [x, y, v] = iterates;
-  const auto& [f, c_e, c_i] = function_values;
-  const auto& [g, A_e, A_i] = first_derivatives;
+  const auto& [x, v] = iterates;
+  const auto& [f, c_i] = function_values;
+  const auto& [g, A_i] = first_derivatives;
 
   // The KKT conditions from docs/algorithms.md:
   //
-  //   ∇f − Aₑᵀy − Aᵢᵀz = 0
+  //   ∇f − Aᵢᵀz − μβ₁e = 0
   //   Sz − μe = 0
-  //   cₑ = 0
-  //   cᵢ − s = 0
+  //   cᵢ − s + μw = 0
   //
   // where
   //
   //   s = √(μ)e⁻ᵛ
   //   z = √(μ)eᵛ
+  //   w = e
   //
   // The log-domain parameterization satisfies Sz = μe exactly, so the
   // complementarity error relative to μ_target is |μ − μ_target|.
@@ -183,9 +191,8 @@ Scalar kkt_error_inf_norm(const IPMIterates<Scalar>& iterates,
   //
   //   s_d = max(1, ε^(5/8) ω/tol)
 
-  // ω = ‖|∇f| + |Aₑ|ᵀ|y| + |Aᵢ|ᵀ|z|‖_∞
-  const Scalar ω = (g.cwiseAbs() + A_e.cwiseAbs().transpose() * y.cwiseAbs() +
-                    A_i.cwiseAbs().transpose() * z.cwiseAbs())
+  // ω = ‖|∇f| + |Aᵢ|ᵀ|z|‖_∞
+  const Scalar ω = (g.cwiseAbs() + A_i.cwiseAbs().transpose() * z.cwiseAbs())
                        .toDense()
                        .template lpNorm<Eigen::Infinity>();
 
@@ -198,18 +205,19 @@ Scalar kkt_error_inf_norm(const IPMIterates<Scalar>& iterates,
   Scalar s_c =
       std::max(s_max, z.template lpNorm<1>() / Scalar(z.rows())) / s_max;
 
-  // ‖∇f − Aₑᵀy − Aᵢᵀz‖_∞ / s_d
+  // ‖∇f − Aᵢᵀz − μβ₁e‖_∞ / s_d
   // ‖Sz − μe‖_∞ / s_c
-  // ‖cₑ‖_∞
-  // ‖cᵢ − s‖_∞
+  // ‖cᵢ − s + μw‖_∞
   return std::max(
-      {(g - A_e.transpose() * y - A_i.transpose() * z)
-               .toDense()
+      {((g - A_i.transpose() * z).toDense().array() -
+        μ_target * ipm_β_1<Scalar>)
+               .matrix()
                .template lpNorm<Eigen::Infinity>() /
            s_d,
        z.rows() > 0 ? abs(sqrt_μ * sqrt_μ - μ_target) / s_c : Scalar(0),
-       c_e.template lpNorm<Eigen::Infinity>(),
-       (c_i - s).template lpNorm<Eigen::Infinity>()});
+       ((c_i - s).array() + μ_target)
+           .matrix()
+           .template lpNorm<Eigen::Infinity>()});
 }
 
 /// Returns the 1-norm of the KKT condition errors for the interior-point
@@ -218,11 +226,12 @@ Scalar kkt_error_inf_norm(const IPMIterates<Scalar>& iterates,
 /// @tparam Scalar Scalar type.
 /// @param iterates The iterates.
 /// @param function_values Cost function and constraint values.
-/// @param first_derivatives Cost function gradient and constraint Jacobians.
+/// @param first_derivatives Cost function gradient and constraint Jacobian.
 /// @param sqrt_μ Square root of the barrier parameter for the iterate.
 /// @param μ_target The barrier parameter against which to measure
-///     complementarity. Pass zero for the error of the original problem and μ
-///     for the error of the barrier subproblem.
+///     complementarity and the μw and μβ₁e perturbations. Pass zero for the
+///     error of the original problem and μ for the error of the barrier
+///     subproblem.
 template <typename Scalar>
 Scalar kkt_error_one_norm(const IPMIterates<Scalar>& iterates,
                           const IPMFunctionValues<Scalar>& function_values,
@@ -230,21 +239,21 @@ Scalar kkt_error_one_norm(const IPMIterates<Scalar>& iterates,
                           Scalar sqrt_μ, Scalar μ_target) {
   using std::abs;
 
-  const auto& [x, y, v] = iterates;
-  const auto& [f, c_e, c_i] = function_values;
-  const auto& [g, A_e, A_i] = first_derivatives;
+  const auto& [x, v] = iterates;
+  const auto& [f, c_i] = function_values;
+  const auto& [g, A_i] = first_derivatives;
 
   // The KKT conditions from docs/algorithms.md:
   //
-  //   ∇f − Aₑᵀy − Aᵢᵀz = 0
+  //   ∇f − Aᵢᵀz − μβ₁e = 0
   //   Sz − μe = 0
-  //   cₑ = 0
-  //   cᵢ − s = 0
+  //   cᵢ − s + μw = 0
   //
   // where
   //
   //   s = √(μ)e⁻ᵛ
   //   z = √(μ)eᵛ
+  //   w = e
   //
   // The log-domain parameterization satisfies Sz = μe exactly, so the
   // complementarity error relative to μ_target is |μ − μ_target|.
@@ -252,11 +261,12 @@ Scalar kkt_error_one_norm(const IPMIterates<Scalar>& iterates,
   const Eigen::VectorX<Scalar> s = sqrt_μ * (-v).array().exp().matrix();
   const Eigen::VectorX<Scalar> z = sqrt_μ * v.array().exp().matrix();
 
-  return (g - A_e.transpose() * y - A_i.transpose() * z)
-             .toDense()
+  return ((g - A_i.transpose() * z).toDense().array() -
+          μ_target * ipm_β_1<Scalar>)
+             .matrix()
              .template lpNorm<1>() +
          Scalar(z.rows()) * abs(sqrt_μ * sqrt_μ - μ_target) +
-         c_e.template lpNorm<1>() + (c_i - s).template lpNorm<1>();
+         ((c_i - s).array() + μ_target).matrix().template lpNorm<1>();
 }
 
 /// Returns the ∞-norm of the unscaled KKT condition errors for Newton's method.
@@ -326,7 +336,7 @@ Scalar unscaled_kkt_error_inf_norm(
 ///     Jacobians.
 /// @param sqrt_μ Square root of the scaled barrier parameter.
 /// @param μ_target The scaled barrier parameter against which to measure
-///     complementarity.
+///     complementarity and the μw and μβ₁e perturbations.
 /// @param tolerance Solver tolerance.
 template <typename Scalar>
 Scalar unscaled_kkt_error_inf_norm(
@@ -346,15 +356,12 @@ Scalar unscaled_kkt_error_inf_norm(
   }
 
   const Scalar inv_d_f = Scalar(1) / scaling.f;
-  const DenseVector inv_d_c_e = scaling.c_e.cwiseInverse();
   const DenseVector inv_d_c_i = scaling.c_i.cwiseInverse();
 
   const IPMFunctionValues<Scalar> function_values_unscaled{
-      inv_d_f * function_values.f, inv_d_c_e.cwiseProduct(function_values.c_e),
-      inv_d_c_i.cwiseProduct(function_values.c_i)};
+      inv_d_f * function_values.f, inv_d_c_i.cwiseProduct(function_values.c_i)};
   const IPMFirstDerivatives<Scalar> first_derivatives_unscaled{
       inv_d_f * first_derivatives.g,
-      inv_d_c_e.asDiagonal() * first_derivatives.A_e,
       inv_d_c_i.asDiagonal() * first_derivatives.A_i};
 
   // The unscaled slacks and duals are
@@ -367,10 +374,9 @@ Scalar unscaled_kkt_error_inf_norm(
   //   √(μᵤ) = √(μ/d_f)
   //   vᵤ = v + ln(D_cᵢ) − ½ln(d_f)
   const IPMIterates<Scalar> iterates_unscaled{
-      iterates.x, scaling.c_e.cwiseProduct(iterates.y) * inv_d_f,
-      (iterates.v.array() + scaling.c_i.array().log() -
-       Scalar(0.5) * log(scaling.f))
-          .matrix()};
+      iterates.x, (iterates.v.array() + scaling.c_i.array().log() -
+                   Scalar(0.5) * log(scaling.f))
+                      .matrix()};
   const Scalar sqrt_μ_unscaled = sqrt_μ * sqrt(inv_d_f);
 
   const Scalar μ_target_unscaled = μ_target * inv_d_f;

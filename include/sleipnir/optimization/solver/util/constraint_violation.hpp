@@ -20,15 +20,13 @@ Scalar constraint_violation(const Eigen::VectorX<Scalar>& c_e) {
 /// Returns the constraint violation for an interior-point method iterate.
 ///
 /// @tparam Scalar Scalar type.
-/// @param c_e The equality constraint values (nonzero means violation).
 /// @param c_i The inequality constraint values (negative means violation).
 /// @param s The inequality constraint slack variables.
 /// @return The constraint violation.
 template <typename Scalar>
-Scalar constraint_violation(const Eigen::VectorX<Scalar>& c_e,
-                            const Eigen::VectorX<Scalar>& c_i,
+Scalar constraint_violation(const Eigen::VectorX<Scalar>& c_i,
                             const Eigen::VectorX<Scalar>& s) {
-  return c_e.template lpNorm<1>() + (c_i - s).template lpNorm<1>();
+  return (c_i - s).template lpNorm<1>();
 }
 
 }  // namespace slp

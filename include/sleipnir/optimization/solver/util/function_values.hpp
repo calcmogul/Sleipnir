@@ -29,17 +29,14 @@ struct SQPFunctionValues {
   }
 };
 
-/// The cost function and constraints evaluated at an interior-point method
-/// iterate's decision variables.
+/// The cost function and inequality constraints evaluated at an interior-point
+/// method iterate's decision variables.
 ///
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct IPMFunctionValues {
   /// The cost function f(x).
   Scalar f;
-
-  /// The equality constraints cₑ(x).
-  Eigen::VectorX<Scalar> c_e;
 
   /// The inequality constraints cᵢ(x).
   Eigen::VectorX<Scalar> c_i;
@@ -49,7 +46,7 @@ struct IPMFunctionValues {
   /// @return Whether every value is finite.
   bool all_finite() const {
     using std::isfinite;
-    return isfinite(f) && c_e.allFinite() && c_i.allFinite();
+    return isfinite(f) && c_i.allFinite();
   }
 };
 

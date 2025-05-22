@@ -116,8 +116,6 @@ struct IPMStep {
 
   /// Decision variable primal step.
   DenseVector p_x;
-  /// Equality constraint dual step.
-  DenseVector p_y;
   /// Log-domain variable step.
   DenseVector p_v;
 
@@ -132,8 +130,7 @@ struct IPMStep {
   ///
   /// @return The infinity norm of the dual step.
   Scalar dual_inf_norm() const {
-    return std::max(p_y.template lpNorm<Eigen::Infinity>(),
-                    p_v.template lpNorm<Eigen::Infinity>());
+    return p_v.template lpNorm<Eigen::Infinity>();
   }
 
   /// Returns the step size below which the primal step is negligible relative

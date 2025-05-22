@@ -26,8 +26,8 @@ struct SQPFirstDerivatives {
   bool all_finite() const { return slp::all_finite(g) && slp::all_finite(A_e); }
 };
 
-/// The cost function gradient and constraint Jacobians evaluated at an
-/// interior-point method iterate's decision variables.
+/// The cost function gradient and inequality constraint Jacobian evaluated at
+/// an interior-point method iterate's decision variables.
 ///
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
@@ -35,18 +35,13 @@ struct IPMFirstDerivatives {
   /// The cost function gradient ∇f(x).
   Eigen::SparseVector<Scalar> g;
 
-  /// The equality constraint Jacobian Aₑ(x).
-  Eigen::SparseMatrix<Scalar> A_e;
-
   /// The inequality constraint Jacobian Aᵢ(x).
   Eigen::SparseMatrix<Scalar> A_i;
 
   /// Returns whether every value is finite.
   ///
   /// @return Whether every value is finite.
-  bool all_finite() const {
-    return slp::all_finite(g) && slp::all_finite(A_e) && slp::all_finite(A_i);
-  }
+  bool all_finite() const { return slp::all_finite(g) && slp::all_finite(A_i); }
 };
 
 }  // namespace slp

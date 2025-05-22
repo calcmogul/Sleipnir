@@ -50,7 +50,7 @@ struct FilterEntry {
   /// Constructs an interior-point method filter entry.
   ///
   /// @param v The log-domain variables.
-  /// @param function_values The cost function and constraint values.
+  /// @param function_values The cost function and inequality constraint values.
   /// @param sqrt_μ Square root of the barrier parameter.
   FilterEntry(const DenseVector& v,
               const IPMFunctionValues<Scalar>& function_values, Scalar sqrt_μ) {
@@ -58,8 +58,14 @@ struct FilterEntry {
     DenseVector s = sqrt_μ * (-v).array().exp().matrix();
 
     cost = function_values.f - sqrt_μ * sqrt_μ * s.array().log().sum();
-    constraint_violation =
-        slp::constraint_violation(function_values.c_e, function_values.c_i, s);
+
+    // The Newton step targets the relaxed constraint cᵢ − s + μw = 0 (w = e),
+    // so measure violation of that instead of cᵢ − s = 0. Otherwise, the
+    // violation measure can't fall below μ‖w‖₁ near the barrier subproblem's
+    // solution, and the filter rejects productive steps.
+    constraint_violation = ((function_values.c_i - s).array() + sqrt_μ * sqrt_μ)
+                               .matrix()
+                               .template lpNorm<1>();
   }
 
   /// Returns true if this filter entry is dominated by another.
