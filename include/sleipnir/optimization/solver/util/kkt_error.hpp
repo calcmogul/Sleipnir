@@ -51,30 +51,21 @@ Scalar kkt_error(const Eigen::Vector<Scalar, Eigen::Dynamic>& g,
 ///
 /// @tparam Scalar Scalar type.
 /// @param g Gradient of the cost function ∇f.
-/// @param A_e The problem's equality constraint Jacobian Aₑ(x) evaluated at the
-///     current iterate.
-/// @param c_e The problem's equality constraints cₑ(x) evaluated at the current
-///     iterate.
 /// @param A_i The problem's inequality constraint Jacobian Aᵢ(x) evaluated at
 ///     the current iterate.
 /// @param c_i The problem's inequality constraints cᵢ(x) evaluated at the
 ///     current iterate.
-/// @param y Equality constraint dual variables.
 /// @param v Log-domain variables.
 /// @param sqrt_μ Square root of the barrier parameter.
 template <typename Scalar>
 Scalar kkt_error(const Eigen::Vector<Scalar, Eigen::Dynamic>& g,
-                 const Eigen::SparseMatrix<Scalar>& A_e,
-                 const Eigen::Vector<Scalar, Eigen::Dynamic>& c_e,
                  const Eigen::SparseMatrix<Scalar>& A_i,
                  const Eigen::Vector<Scalar, Eigen::Dynamic>& c_i,
-                 const Eigen::Vector<Scalar, Eigen::Dynamic>& y,
                  const Eigen::Vector<Scalar, Eigen::Dynamic>& v,
                  Scalar sqrt_μ) {
   // Compute the KKT error as the 1-norm of the KKT conditions.
   //
-  //   ∇f − Aₑᵀy − Aᵢᵀz = 0
-  //   cₑ = 0
+  //   ∇f − Aᵢᵀz = 0
   //   cᵢ − s = 0
   //
   // where
@@ -87,8 +78,8 @@ Scalar kkt_error(const Eigen::Vector<Scalar, Eigen::Dynamic>& g,
   const Eigen::Vector<Scalar, Eigen::Dynamic> z =
       sqrt_μ * v.array().exp().matrix();
 
-  return (g - A_e.transpose() * y - A_i.transpose() * z).template lpNorm<1>() +
-         c_e.template lpNorm<1>() + (c_i - s).template lpNorm<1>();
+  return (g - A_i.transpose() * z).template lpNorm<1>() +
+         (c_i - s).template lpNorm<1>();
 }
 
 }  // namespace slp
