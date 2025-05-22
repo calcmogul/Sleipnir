@@ -294,75 +294,63 @@ Next, we'll apply Newton's method to the optimality conditions. Let H be ∂²L/
 Group them into a matrix equation.
 
 ```
-  [H   −Aₑᵀ  −√(μ)Aᵢᵀeᵛ][pˣ]    [∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ]
-  [Aₑ   0         0    ][pʸ] = −[          cₑ         ]
-  [Aᵢ   0     √(μ)e⁻ᵛ  ][pᵛ]    [    cᵢ − √(μ)e⁻ᵛ     ]
+  [H   −√(μ)Aᵢᵀeᵛ][pˣ] = −[∇f − √(μ)Aᵢᵀeᵛ − μβ₁e]
+  [Aᵢ   √(μ)e⁻ᵛ  ][pᵛ]    [  cᵢ − √(μ)e⁻ᵛ + μw  ]
 ```
 
-Invert pʸ.
+Solve the second row for pᵛ.
 
 ```
-  [H   Aₑᵀ  −√(μ)Aᵢᵀeᵛ][ pˣ]    [∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ]
-  [Aₑ   0       0     ][−pʸ] = −[         cₑ          ]
-  [Aᵢ   0    √(μ)e⁻ᵛ  ][ pᵛ]    [    cᵢ − √(μ)e⁻ᵛ     ]
-```
-
-Solve the third row for pᵛ.
-
-```
-  Aᵢpˣ + √(μ)e⁻ᵛ∘pᵛ = −cᵢ + √(μ)e⁻ᵛ
-  √(μ)e⁻ᵛ∘pᵛ = −Aᵢpˣ − cᵢ + √(μ)e⁻ᵛ
-  pᵛ = −1/√(μ) Aᵢeᵛ∘pˣ − 1/√(μ) eᵛ∘cᵢ + e
-  pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)
+  Aᵢpˣ + √(μ)e⁻ᵛ∘pᵛ = −cᵢ + √(μ)e⁻ᵛ − μw
+  √(μ)e⁻ᵛ∘pᵛ = −Aᵢpˣ − cᵢ + √(μ)e⁻ᵛ − μw
+  pᵛ = −1/√(μ) Aᵢeᵛ∘pˣ − 1/√(μ) eᵛ∘cᵢ + e − √(μ)eᵛ∘w
+  pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ) − √(μ)eᵛ∘w
 ```
 
 Substitute the explicit formula for pᵛ into the first row.
 
 ```
-  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘pᵛ = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
-  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘(e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)) = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
+  Hpˣ − √(μ)Aᵢᵀeᵛ∘pᵛ = −∇f + √(μ)Aᵢᵀeᵛ + μβ₁e
+  Hpˣ − √(μ)Aᵢᵀeᵛ∘(e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ) − √(μ)eᵛ∘w) = −∇f + √(μ)Aᵢᵀeᵛ + μβ₁e
 ```
 
 Expand and simplify.
 
 ```
-  Hpˣ − Aₑᵀpʸ − Aᵢᵀeᵛ∘(√(μ) − eᵛ∘(Aᵢpˣ + cᵢ)) = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
-  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ + Aᵢᵀe²ᵛ∘(Aᵢpˣ + cᵢ) = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
-  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ + Aᵢᵀdiag(e²ᵛ)Aᵢpˣ + Aᵢᵀe²ᵛ∘cᵢ = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
-  Hpˣ − Aₑᵀpʸ + Aᵢᵀdiag(e²ᵛ)Aᵢpˣ + Aᵢᵀe²ᵛ∘cᵢ = −∇f + Aₑᵀy + 2√(μ)Aᵢᵀeᵛ
-  Hpˣ − Aₑᵀpʸ + Aᵢᵀdiag(e²ᵛ)Aᵢpˣ = −∇f + Aₑᵀy + 2√(μ)Aᵢᵀeᵛ − Aᵢᵀe²ᵛ∘cᵢ
-  (Hpˣ + Aᵢᵀdiag(e²ᵛ)Aᵢ)pˣ − Aₑᵀpʸ = −∇f + Aₑᵀy + 2√(μ)Aᵢᵀeᵛ − Aᵢᵀe²ᵛ∘cᵢ
-  (Hpˣ + Aᵢᵀdiag(e²ᵛ)Aᵢ)pˣ − Aₑᵀpʸ = −∇f + Aₑᵀy + Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)
+  Hpˣ − Aᵢᵀeᵛ∘(√(μ) − eᵛ∘(Aᵢpˣ + cᵢ) − eᵛ∘μw) = −∇f + √(μ)Aᵢᵀeᵛ + μβ₁e
+  Hpˣ − √(μ)Aᵢᵀeᵛ + Aᵢᵀe²ᵛ∘(Aᵢpˣ + cᵢ) + Aᵢᵀe²ᵛ∘μw = −∇f + √(μ)Aᵢᵀeᵛ + μβ₁e
+  Hpˣ − √(μ)Aᵢᵀeᵛ + Aᵢᵀdiag(e²ᵛ)Aᵢpˣ + Aᵢᵀe²ᵛ∘(cᵢ + μw) = −∇f + √(μ)Aᵢᵀeᵛ + μβ₁e
+  Hpˣ + Aᵢᵀdiag(e²ᵛ)Aᵢpˣ + Aᵢᵀe²ᵛ∘(cᵢ + μw) = −∇f + 2√(μ)Aᵢᵀeᵛ + μβ₁e
+  Hpˣ + Aᵢᵀdiag(e²ᵛ)Aᵢpˣ = −∇f + 2√(μ)Aᵢᵀeᵛ − Aᵢᵀe²ᵛ∘(cᵢ + μw) + μβ₁e
+  (Hpˣ + Aᵢᵀdiag(e²ᵛ)Aᵢ)pˣ = −∇f + 2√(μ)Aᵢᵀeᵛ − Aᵢᵀe²ᵛ∘(cᵢ + μw) + μβ₁e
+  (Hpˣ + Aᵢᵀdiag(e²ᵛ)Aᵢ)pˣ = −∇f + Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘(cᵢ + μw)) + μβ₁e
 ```
 
-Substitute the new first and third rows into the system.
+Substitute the new first and second rows into the system.
 
 ```
-  [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ  0][ pˣ]    [∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
-  [        Aₑ           0   0][−pʸ] = −[               cₑ                ]
-  [        0            0   I][ pᵛ]    [    e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)    ]
+  [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  0][pˣ] = −[∇f − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘(cᵢ + μw)) − μβ₁e]
+  [        0           I][pᵛ]    [  e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ) − √(μ)eᵛ∘w  ]
 ```
 
-Eliminate the third row and column.
+Eliminate the second row and column.
 
 ```
-  [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
-  [        Aₑ           0 ][−pʸ]    [               cₑ                ]
+  [H + Aᵢᵀdiag(e²ᵛ)Aᵢ][pˣ] = −[∇f − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘(cᵢ + μw)) − μβ₁e]
 ```
 
 ### Final results
 
-In summary, the reduced 2x2 block system gives the iterates pₖˣ and pₖʸ.
+In summary, the folowing system gives the iterate pₖˣ.
 
 ```
-  [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
-  [        Aₑ           0 ][−pʸ]    [               cₑ                ]
+  [H + Aᵢᵀdiag(e²ᵛ)Aᵢ][pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘(cᵢ + μw)) − μβ₁e]
 ```
 
 The iterate pᵛ is given by
 
 ```
-  pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)
+  pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ) − √(μ)eᵛ∘w
 ```
 
 The iterates are applied like so
