@@ -40,8 +40,6 @@ namespace {
 struct Step {
   /// Primal step.
   Eigen::VectorXd p_x;
-  /// Equality constraint dual step.
-  Eigen::VectorXd p_y;
   /// Log-domain variable step.
   Eigen::VectorXd p_v;
 };
@@ -77,8 +75,6 @@ ExitStatus interior_point(
   solve_profilers.emplace_back("    ↳ f(x)");
   solve_profilers.emplace_back("    ↳ ∇f(x)");
   solve_profilers.emplace_back("    ↳ ∇²ₓₓL");
-  solve_profilers.emplace_back("    ↳ cₑ(x)");
-  solve_profilers.emplace_back("    ↳ ∂cₑ/∂x");
   solve_profilers.emplace_back("    ↳ cᵢ(x)");
   solve_profilers.emplace_back("    ↳ ∂cᵢ/∂x");
 
@@ -92,7 +88,7 @@ ExitStatus interior_point(
   auto& kkt_matrix_decomp_prof = solve_profilers[7];
   auto& kkt_system_solve_prof = solve_profilers[8];
   auto& line_search_prof = solve_profilers[9];
-  auto& soc_prof = solve_profilers[10];
+  // auto& soc_prof = solve_profilers[10];
   auto& next_iter_prep_prof = solve_profilers[11];
 
   // Set up profiled matrix callbacks
@@ -100,10 +96,8 @@ ExitStatus interior_point(
   auto& f_prof = solve_profilers[12];
   auto& g_prof = solve_profilers[13];
   auto& H_prof = solve_profilers[14];
-  auto& c_e_prof = solve_profilers[15];
-  auto& A_e_prof = solve_profilers[16];
-  auto& c_i_prof = solve_profilers[17];
-  auto& A_i_prof = solve_profilers[18];
+  auto& c_i_prof = solve_profilers[15];
+  auto& A_i_prof = solve_profilers[16];
 
   InteriorPointMatrixCallbacks matrices{
       [&](const Eigen::VectorXd& x) -> double {
@@ -114,19 +108,10 @@ ExitStatus interior_point(
         ScopedProfiler prof{g_prof};
         return matrix_callbacks.g(x);
       },
-      [&](const Eigen::VectorXd& x, const Eigen::VectorXd& y,
-          const Eigen::VectorXd& v,
+      [&](const Eigen::VectorXd& x, const Eigen::VectorXd& v,
           double sqrt_μ) -> Eigen::SparseMatrix<double> {
         ScopedProfiler prof{H_prof};
-        return matrix_callbacks.H(x, y, v, sqrt_μ);
-      },
-      [&](const Eigen::VectorXd& x) -> Eigen::VectorXd {
-        ScopedProfiler prof{c_e_prof};
-        return matrix_callbacks.c_e(x);
-      },
-      [&](const Eigen::VectorXd& x) -> Eigen::SparseMatrix<double> {
-        ScopedProfiler prof{A_e_prof};
-        return matrix_callbacks.A_e(x);
+        return matrix_callbacks.H(x, v, sqrt_μ);
       },
       [&](const Eigen::VectorXd& x) -> Eigen::VectorXd {
         ScopedProfiler prof{c_i_prof};
@@ -144,27 +129,14 @@ ExitStatus interior_point(
   setup_prof.start();
 
   double f = matrices.f(x);
-  Eigen::VectorXd c_e = matrices.c_e(x);
   Eigen::VectorXd c_i = matrices.c_i(x);
 
   int num_decision_variables = x.rows();
-  int num_equality_constraints = c_e.rows();
   int num_inequality_constraints = c_i.rows();
 
-  // Check for overconstrained problem
-  if (num_equality_constraints > num_decision_variables) {
-    if (options.diagnostics) {
-      print_too_few_dofs_error(c_e);
-    }
-
-    return ExitStatus::TOO_FEW_DOFS;
-  }
-
   Eigen::SparseVector<double> g = matrices.g(x);
-  Eigen::SparseMatrix<double> A_e = matrices.A_e(x);
   Eigen::SparseMatrix<double> A_i = matrices.A_i(x);
 
-  Eigen::VectorXd y = Eigen::VectorXd::Zero(num_equality_constraints);
   Eigen::VectorXd v = Eigen::VectorXd::Zero(num_inequality_constraints);
 
   // Barrier parameter minimum
@@ -194,19 +166,17 @@ ExitStatus interior_point(
   // s = √(μ)e⁻ᵛ
   Eigen::VectorXd s = sqrt_μ * exp_neg_v;
 
-  Eigen::SparseMatrix<double> H = matrices.H(x, y, v, sqrt_μ);
+  Eigen::SparseMatrix<double> H = matrices.H(x, v, sqrt_μ);
 
   // Ensure matrix callback dimensions are consistent
   slp_assert(g.rows() == num_decision_variables);
-  slp_assert(A_e.rows() == num_equality_constraints);
-  slp_assert(A_e.cols() == num_decision_variables);
   slp_assert(A_i.rows() == num_inequality_constraints);
   slp_assert(A_i.cols() == num_decision_variables);
   slp_assert(H.rows() == num_decision_variables);
   slp_assert(H.cols() == num_decision_variables);
 
-  // Check whether initial guess has finite f(xₖ), cₑ(xₖ), and cᵢ(xₖ)
-  if (!std::isfinite(f) || !c_e.allFinite() || !c_i.allFinite()) {
+  // Check whether initial guess has finite f(xₖ) and cᵢ(xₖ)
+  if (!std::isfinite(f) || !c_i.allFinite()) {
     return ExitStatus::NONFINITE_INITIAL_COST_OR_CONSTRAINTS;
   }
 
@@ -217,11 +187,10 @@ ExitStatus interior_point(
   // Kept outside the loop so its storage can be reused
   gch::small_vector<Eigen::Triplet<double>> triplets;
 
-  RegularizedLDLT solver{num_decision_variables, num_equality_constraints};
-  Eigen::SparseMatrix<double> lhs(
-      num_decision_variables + num_equality_constraints,
-      num_decision_variables + num_equality_constraints);
-  Eigen::VectorXd rhs{x.rows() + y.rows()};
+  RegularizedLDLT solver{num_decision_variables, 0};
+  Eigen::SparseMatrix<double> lhs(num_decision_variables,
+                                  num_decision_variables);
+  Eigen::VectorXd rhs{x.rows()};
 
   setup_prof.stop();
 
@@ -229,35 +198,19 @@ ExitStatus interior_point(
   auto build_and_compute_lhs = [&]() -> ExitStatus {
     ScopedProfiler kkt_matrix_build_profiler{kkt_matrix_build_prof};
 
-    // lhs = [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ]
-    //       [        Aₑ           0 ]
+    // lhs = H + Aᵢᵀdiag(e²ᵛ)Aᵢ
     //
     // Don't assign upper triangle because solver only uses lower triangle.
-    const Eigen::SparseMatrix<double> top_left =
-        H + (A_i.transpose() * exp_2v.asDiagonal() * A_i)
-                .triangularView<Eigen::Lower>();
-    triplets.clear();
-    triplets.reserve(top_left.nonZeros() + A_e.nonZeros());
-    for (int col = 0; col < H.cols(); ++col) {
-      // Append column of H + Aᵢᵀdiag(e²ᵛ)Aᵢ lower triangle in top-left quadrant
-      for (Eigen::SparseMatrix<double>::InnerIterator it{top_left, col}; it;
-           ++it) {
-        triplets.emplace_back(it.row(), it.col(), it.value());
-      }
-      // Append column of Aₑ in bottom-left quadrant
-      for (Eigen::SparseMatrix<double>::InnerIterator it{A_e, col}; it; ++it) {
-        triplets.emplace_back(H.rows() + it.row(), it.col(), it.value());
-      }
-    }
-    lhs.setFromSortedTriplets(triplets.begin(), triplets.end());
+    lhs = H + (A_i.transpose() * exp_2v.asDiagonal() * A_i)
+                  .triangularView<Eigen::Lower>();
 
     kkt_matrix_build_profiler.stop();
     ScopedProfiler kkt_matrix_decomp_profiler{kkt_matrix_decomp_prof};
 
     // Solve the Newton-KKT system
     //
-    // [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
-    // [        Aₑ           0 ][−pʸ]    [               cₑ                ]
+    // [H + Aᵢᵀdiag(e²ᵛ)Aᵢ][pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘(cᵢ + μw)) −
+    // μβ₁e]
     if (solver.compute(lhs).info() != Eigen::Success) {
       return ExitStatus::FACTORIZATION_FAILED;
     } else {
@@ -267,27 +220,29 @@ ExitStatus interior_point(
 
   // r is sqrt_μ
   auto build_rhs = [&](double r) {
-    // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
-    //        [               cₑ                ]
-    rhs.segment(0, x.rows()) =
-        -g + A_e.transpose() * y +
-        A_i.transpose() * (2.0 * r * exp_v - exp_2v.asDiagonal() * c_i);
-    rhs.segment(x.rows(), y.rows()) = -c_e;
+    static constexpr double β_1 = 1e-4;
+    Eigen::VectorXd μe = Eigen::VectorXd::Constant(c_i.rows(), r * r);
+    Eigen::VectorXd μβ_1e = Eigen::VectorXd::Constant(x.rows(), r * r * β_1);
+
+    // rhs = −[∇f − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘(cᵢ + μw)) − μβ₁e]
+    rhs =
+        -g +
+        A_i.transpose() * (2.0 * r * exp_v - exp_2v.asDiagonal() * (c_i + μe)) +
+        μβ_1e;
   };
 
   // r is sqrt_μ
   auto compute_step = [&](double r) -> Step {
     Step step;
 
-    // p = [ pˣ]
-    //     [−pʸ]
+    // p = pˣ
     Eigen::VectorXd p = solver.solve(rhs);
     step.p_x = p.segment(0, x.rows());
-    step.p_y = -p.segment(x.rows(), y.rows());
 
-    // pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)
+    // pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ) − √(μ)eᵛ∘w
     step.p_v = Eigen::VectorXd::Ones(v.rows()) -
-               1.0 / r * exp_v.asDiagonal() * (A_i * step.p_x + c_i);
+               1.0 / r * exp_v.asDiagonal() * (A_i * step.p_x + c_i) -
+               r * exp_v;
 
     return step;
   };
@@ -432,15 +387,6 @@ ExitStatus interior_point(
     ScopedProfiler inner_iter_profiler{inner_iter_prof};
     ScopedProfiler feasibility_check_profiler{feasibility_check_prof};
 
-    // Check for local equality constraint infeasibility
-    if (is_equality_locally_infeasible(A_e, c_e)) {
-      if (options.diagnostics) {
-        print_c_e_local_infeasibility_error(c_e);
-      }
-
-      return ExitStatus::LOCALLY_INFEASIBLE;
-    }
-
     // Check for local inequality constraint infeasibility
     if (is_inequality_locally_infeasible(A_i, c_i)) {
       if (options.diagnostics) {
@@ -461,7 +407,7 @@ ExitStatus interior_point(
 
     // Call iteration callbacks
     for (const auto& callback : iteration_callbacks) {
-      if (callback({iterations, x, g, H, A_e, A_i})) {
+      if (callback({iterations, x, g, H, Eigen::SparseMatrix<double>{}, A_i})) {
         return ExitStatus::CALLBACK_REQUESTED_STOP;
       }
     }
@@ -477,7 +423,7 @@ ExitStatus interior_point(
       init_barrier_parameter();
       μ_initialized = true;
     } else if (is_nlp) {
-      double E_sqrt_μ = error_estimate(g, A_e, c_e, A_i, c_i, y, v, sqrt_μ);
+      double E_sqrt_μ = error_estimate(g, A_i, c_i, v, sqrt_μ);
       if (E_sqrt_μ <= 10.0 * sqrt_μ * sqrt_μ) {
         ScopedProfiler μ_update_profiler{μ_update_prof};
         update_barrier_parameter();
@@ -508,17 +454,14 @@ ExitStatus interior_point(
     // Loop until a step is accepted
     while (1) {
       Eigen::VectorXd trial_x = x + α * step.p_x;
-      Eigen::VectorXd trial_y = y + α * step.p_y;
       Eigen::VectorXd trial_v = v + α_v * step.p_v;
 
       double trial_f = matrices.f(trial_x);
-      Eigen::VectorXd trial_c_e = matrices.c_e(trial_x);
       Eigen::VectorXd trial_c_i = matrices.c_i(trial_x);
 
-      // If f(xₖ + αpₖˣ), cₑ(xₖ + αpₖˣ), or cᵢ(xₖ + αpₖˣ) aren't finite, reduce
-      // step size immediately
-      if (!std::isfinite(trial_f) || !trial_c_e.allFinite() ||
-          !trial_c_i.allFinite()) {
+      // If f(xₖ + αpₖˣ) or cᵢ(xₖ + αpₖˣ) aren't finite, reduce step size
+      // immediately
+      if (!std::isfinite(trial_f) || !trial_c_i.allFinite()) {
         // Reduce step size
         α *= α_reduction_factor;
 
@@ -545,13 +488,13 @@ ExitStatus interior_point(
       }
 
       // Check whether filter accepts trial iterate
-      if (filter.try_add(
-              FilterEntry{trial_f, trial_v, trial_c_e, trial_c_i, sqrt_μ}, α)) {
+      if (filter.try_add(FilterEntry{trial_f, trial_v, trial_c_i, sqrt_μ}, α)) {
         // Accept step
         watchdog_count = 0;
         break;
       }
 
+#if 0
       double prev_constraint_violation =
           c_e.lpNorm<1>() + (c_i - s).lpNorm<1>();
       double next_constraint_violation =
@@ -644,6 +587,7 @@ ExitStatus interior_point(
           break;
         }
       }
+#endif
 
       // If we got here and α is the full step, the full step was rejected.
       // Increment the full-step rejected counter to keep track of how many full
@@ -670,19 +614,16 @@ ExitStatus interior_point(
       // If step size hit a minimum, check if the KKT error was reduced. If it
       // wasn't, report line search failure.
       if (α < α_min) {
-        double current_kkt_error =
-            kkt_error(g, A_e, c_e, A_i, c_i, y, v, sqrt_μ);
+        double current_kkt_error = kkt_error(g, A_i, c_i, v, sqrt_μ);
 
         trial_x = x + α_max * step.p_x;
-        trial_y = y + α_max * step.p_y;
         trial_v = v + α_v * step.p_v;
 
-        trial_c_e = matrices.c_e(trial_x);
         trial_c_i = matrices.c_i(trial_x);
 
-        double next_kkt_error = kkt_error(
-            matrices.g(trial_x), matrices.A_e(trial_x), trial_c_e,
-            matrices.A_i(trial_x), trial_c_i, trial_y, trial_v, sqrt_μ);
+        double next_kkt_error =
+            kkt_error(matrices.g(trial_x), matrices.A_i(trial_x), trial_c_i,
+                      trial_v, sqrt_μ);
 
         // If the step using αᵐᵃˣ reduced the KKT error, accept it anyway
         if (next_kkt_error <= 0.999 * current_kkt_error) {
@@ -715,7 +656,6 @@ ExitStatus interior_point(
     // yₖ₊₁ = yₖ + αₖpₖʸ
     // vₖ₊₁ = vₖ + αₖᵛpₖᵛ
     x += α * step.p_x;
-    y += α * step.p_y;
     v += α_v * step.p_v;
 
     exp_v = v.array().exp().matrix();
@@ -725,28 +665,26 @@ ExitStatus interior_point(
 
     // Update autodiff for Jacobians and Hessian
     f = matrices.f(x);
-    A_e = matrices.A_e(x);
     A_i = matrices.A_i(x);
     g = matrices.g(x);
-    H = matrices.H(x, y, v, sqrt_μ);
+    H = matrices.H(x, v, sqrt_μ);
 
     ScopedProfiler next_iter_prep_profiler{next_iter_prep_prof};
 
-    c_e = matrices.c_e(x);
     c_i = matrices.c_i(x);
 
     // Update the error estimate
-    E_0 = error_estimate(g, A_e, c_e, A_i, c_i, y, v, sqrt_μ_min);
+    E_0 = error_estimate(g, A_i, c_i, v, sqrt_μ_min);
 
     next_iter_prep_profiler.stop();
     inner_iter_profiler.stop();
 
     if (options.diagnostics) {
-      print_iteration_diagnostics(
-          iterations, IterationType::NORMAL,
-          inner_iter_profiler.current_duration(), E_0, f,
-          c_e.lpNorm<1>() + (c_i - s).lpNorm<1>(), sqrt_μ * sqrt_μ,
-          solver.hessian_regularization(), α, α_max, α_reduction_factor, α_v);
+      print_iteration_diagnostics(iterations, IterationType::NORMAL,
+                                  inner_iter_profiler.current_duration(), E_0,
+                                  f, (c_i - s).lpNorm<1>(), sqrt_μ * sqrt_μ,
+                                  solver.hessian_regularization(), α, α_max,
+                                  α_reduction_factor, α_v);
     }
 
     ++iterations;
