@@ -98,7 +98,6 @@ inline constexpr std::array ipm_setup_time_trace{
     TimeTraceEntry{SetupTimeTracerID::HESSIAN, "∇²ₓₓL", 1},
     TimeTraceEntry{SetupTimeTracerID::HESSIAN_COST, "∇²ₓₓL_f", 2},
     TimeTraceEntry{SetupTimeTracerID::HESSIAN_CONSTRAINTS, "∇²ₓₓL_c", 2},
-    TimeTraceEntry{SetupTimeTracerID::EQUALITY_JACOBIAN, "∂cₑ/∂x", 1},
     TimeTraceEntry{SetupTimeTracerID::INEQUALITY_JACOBIAN, "∂cᵢ/∂x", 1},
 };
 
@@ -158,8 +157,6 @@ inline constexpr std::array ipm_time_trace{
     TimeTraceEntry{SolveTimeTracerID::GRADIENT, "∇f(x)", 2},
     TimeTraceEntry{SolveTimeTracerID::HESSIAN, "∇²ₓₓL", 2},
     TimeTraceEntry{SolveTimeTracerID::HESSIAN_CONSTRAINTS, "∇²ₓₓL_c", 2},
-    TimeTraceEntry{SolveTimeTracerID::EQUALITY_CONSTRAINTS, "cₑ(x)", 2},
-    TimeTraceEntry{SolveTimeTracerID::EQUALITY_JACOBIAN, "∂cₑ/∂x", 2},
     TimeTraceEntry{SolveTimeTracerID::INEQUALITY_CONSTRAINTS, "cᵢ(x)", 2},
     TimeTraceEntry{SolveTimeTracerID::INEQUALITY_JACOBIAN, "∂cᵢ/∂x", 2},
 };
