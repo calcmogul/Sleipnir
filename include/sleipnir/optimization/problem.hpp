@@ -318,7 +318,6 @@ class Problem {
 
     int num_decision_variables = m_decision_variables.size();
     int num_equality_constraints = m_equality_constraints.size();
-    int num_inequality_constraints = m_inequality_constraints.size();
 
     gch::small_vector<std::function<bool(const IterationInfo<Scalar>& info)>>
         iteration_callbacks;
@@ -500,9 +499,20 @@ class Problem {
         slp::println("\nInvoking IPM solver\n");
       }
 
-      VariableMatrix<Scalar> c_e_ad{m_equality_constraints};
-      VariableMatrix<Scalar> c_i_ad{m_inequality_constraints};
-      VariableMatrix<Scalar> y_ad(num_equality_constraints);
+      // Turn each equality constraint into two inequality constraints
+      gch::small_vector<Variable<Scalar>> inequality_constraints;
+      inequality_constraints.reserve(m_inequality_constraints.size() +
+                                     2 * m_equality_constraints.size());
+      for (const auto& c : m_inequality_constraints) {
+        inequality_constraints.emplace_back(c);
+      }
+      for (const auto& c : m_equality_constraints) {
+        inequality_constraints.emplace_back(c);
+        inequality_constraints.emplace_back(-c);
+      }
+      int num_inequality_constraints = inequality_constraints.size();
+
+      VariableMatrix<Scalar> c_i_ad{inequality_constraints};
       VariableMatrix<Scalar> v_ad(num_inequality_constraints);
       Variable<Scalar> sqrt_μ_ad;
 
@@ -512,7 +522,6 @@ class Problem {
       ad_setup_profilers.emplace_back("↳ ∇²ₓₓL");
       ad_setup_profilers.emplace_back("  ↳ ∇²ₓₓL_f");
       ad_setup_profilers.emplace_back("  ↳ ∇²ₓₓL_c");
-      ad_setup_profilers.emplace_back("↳ ∂cₑ/∂x");
       ad_setup_profilers.emplace_back("↳ ∂cᵢ/∂x");
 
       ad_setup_profilers[0].start();
@@ -532,23 +541,16 @@ class Problem {
       // Set up constraint part of Lagrangian Hessian autodiff
       ad_setup_profilers[4].start();
       Hessian<Scalar, Eigen::Lower> H_c{
-          -y_ad.T() * c_e_ad -
-              sqrt_μ_ad *
-                  (v_ad.cwise_transform(&slp::exp<Scalar>).T() * c_i_ad),
+          -sqrt_μ_ad * (v_ad.cwise_transform(&slp::exp<Scalar>).T() * c_i_ad),
           x_ad};
       ad_setup_profilers[4].stop();
 
       ad_setup_profilers[2].stop();
 
-      // Set up equality constraint Jacobian autodiff
-      ad_setup_profilers[5].start();
-      Jacobian A_e{c_e_ad, x_ad};
-      ad_setup_profilers[5].stop();
-
       // Set up inequality constraint Jacobian autodiff
-      ad_setup_profilers[6].start();
+      ad_setup_profilers[5].start();
       Jacobian A_i{c_i_ad, x_ad};
-      ad_setup_profilers[6].stop();
+      ad_setup_profilers[5].stop();
 
       ad_setup_profilers[0].stop();
 
@@ -559,17 +561,12 @@ class Problem {
 #ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
       // Sparsity pattern files written when spy flag is set
       std::unique_ptr<Spy<Scalar>> H_spy;
-      std::unique_ptr<Spy<Scalar>> A_e_spy;
       std::unique_ptr<Spy<Scalar>> A_i_spy;
 
       if (spy) {
         H_spy = std::make_unique<Spy<Scalar>>(
             "H.spy", "Hessian", "Decision variables", "Decision variables",
             num_decision_variables, num_decision_variables);
-        A_e_spy = std::make_unique<Spy<Scalar>>(
-            "A_e.spy", "Equality constraint Jacobian", "Constraints",
-            "Decision variables", num_equality_constraints,
-            num_decision_variables);
         A_i_spy = std::make_unique<Spy<Scalar>>(
             "A_i.spy", "Inequality constraint Jacobian", "Constraints",
             "Decision variables", num_inequality_constraints,
@@ -577,7 +574,6 @@ class Problem {
         iteration_callbacks.push_back(
             [&](const IterationInfo<Scalar>& info) -> bool {
               H_spy->add(info.H);
-              A_e_spy->add(info.A_e);
               A_i_spy->add(info.A_i);
               return false;
             });
@@ -585,7 +581,7 @@ class Problem {
 #endif
 
       const auto [bound_constraint_mask, bounds, conflicting_bound_indices] =
-          get_bounds<Scalar>(m_decision_variables, m_inequality_constraints,
+          get_bounds<Scalar>(m_decision_variables, inequality_constraints,
                              A_i.value());
       if (!conflicting_bound_indices.empty()) {
         if (options.diagnostics) {
@@ -607,8 +603,8 @@ class Problem {
                                     &Variable<Scalar>::type)
                            .type() > ExpressionType::LINEAR) {
           return true;
-        } else if (!m_inequality_constraints.empty() &&
-                   std::ranges::max(m_inequality_constraints, {},
+        } else if (!inequality_constraints.empty() &&
+                   std::ranges::max(inequality_constraints, {},
                                     &Variable<Scalar>::type)
                            .type() > ExpressionType::LINEAR) {
           return true;
@@ -629,29 +625,19 @@ class Problem {
             x_ad.set_value(x);
             return g.value();
           },
-          [&](const DenseVector& x, const DenseVector& y, const DenseVector& v,
+          [&](const DenseVector& x, const DenseVector& v,
               Scalar sqrt_μ) -> SparseMatrix {
             x_ad.set_value(x);
-            y_ad.set_value(y);
             v_ad.set_value(v);
             sqrt_μ_ad.set_value(sqrt_μ);
             return H_f.value() + H_c.value();
           },
-          [&](const DenseVector& x, const DenseVector& y, const DenseVector& v,
+          [&](const DenseVector& x, const DenseVector& v,
               Scalar sqrt_μ) -> SparseMatrix {
             x_ad.set_value(x);
-            y_ad.set_value(y);
             v_ad.set_value(v);
             sqrt_μ_ad.set_value(sqrt_μ);
             return H_c.value();
-          },
-          [&](const DenseVector& x) -> DenseVector {
-            x_ad.set_value(x);
-            return c_e_ad.value();
-          },
-          [&](const DenseVector& x) -> SparseMatrix {
-            x_ad.set_value(x);
-            return A_e.value();
           },
           [&](const DenseVector& x) -> DenseVector {
             x_ad.set_value(x);

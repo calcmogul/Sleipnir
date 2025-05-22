@@ -81,30 +81,21 @@ Scalar kkt_error(const Eigen::Vector<Scalar, Eigen::Dynamic>& g,
 /// @tparam Scalar Scalar type.
 /// @tparam T The type of KKT error to compute.
 /// @param g Gradient of the cost function ∇f.
-/// @param A_e The problem's equality constraint Jacobian Aₑ(x) evaluated at the
-///     current iterate.
-/// @param c_e The problem's equality constraints cₑ(x) evaluated at the current
-///     iterate.
 /// @param A_i The problem's inequality constraint Jacobian Aᵢ(x) evaluated at
 ///     the current iterate.
 /// @param c_i The problem's inequality constraints cᵢ(x) evaluated at the
 ///     current iterate.
-/// @param y Equality constraint dual variables.
 /// @param v Log-domain variables.
 /// @param sqrt_μ Square root of the barrier parameter.
 template <typename Scalar, KKTErrorType T>
 Scalar kkt_error(const Eigen::Vector<Scalar, Eigen::Dynamic>& g,
-                 const Eigen::SparseMatrix<Scalar>& A_e,
-                 const Eigen::Vector<Scalar, Eigen::Dynamic>& c_e,
                  const Eigen::SparseMatrix<Scalar>& A_i,
                  const Eigen::Vector<Scalar, Eigen::Dynamic>& c_i,
-                 const Eigen::Vector<Scalar, Eigen::Dynamic>& y,
                  const Eigen::Vector<Scalar, Eigen::Dynamic>& v,
                  Scalar sqrt_μ) {
   // The KKT conditions from docs/algorithms.md:
   //
-  //   ∇f − Aₑᵀy − Aᵢᵀz = 0
-  //   cₑ = 0
+  //   ∇f − Aᵢᵀz = 0
   //   cᵢ − s = 0
   //
   // where
@@ -123,22 +114,16 @@ Scalar kkt_error(const Eigen::Vector<Scalar, Eigen::Dynamic>& g,
     // s_d = max(sₘₐₓ, (‖y‖₁ + ‖z‖₁) / (m + n)) / sₘₐₓ
     constexpr Scalar s_max(100);
     Scalar s_d =
-        std::max(s_max, (y.template lpNorm<1>() + z.template lpNorm<1>()) /
-                            Scalar(y.rows() + z.rows())) /
-        s_max;
+        std::max(s_max, z.template lpNorm<1>() / Scalar(z.rows())) / s_max;
 
-    // ‖∇f − Aₑᵀy − Aᵢᵀz‖_∞ / s_d
-    // ‖cₑ‖_∞
+    // ‖∇f − Aᵢᵀz‖_∞ / s_d
     // ‖cᵢ − s‖_∞
-    return std::max({(g - A_e.transpose() * y - A_i.transpose() * z)
-                             .template lpNorm<Eigen::Infinity>() /
-                         s_d,
-                     c_e.template lpNorm<Eigen::Infinity>(),
-                     (c_i - s).template lpNorm<Eigen::Infinity>()});
+    return std::max(
+        {(g - A_i.transpose() * z).template lpNorm<Eigen::Infinity>() / s_d,
+         (c_i - s).template lpNorm<Eigen::Infinity>()});
   } else if constexpr (T == KKTErrorType::ONE_NORM) {
-    return (g - A_e.transpose() * y - A_i.transpose() * z)
-               .template lpNorm<1>() +
-           c_e.template lpNorm<1>() + (c_i - s).template lpNorm<1>();
+    return (g - A_i.transpose() * z).template lpNorm<1>() +
+           (c_i - s).template lpNorm<1>();
   }
 }
 

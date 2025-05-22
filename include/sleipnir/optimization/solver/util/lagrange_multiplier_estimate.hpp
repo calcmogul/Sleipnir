@@ -13,17 +13,6 @@
 
 namespace slp {
 
-/// Lagrange multiplier estimates.
-///
-/// @tparam Scalar Scalar type.
-template <typename Scalar>
-struct LagrangeMultiplierEstimate {
-  /// Equality constraint dual estimate.
-  Eigen::Vector<Scalar, Eigen::Dynamic> y;
-  /// Inequality constraint dual estimate.
-  Eigen::Vector<Scalar, Eigen::Dynamic> z;
-};
-
 /// Estimates Lagrange multipliers for SQP.
 ///
 /// @tparam Scalar Scalar type.
@@ -48,16 +37,13 @@ Eigen::Vector<Scalar, Eigen::Dynamic> lagrange_multiplier_estimate(
 ///
 /// @tparam Scalar Scalar type.
 /// @param g Gradient of the cost function ∇f.
-/// @param A_e The problem's equality constraint Jacobian Aₑ(x) evaluated at the
-///     current iterate.
 /// @param A_i The problem's inequality constraint Jacobian Aᵢ(x) evaluated at
 ///     the current iterate.
 /// @param s Inequality constraint slack variables.
 /// @param μ Barrier parameter.
 template <typename Scalar>
-LagrangeMultiplierEstimate<Scalar> lagrange_multiplier_estimate(
+Eigen::Vector<Scalar, Eigen::Dynamic> lagrange_multiplier_estimate(
     const Eigen::SparseVector<Scalar>& g,
-    const Eigen::SparseMatrix<Scalar>& A_e,
     const Eigen::SparseMatrix<Scalar>& A_i,
     const Eigen::Vector<Scalar, Eigen::Dynamic>& s, Scalar μ) {
   using DenseVector = Eigen::Vector<Scalar, Eigen::Dynamic>;
@@ -65,35 +51,33 @@ LagrangeMultiplierEstimate<Scalar> lagrange_multiplier_estimate(
 
   // Lagrange multiplier estimates
   //
-  //   ∇f − Aₑᵀy − Aᵢᵀz = 0
+  //   ∇f − Aᵢᵀz = 0
   //   Sz − μe = 0
   //
-  //   Aₑᵀy + Aᵢᵀz = ∇f
+  //   Aᵢᵀz = ∇f
   //   −Sz = −μe
   //
-  //   [Aₑᵀ  Aᵢᵀ][y] = [ ∇f]
-  //   [ 0   −S ][z]   [−μe]
+  //   [Aᵢᵀ][z] = [ ∇f]
+  //   [−S ]      [−μe]
   //
-  //   [Aₑ   0]ᵀ[y] = [ ∇f]
-  //   [Aᵢ  −S] [z]   [−μe]
+  //   [Aᵢ  −S]ᵀ[z] = [ ∇f]
+  //                  [−μe]
   //
-  // Let Â = [Aₑ   0]
-  //         [Aᵢ  −S]
+  // Let Â = [Aᵢ  −S]
   //
-  //   Âᵀ[y] = [ ∇f]
-  //     [z]   [−μe]
+  //   Âᵀz = [ ∇f]
+  //         [−μe]
   //
-  //   [y] = (ÂÂᵀ)⁻¹Â[ ∇f]
-  //   [z]           [−μe]
+  //   z = (ÂÂᵀ)⁻¹Â[ ∇f]
+  //               [−μe]
 
   gch::small_vector<Eigen::Triplet<Scalar>> triplets;
 
-  // Â = [Aₑ   0]
-  //     [Aᵢ  −S]
-  triplets.reserve(A_e.nonZeros() + A_i.nonZeros() + s.rows());
-  append_as_triplets(triplets, 0, 0, {A_e, A_i});
-  append_diagonal_as_triplets(triplets, A_e.rows(), A_i.cols(), (-s).eval());
-  SparseMatrix A_hat{A_e.rows() + A_i.rows(), A_e.cols() + s.rows()};
+  // Â = [Aᵢ  −S]
+  triplets.reserve(A_i.nonZeros() + s.rows());
+  append_as_triplets(triplets, 0, 0, {A_i});
+  append_diagonal_as_triplets(triplets, 0, A_i.cols(), (-s).eval());
+  SparseMatrix A_hat{A_i.rows(), A_i.cols() + s.rows()};
   A_hat.setFromSortedTriplets(triplets.begin(), triplets.end());
 
   // lhs = ÂÂᵀ
@@ -107,9 +91,7 @@ LagrangeMultiplierEstimate<Scalar> lagrange_multiplier_estimate(
   DenseVector rhs = A_hat * rhs_temp;
 
   Eigen::SimplicialLDLT<SparseMatrix> yz_estimator{lhs};
-  DenseVector sol = yz_estimator.solve(rhs);
-  DenseVector y = sol.segment(0, A_e.rows());
-  DenseVector z = sol.segment(A_e.rows(), s.rows());
+  DenseVector z = yz_estimator.solve(rhs);
 
   // A requirement for the convergence proof is that the primal-dual barrier
   // term Hessian Σₖ₊₁ does not deviate arbitrarily much from the primal barrier
@@ -129,7 +111,7 @@ LagrangeMultiplierEstimate<Scalar> lagrange_multiplier_estimate(
     z[row] = std::clamp(z[row], Scalar(1) / κ_Σ * μ / s[row], κ_Σ * μ / s[row]);
   }
 
-  return {std::move(y), std::move(z)};
+  return std::move(z);
 }
 
 }  // namespace slp
