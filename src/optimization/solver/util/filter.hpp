@@ -56,17 +56,16 @@ struct FilterEntry {
    *
    * @param f The cost function value.
    * @param v The log-domain variables.
-   * @param c_e The equality constraint values (nonzero means violation).
    * @param c_i The inequality constraint values (negative means violation).
    * @param sqrt_μ Square root of the barrier parameter.
    */
-  FilterEntry(double f, Eigen::VectorXd& v, const Eigen::VectorXd& c_e,
-              const Eigen::VectorXd& c_i, double sqrt_μ) {
+  FilterEntry(double f, Eigen::VectorXd& v, const Eigen::VectorXd& c_i,
+              double sqrt_μ) {
     // s = √(μ)e⁻ᵛ
     Eigen::VectorXd s = sqrt_μ * (-v).array().exp().matrix();
 
     cost = f - sqrt_μ * sqrt_μ * s.array().log().sum();
-    constraint_violation = c_e.lpNorm<1>() + (c_i - s).lpNorm<1>();
+    constraint_violation = (c_i - s).lpNorm<1>();
   }
 };
 
