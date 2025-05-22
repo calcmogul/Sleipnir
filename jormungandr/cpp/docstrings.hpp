@@ -244,17 +244,6 @@ static const char *__doc_slp_InequalityConstraints_operator_bool = R"doc(Implici
 
 static const char *__doc_slp_InteriorPointMatrixCallbacks = R"doc(Matrix callbacks for the interior-point method solver.)doc";
 
-static const char *__doc_slp_InteriorPointMatrixCallbacks_A_e =
-R"doc(Equality constraint Jacobian ∂cₑ/∂x getter.
-
-@verbatim [∇ᵀcₑ₁(xₖ)] Aₑ(x) = [∇ᵀcₑ₂(xₖ)] [ ⋮ ] [∇ᵀcₑₘ(xₖ)]
-@endverbatim
-
-<table> <tr> <th>Variable</th> <th>Rows</th> <th>Columns</th> </tr>
-<tr> <td>x</td> <td>num_decision_variables</td> <td>1</td> </tr> <tr>
-<td>Aₑ(x)</td> <td>num_equality_constraints</td>
-<td>num_decision_variables</td> </tr> </table>)doc";
-
 static const char *__doc_slp_InteriorPointMatrixCallbacks_A_i =
 R"doc(Inequality constraint Jacobian ∂cᵢ/∂x getter.
 
@@ -267,24 +256,15 @@ R"doc(Inequality constraint Jacobian ∂cᵢ/∂x getter.
 <td>num_decision_variables</td> </tr> </table>)doc";
 
 static const char *__doc_slp_InteriorPointMatrixCallbacks_H =
-R"doc(Lagrangian Hessian ∇ₓₓ²L(x, y, v, √(μ)) getter.
+R"doc(Lagrangian Hessian ∇ₓₓ²L(x, v, √(μ)) getter.
 
-L(xₖ, yₖ, zₖ) = f(xₖ) − yₖᵀcₑ(xₖ) − √(μ)eᵛᵀcᵢ(xₖ)
+L(xₖ, vₖ, √(μ)) = f(xₖ) − √(μ)eᵛᵀcᵢ(xₖ)
 
 <table> <tr> <th>Variable</th> <th>Rows</th> <th>Columns</th> </tr>
 <tr> <td>x</td> <td>num_decision_variables</td> <td>1</td> </tr> <tr>
-<td>y</td> <td>num_equality_constraints</td> <td>1</td> </tr> <tr>
 <td>z</td> <td>num_inequality_constraints</td> <td>1</td> </tr> <tr>
-<td>∇ₓₓ²L(x, y, z)</td> <td>num_decision_variables</td>
+<td>∇ₓₓ²L(x, v, √(μ))</td> <td>num_decision_variables</td>
 <td>num_decision_variables</td> </tr> </table>)doc";
-
-static const char *__doc_slp_InteriorPointMatrixCallbacks_c_e =
-R"doc(Equality constraint value cₑ(x) getter.
-
-<table> <tr> <th>Variable</th> <th>Rows</th> <th>Columns</th> </tr>
-<tr> <td>x</td> <td>num_decision_variables</td> <td>1</td> </tr> <tr>
-<td>cₑ(x)</td> <td>num_equality_constraints</td> <td>1</td> </tr>
-</table>)doc";
 
 static const char *__doc_slp_InteriorPointMatrixCallbacks_c_i =
 R"doc(Inequality constraint value cᵢ(x) getter.
