@@ -64,28 +64,20 @@ inline double error_estimate(const Eigen::VectorXd& g,
  * method.
  *
  * @param g Gradient of the cost function ∇f.
- * @param A_e The problem's equality constraint Jacobian Aₑ(x) evaluated at the
- *   current iterate.
- * @param c_e The problem's equality constraints cₑ(x) evaluated at the current
- *   iterate.
  * @param A_i The problem's inequality constraint Jacobian Aᵢ(x) evaluated at
  *   the current iterate.
  * @param c_i The problem's inequality constraints cᵢ(x) evaluated at the
  *   current iterate.
- * @param y Equality constraint dual variables.
  * @param v Log-domain variables.
  * @param sqrt_μ Square root of the barrier parameter.
  */
 inline double error_estimate(const Eigen::VectorXd& g,
-                             const Eigen::SparseMatrix<double>& A_e,
-                             const Eigen::VectorXd& c_e,
                              const Eigen::SparseMatrix<double>& A_i,
                              const Eigen::VectorXd& c_i,
-                             const Eigen::VectorXd& y, const Eigen::VectorXd& v,
-                             double sqrt_μ) {
+                             const Eigen::VectorXd& v, double sqrt_μ) {
   // Update the error estimate using the KKT conditions.
   //
-  //   ∇f − Aₑᵀy − Aᵢᵀz = 0
+  //   ∇f − Aᵢᵀz = 0
   //   cₑ = 0
   //   cᵢ − s = 0
   //
@@ -97,23 +89,17 @@ inline double error_estimate(const Eigen::VectorXd& g,
   // The error tolerance is the max of the following infinity norms scaled by
   // s_d (see equation (5) of [2]).
   //
-  //   ‖∇f − Aₑᵀy − Aᵢᵀz‖_∞ / s_d
-  //   ‖cₑ‖_∞
+  //   ‖∇f − Aᵢᵀz‖_∞ / s_d
   //   ‖cᵢ − s‖_∞
 
   Eigen::VectorXd s = sqrt_μ * (-v).array().exp().matrix();
   Eigen::VectorXd z = sqrt_μ * v.array().exp().matrix();
 
-  // s_d = max(sₘₐₓ, (‖y‖₁ + ‖z‖₁) / (m + n)) / sₘₐₓ
+  // s_d = max(sₘₐₓ, ‖z‖₁ / n) / sₘₐₓ
   constexpr double s_max = 100.0;
-  double s_d =
-      std::max(s_max, (y.lpNorm<1>() + z.lpNorm<1>()) / (y.rows() + z.rows())) /
-      s_max;
+  double s_d = std::max(s_max, z.lpNorm<1>() / z.rows()) / s_max;
 
-  return std::max({(g - A_e.transpose() * y - A_i.transpose() * z)
-                           .lpNorm<Eigen::Infinity>() /
-                       s_d,
-                   c_e.lpNorm<Eigen::Infinity>(),
+  return std::max({(g - A_i.transpose() * z).lpNorm<Eigen::Infinity>() / s_d,
                    (c_i - s).lpNorm<Eigen::Infinity>()});
 }
 
