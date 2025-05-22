@@ -61,9 +61,9 @@ struct SLEIPNIR_DLLEXPORT InteriorPointMatrixCallbacks {
   /// </table>
   std::function<Eigen::SparseVector<double>(const Eigen::VectorXd& x)> g;
 
-  /// Lagrangian Hessian ∇ₓₓ²L(x, y, v, √(μ)) getter.
+  /// Lagrangian Hessian ∇ₓₓ²L(x, v, √(μ)) getter.
   ///
-  /// L(xₖ, yₖ, zₖ) = f(xₖ) − yₖᵀcₑ(xₖ) − √(μ)eᵛᵀcᵢ(xₖ)
+  /// L(xₖ, vₖ, √(μ)) = f(xₖ) − √(μ)eᵛᵀcᵢ(xₖ)
   ///
   /// <table>
   ///   <tr>
@@ -74,11 +74,6 @@ struct SLEIPNIR_DLLEXPORT InteriorPointMatrixCallbacks {
   ///   <tr>
   ///     <td>x</td>
   ///     <td>num_decision_variables</td>
-  ///     <td>1</td>
-  ///   </tr>
-  ///   <tr>
-  ///     <td>y</td>
-  ///     <td>num_equality_constraints</td>
   ///     <td>1</td>
   ///   </tr>
   ///   <tr>
@@ -87,64 +82,14 @@ struct SLEIPNIR_DLLEXPORT InteriorPointMatrixCallbacks {
   ///     <td>1</td>
   ///   </tr>
   ///   <tr>
-  ///     <td>∇ₓₓ²L(x, y, z)</td>
+  ///     <td>∇ₓₓ²L(x, v, √(μ))</td>
   ///     <td>num_decision_variables</td>
   ///     <td>num_decision_variables</td>
   ///   </tr>
   /// </table>
   std::function<Eigen::SparseMatrix<double>(
-      const Eigen::VectorXd& x, const Eigen::VectorXd& y,
-      const Eigen::VectorXd& v, double sqrt_μ)>
+      const Eigen::VectorXd& x, const Eigen::VectorXd& v, double sqrt_μ)>
       H;
-
-  /// Equality constraint value cₑ(x) getter.
-  ///
-  /// <table>
-  ///   <tr>
-  ///     <th>Variable</th>
-  ///     <th>Rows</th>
-  ///     <th>Columns</th>
-  ///   </tr>
-  ///   <tr>
-  ///     <td>x</td>
-  ///     <td>num_decision_variables</td>
-  ///     <td>1</td>
-  ///   </tr>
-  ///   <tr>
-  ///     <td>cₑ(x)</td>
-  ///     <td>num_equality_constraints</td>
-  ///     <td>1</td>
-  ///   </tr>
-  /// </table>
-  std::function<Eigen::VectorXd(const Eigen::VectorXd& x)> c_e;
-
-  /// Equality constraint Jacobian ∂cₑ/∂x getter.
-  ///
-  /// @verbatim
-  ///         [∇ᵀcₑ₁(xₖ)]
-  /// Aₑ(x) = [∇ᵀcₑ₂(xₖ)]
-  ///         [    ⋮    ]
-  ///         [∇ᵀcₑₘ(xₖ)]
-  /// @endverbatim
-  ///
-  /// <table>
-  ///   <tr>
-  ///     <th>Variable</th>
-  ///     <th>Rows</th>
-  ///     <th>Columns</th>
-  ///   </tr>
-  ///   <tr>
-  ///     <td>x</td>
-  ///     <td>num_decision_variables</td>
-  ///     <td>1</td>
-  ///   </tr>
-  ///   <tr>
-  ///     <td>Aₑ(x)</td>
-  ///     <td>num_equality_constraints</td>
-  ///     <td>num_decision_variables</td>
-  ///   </tr>
-  /// </table>
-  std::function<Eigen::SparseMatrix<double>(const Eigen::VectorXd& x)> A_e;
 
   /// Inequality constraint value cᵢ(x) getter.
   ///
