@@ -20,7 +20,6 @@
 #include "sleipnir/optimization/solver/iteration_info.hpp"
 #include "sleipnir/optimization/solver/options.hpp"
 #include "sleipnir/optimization/solver/util/all_finite.hpp"
-#include "sleipnir/optimization/solver/util/append_as_triplets.hpp"
 #include "sleipnir/optimization/solver/util/feasibility_restoration.hpp"
 #include "sleipnir/optimization/solver/util/filter.hpp"
 #include "sleipnir/optimization/solver/util/is_locally_infeasible.hpp"
@@ -87,7 +86,7 @@ ExitStatus interior_point(
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
                         bound_constraint_mask,
 #endif
-                        x, y, v, sqrt_μ);
+                        x, v, sqrt_μ);
 }
 
 /// Finds the optimal solution to a nonlinear program using the interior-point
@@ -117,8 +116,6 @@ ExitStatus interior_point(
 ///     restoration mode.
 /// @param[in,out] x The initial guess and output location for the decision
 ///     variables.
-/// @param[in,out] y The initial guess and output location for the equality
-///     constraint dual variables.
 /// @param[in,out] v The initial guess and output location for the log-domain
 ///     variables.
 /// @param[in,out] sqrt_μ The initial guess and output location for the barrier
@@ -134,7 +131,6 @@ ExitStatus interior_point(
     const Eigen::ArrayX<bool>& bound_constraint_mask,
 #endif
     Eigen::Vector<Scalar, Eigen::Dynamic>& x,
-    Eigen::Vector<Scalar, Eigen::Dynamic>& y,
     Eigen::Vector<Scalar, Eigen::Dynamic>& v, Scalar& sqrt_μ) {
   using DenseVector = Eigen::Vector<Scalar, Eigen::Dynamic>;
   using SparseMatrix = Eigen::SparseMatrix<Scalar>;
@@ -144,8 +140,6 @@ ExitStatus interior_point(
   struct Step {
     /// Decision variable primal step.
     DenseVector p_x;
-    /// Equality constraint dual step.
-    DenseVector p_y;
     /// Log-domain variable step.
     DenseVector p_v;
   };
@@ -172,8 +166,6 @@ ExitStatus interior_point(
   solve_profilers.emplace_back("  ↳ ∇f(x)");
   solve_profilers.emplace_back("  ↳ ∇²ₓₓL");
   solve_profilers.emplace_back("  ↳ ∇²ₓₓL_c");
-  solve_profilers.emplace_back("  ↳ cₑ(x)");
-  solve_profilers.emplace_back("  ↳ ∂cₑ/∂x");
   solve_profilers.emplace_back("  ↳ cᵢ(x)");
   solve_profilers.emplace_back("  ↳ ∂cᵢ/∂x");
 
@@ -187,7 +179,7 @@ ExitStatus interior_point(
   auto& kkt_matrix_decomp_prof = solve_profilers[7];
   auto& kkt_system_solve_prof = solve_profilers[8];
   auto& line_search_prof = solve_profilers[9];
-  auto& soc_prof = solve_profilers[10];
+  // auto& soc_prof = solve_profilers[10];
   auto& feasibility_restoration_prof = solve_profilers[11];
 
   // Set up profiled matrix callbacks
@@ -196,10 +188,8 @@ ExitStatus interior_point(
   auto& g_prof = solve_profilers[13];
   auto& H_prof = solve_profilers[14];
   auto& H_c_prof = solve_profilers[15];
-  auto& c_e_prof = solve_profilers[16];
-  auto& A_e_prof = solve_profilers[17];
-  auto& c_i_prof = solve_profilers[18];
-  auto& A_i_prof = solve_profilers[19];
+  auto& c_i_prof = solve_profilers[16];
+  auto& A_i_prof = solve_profilers[17];
 
   InteriorPointMatrixCallbacks<Scalar> matrices{
       matrix_callbacks.num_decision_variables,
@@ -213,23 +203,15 @@ ExitStatus interior_point(
         ScopedProfiler prof{g_prof};
         return matrix_callbacks.g(x);
       },
-      [&](const DenseVector& x, const DenseVector& y, const DenseVector& v,
+      [&](const DenseVector& x, const DenseVector& v,
           Scalar sqrt_μ) -> SparseMatrix {
         ScopedProfiler prof{H_prof};
-        return matrix_callbacks.H(x, y, v, sqrt_μ);
+        return matrix_callbacks.H(x, v, sqrt_μ);
       },
-      [&](const DenseVector& x, const DenseVector& y, const DenseVector& v,
+      [&](const DenseVector& x, const DenseVector& v,
           Scalar sqrt_μ) -> SparseMatrix {
         ScopedProfiler prof{H_c_prof};
-        return matrix_callbacks.H_c(x, y, v, sqrt_μ);
-      },
-      [&](const DenseVector& x) -> DenseVector {
-        ScopedProfiler prof{c_e_prof};
-        return matrix_callbacks.c_e(x);
-      },
-      [&](const DenseVector& x) -> SparseMatrix {
-        ScopedProfiler prof{A_e_prof};
-        return matrix_callbacks.A_e(x);
+        return matrix_callbacks.H_c(x, v, sqrt_μ);
       },
       [&](const DenseVector& x) -> DenseVector {
         ScopedProfiler prof{c_i_prof};
@@ -248,9 +230,7 @@ ExitStatus interior_point(
 
   Scalar f = matrices.f(x);
   SparseVector g = matrices.g(x);
-  SparseMatrix H = matrices.H(x, y, v, sqrt_μ);
-  DenseVector c_e = matrices.c_e(x);
-  SparseMatrix A_e = matrices.A_e(x);
+  SparseMatrix H = matrices.H(x, v, sqrt_μ);
   DenseVector c_i = matrices.c_i(x);
   SparseMatrix A_i = matrices.A_i(x);
 
@@ -258,9 +238,6 @@ ExitStatus interior_point(
   slp_assert(g.rows() == matrices.num_decision_variables);
   slp_assert(H.rows() == matrices.num_decision_variables);
   slp_assert(H.cols() == matrices.num_decision_variables);
-  slp_assert(c_e.rows() == matrices.num_equality_constraints);
-  slp_assert(A_e.rows() == matrices.num_equality_constraints);
-  slp_assert(A_e.cols() == matrices.num_decision_variables);
   slp_assert(c_i.rows() == matrices.num_inequality_constraints);
   slp_assert(A_i.rows() == matrices.num_inequality_constraints);
   slp_assert(A_i.cols() == matrices.num_decision_variables);
@@ -270,21 +247,11 @@ ExitStatus interior_point(
   DenseVector trial_v;
 
   Scalar trial_f;
-  DenseVector trial_c_e;
   DenseVector trial_c_i;
 
-  // Check for overconstrained problem
-  if (matrices.num_equality_constraints > matrices.num_decision_variables) {
-    if (options.diagnostics) {
-      print_too_few_dofs_error(c_e);
-    }
-
-    return ExitStatus::TOO_FEW_DOFS;
-  }
-
   // Check whether initial guess has finite cost, constraints, and derivatives
-  if (!isfinite(f) || !all_finite(g) || !all_finite(H) || !c_e.allFinite() ||
-      !all_finite(A_e) || !c_i.allFinite() || !all_finite(A_i)) {
+  if (!isfinite(f) || !all_finite(g) || !all_finite(H) || !c_i.allFinite() ||
+      !all_finite(A_i)) {
     return ExitStatus::NONFINITE_INITIAL_GUESS;
   }
 
@@ -314,21 +281,15 @@ ExitStatus interior_point(
   // Barrier parameter minimum
   const Scalar sqrt_μ_min = sqrt(Scalar(options.tolerance) / Scalar(10));
 
-  Filter<Scalar> filter{c_e.template lpNorm<1>() +
-                        (c_i - s).template lpNorm<1>()};
+  Filter<Scalar> filter{(c_i - s).template lpNorm<1>()};
 
   // Kept outside the loop so its storage can be reused
   gch::small_vector<Eigen::Triplet<Scalar>> triplets;
 
-  // Constraint regularization is forced to zero in feasibility restoration
-  // because the equality constraint Jacobian cannot be rank-deficient
-  RegularizedLDLT<Scalar> solver{
-      matrices.num_decision_variables, matrices.num_equality_constraints,
-      in_feasibility_restoration ? Scalar(0) : Scalar(1e-10)};
-  SparseMatrix lhs(
-      matrices.num_decision_variables + matrices.num_equality_constraints,
-      matrices.num_decision_variables + matrices.num_equality_constraints);
-  DenseVector rhs{x.rows() + y.rows()};
+  RegularizedLDLT<Scalar> solver{matrices.num_decision_variables, 0};
+  SparseMatrix lhs(matrices.num_decision_variables,
+                   matrices.num_decision_variables);
+  DenseVector rhs{x.rows()};
 
   setup_prof.stop();
 
@@ -336,25 +297,19 @@ ExitStatus interior_point(
   auto build_and_compute_lhs = [&]() -> ExitStatus {
     ScopedProfiler kkt_matrix_build_profiler{kkt_matrix_build_prof};
 
-    // lhs = [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ]
-    //       [        Aₑ           0 ]
+    // lhs = H + Aᵢᵀdiag(e²ᵛ)Aᵢ
     //
     // Don't assign upper triangle because solver only uses lower triangle.
-    const SparseMatrix top_left =
-        H + (A_i.transpose() * exp_2v.asDiagonal() * A_i)
-                .template triangularView<Eigen::Lower>();
-    triplets.clear();
-    triplets.reserve(top_left.nonZeros() + A_e.nonZeros());
-    append_as_triplets(triplets, 0, 0, {top_left, A_e});
-    lhs.setFromSortedTriplets(triplets.begin(), triplets.end());
+    lhs = H + (A_i.transpose() * exp_2v.asDiagonal() * A_i)
+                  .template triangularView<Eigen::Lower>();
 
     kkt_matrix_build_profiler.stop();
     ScopedProfiler kkt_matrix_decomp_profiler{kkt_matrix_decomp_prof};
 
     // Solve the Newton-KKT system
     //
-    // [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
-    // [        Aₑ           0 ][−pʸ]    [               cₑ                ]
+    // [H + Aᵢᵀdiag(e²ᵛ)Aᵢ][pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘(cᵢ + μw)) −
+    //                              μβ₁e]
     if (solver.compute(lhs).info() != Eigen::Success) {
       return ExitStatus::FACTORIZATION_FAILED;
     } else {
@@ -364,27 +319,31 @@ ExitStatus interior_point(
 
   // r is sqrt_μ
   auto build_rhs = [&](Scalar r) {
-    // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
-    //        [               cₑ                ]
-    rhs.segment(0, x.rows()) =
-        -g + A_e.transpose() * y +
-        A_i.transpose() * (Scalar(2) * r * exp_v - exp_2v.asDiagonal() * c_i);
-    rhs.segment(x.rows(), y.rows()) = -c_e;
+    constexpr Scalar β_1(1e-4);
+    Eigen::Vector<Scalar, Eigen::Dynamic> μe =
+        Eigen::Vector<Scalar, Eigen::Dynamic>::Constant(c_i.rows(), r * r);
+    Eigen::Vector<Scalar, Eigen::Dynamic> μβ_1e =
+        Eigen::Vector<Scalar, Eigen::Dynamic>::Constant(x.rows(), r * r * β_1);
+
+    // rhs = −[∇f − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘(cᵢ + μw)) − μβ₁e]
+    rhs = -g +
+          A_i.transpose() *
+              (Scalar(2) * r * exp_v - exp_2v.asDiagonal() * (c_i + μe)) +
+          μβ_1e;
   };
 
   // r is sqrt_μ
   auto compute_step = [&](Scalar r) -> Step {
     Step step;
 
-    // p = [ pˣ]
-    //     [−pʸ]
+    // p = pˣ
     DenseVector p = solver.solve(rhs);
     step.p_x = p.segment(0, x.rows());
-    step.p_y = -p.segment(x.rows(), y.rows());
 
-    // pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)
+    // pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ) − √(μ)eᵛ∘w
     step.p_v = DenseVector::Ones(v.rows()) -
-               Scalar(1) / r * exp_v.asDiagonal() * (A_i * step.p_x + c_i);
+               Scalar(1) / r * exp_v.asDiagonal() * (A_i * step.p_x + c_i) -
+               r * exp_v;
 
     return step;
   };
@@ -503,8 +462,8 @@ ExitStatus interior_point(
   int full_step_rejected_counter = 0;
 
   // Error
-  Scalar E_0 = kkt_error<Scalar, KKTErrorType::INF_NORM_SCALED>(
-      g, A_e, c_e, A_i, c_i, y, v, sqrt_μ_min);
+  Scalar E_0 = kkt_error<Scalar, KKTErrorType::INF_NORM_SCALED>(g, A_i, c_i, v,
+                                                                sqrt_μ_min);
 
   // Prints final solver diagnostics when the solver exits
   scope_exit exit{[&] {
@@ -535,15 +494,6 @@ ExitStatus interior_point(
     ScopedProfiler inner_iter_profiler{inner_iter_prof};
     ScopedProfiler feasibility_check_profiler{feasibility_check_prof};
 
-    // Check for local equality constraint infeasibility
-    if (is_equality_locally_infeasible(A_e, c_e)) {
-      if (options.diagnostics) {
-        print_c_e_local_infeasibility_error(c_e);
-      }
-
-      return ExitStatus::LOCALLY_INFEASIBLE;
-    }
-
     // Check for local inequality constraint infeasibility
     if (is_inequality_locally_infeasible(A_i, c_i)) {
       if (options.diagnostics) {
@@ -564,7 +514,7 @@ ExitStatus interior_point(
 
     // Call iteration callbacks
     for (const auto& callback : iteration_callbacks) {
-      if (callback({iterations, x, y, v, g, H, A_e, A_i})) {
+      if (callback({iterations, x, {}, v, g, H, {}, A_i})) {
         return ExitStatus::CALLBACK_REQUESTED_STOP;
       }
     }
@@ -581,7 +531,7 @@ ExitStatus interior_point(
       μ_initialized = true;
     } else if (is_nlp) {
       Scalar E_sqrt_μ = kkt_error<Scalar, KKTErrorType::INF_NORM_SCALED>(
-          g, A_e, c_e, A_i, c_i, y, v, sqrt_μ);
+          g, A_i, c_i, v, sqrt_μ);
       if (E_sqrt_μ <= Scalar(10) * sqrt_μ * sqrt_μ) {
         ScopedProfiler μ_update_profiler{μ_update_prof};
         update_barrier_parameter();
@@ -610,7 +560,7 @@ ExitStatus interior_point(
     Scalar α_v = std::min(Scalar(1), Scalar(1) / (p_v_infnorm * p_v_infnorm));
     prev_p_v_infnorm = p_v_infnorm;
 
-    const FilterEntry<Scalar> current_entry{f, v, c_e, c_i, sqrt_μ};
+    const FilterEntry<Scalar> current_entry{f, v, c_i, sqrt_μ};
 
     // Loop until a step is accepted
     while (1) {
@@ -630,17 +580,14 @@ ExitStatus interior_point(
       } else {
         trial_s = sqrt_μ * (-trial_v).array().exp().matrix();
       }
-      trial_y = y + α * step.p_y;
       trial_v = v + α_v * step.p_v;
 
       trial_f = matrices.f(trial_x);
-      trial_c_e = matrices.c_e(trial_x);
       trial_c_i = matrices.c_i(trial_x);
 
-      // If f(xₖ + αpₖˣ), cₑ(xₖ + αpₖˣ), or cᵢ(xₖ + αpₖˣ) aren't finite, reduce
-      // step size immediately
-      if (!isfinite(trial_f) || !trial_c_e.allFinite() ||
-          !trial_c_i.allFinite()) {
+      // If f(xₖ + αpₖˣ) or cᵢ(xₖ + αpₖˣ) aren't finite, reduce step size
+      // immediately
+      if (!isfinite(trial_f) || !trial_c_i.allFinite()) {
         // Reduce step size
         α *= α_reduction_factor;
 
@@ -652,13 +599,14 @@ ExitStatus interior_point(
       }
 
       // Check whether filter accepts trial iterate
-      FilterEntry trial_entry{trial_f, trial_v, trial_c_e, trial_c_i, sqrt_μ};
+      FilterEntry trial_entry{trial_f, trial_v, trial_c_i, sqrt_μ};
       if (filter.try_add(current_entry, trial_entry, step.p_x, g, α)) {
         // Accept step
         watchdog_count = 0;
         break;
       }
 
+#if 0
       Scalar prev_constraint_violation =
           c_e.template lpNorm<1>() + (c_i - s).template lpNorm<1>();
       Scalar next_constraint_violation =
@@ -756,6 +704,7 @@ ExitStatus interior_point(
           break;
         }
       }
+#endif
 
       // If we got here and α is the full step, the full step was rejected.
       // Increment the full-step rejected counter to keep track of how many full
@@ -783,20 +732,18 @@ ExitStatus interior_point(
       // If step size hit a minimum, check if the KKT error was reduced. If it
       // wasn't, invoke feasibility restoration.
       if (α < α_min) {
-        Scalar current_kkt_error = kkt_error<Scalar, KKTErrorType::ONE_NORM>(
-            g, A_e, c_e, A_i, c_i, y, v, sqrt_μ);
+        Scalar current_kkt_error =
+            kkt_error<Scalar, KKTErrorType::ONE_NORM>(g, A_i, c_i, v, sqrt_μ);
 
         trial_x = x + α_max * step.p_x;
-        trial_y = y + α_max * step.p_y;
         trial_v = v + α_v * step.p_v;
 
         trial_f = matrices.f(trial_x);
-        trial_c_e = matrices.c_e(trial_x);
         trial_c_i = matrices.c_i(trial_x);
 
         Scalar next_kkt_error = kkt_error<Scalar, KKTErrorType::ONE_NORM>(
-            matrices.g(trial_x), matrices.A_e(trial_x), trial_c_e,
-            matrices.A_i(trial_x), trial_c_i, trial_y, trial_v, sqrt_μ);
+            matrices.g(trial_x), matrices.A_i(trial_x), trial_c_i, trial_v,
+            sqrt_μ);
 
         // If the step using αᵐᵃˣ reduced the KKT error, accept it anyway
         if (next_kkt_error <= Scalar(0.999) * current_kkt_error) {
@@ -828,7 +775,7 @@ ExitStatus interior_point(
         return ExitStatus::FEASIBILITY_RESTORATION_FAILED;
       }
 
-      FilterEntry initial_entry{matrices.f(x), v, c_e, c_i, sqrt_μ};
+      FilterEntry initial_entry{matrices.f(x), v, c_i, sqrt_μ};
 
       // Feasibility restoration phase
       gch::small_vector<std::function<bool(const IterationInfo<Scalar>& info)>>
@@ -842,19 +789,18 @@ ExitStatus interior_point(
         DenseVector trial_v =
             info.v.segment(0, matrices.num_inequality_constraints);
 
-        DenseVector trial_c_e = matrices.c_e(trial_x);
         DenseVector trial_c_i = matrices.c_i(trial_x);
 
         // If the current iterate sufficiently reduces constraint violation and
         // is accepted by the normal filter, stop feasibility restoration
-        FilterEntry trial_entry{matrices.f(trial_x), trial_v, trial_c_e,
-                                trial_c_i, sqrt_μ};
+        FilterEntry trial_entry{matrices.f(trial_x), trial_v, trial_c_i,
+                                sqrt_μ};
         return trial_entry.constraint_violation <
                    Scalar(0.9) * initial_entry.constraint_violation &&
                filter.try_add(initial_entry, trial_entry, trial_x - x, g, α);
       });
       auto status = feasibility_restoration<Scalar>(matrices, is_nlp, callbacks,
-                                                    options, x, y, v, sqrt_μ);
+                                                    options, x, v, sqrt_μ);
 
       if (status != ExitStatus::SUCCESS) {
         // Report failure
@@ -862,7 +808,6 @@ ExitStatus interior_point(
       }
 
       f = matrices.f(x);
-      c_e = matrices.c_e(x);
       c_i = matrices.c_i(x);
     } else {
       // If full step was accepted, reset full-step rejected counter
@@ -872,11 +817,9 @@ ExitStatus interior_point(
 
       // Update iterates
       x = trial_x;
-      y = trial_y;
       v = trial_v;
 
       f = trial_f;
-      c_e = trial_c_e;
       c_i = trial_c_i;
     }
 
@@ -886,14 +829,13 @@ ExitStatus interior_point(
     s = sqrt_μ * exp_neg_v;
 
     // Update autodiff for Jacobians and Hessian
-    A_e = matrices.A_e(x);
     A_i = matrices.A_i(x);
     g = matrices.g(x);
-    H = matrices.H(x, y, v, sqrt_μ);
+    H = matrices.H(x, v, sqrt_μ);
 
     // Update the error
-    E_0 = kkt_error<Scalar, KKTErrorType::INF_NORM_SCALED>(
-        g, A_e, c_e, A_i, c_i, y, v, sqrt_μ_min);
+    E_0 = kkt_error<Scalar, KKTErrorType::INF_NORM_SCALED>(g, A_i, c_i, v,
+                                                           sqrt_μ_min);
 
     inner_iter_profiler.stop();
 
@@ -903,9 +845,8 @@ ExitStatus interior_point(
           in_feasibility_restoration ? IterationType::FEASIBILITY_RESTORATION
                                      : IterationType::NORMAL,
           inner_iter_profiler.current_duration(), E_0, f,
-          c_e.template lpNorm<1>() + (c_i - s).template lpNorm<1>(),
-          sqrt_μ * sqrt_μ, solver.hessian_regularization(), α, α_max,
-          α_reduction_factor, α_v);
+          (c_i - s).template lpNorm<1>(), sqrt_μ * sqrt_μ,
+          solver.hessian_regularization(), α, α_max, α_reduction_factor, α_v);
     }
 
     ++iterations;

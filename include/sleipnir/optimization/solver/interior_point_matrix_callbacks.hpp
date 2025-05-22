@@ -72,9 +72,9 @@ struct InteriorPointMatrixCallbacks {
   /// </table>
   std::function<SparseVector(const DenseVector& x)> g;
 
-  /// Lagrangian Hessian ∇ₓₓ²L(x, y, v, √(μ)) getter.
+  /// Lagrangian Hessian ∇ₓₓ²L(x, v, √(μ)) getter.
   ///
-  /// L(x, y, v, √(μ))) = f(x) − yᵀcₑ(x) − √(μ)eᵛᵀcᵢ(x)
+  /// L(x, v, √(μ)) = f(x) − √(μ)eᵛᵀcᵢ(x)
   ///
   /// Only the lower triangle is used.
   ///
@@ -90,27 +90,21 @@ struct InteriorPointMatrixCallbacks {
   ///     <td>1</td>
   ///   </tr>
   ///   <tr>
-  ///     <td>y</td>
-  ///     <td>num_equality_constraints</td>
-  ///     <td>1</td>
-  ///   </tr>
-  ///   <tr>
   ///     <td>v</td>
   ///     <td>num_inequality_constraints</td>
   ///     <td>1</td>
   ///   </tr>
   ///   <tr>
-  ///     <td>∇ₓₓ²L(x, y, v, √(μ))</td>
+  ///     <td>∇ₓₓ²L(x, v, √(μ))</td>
   ///     <td>num_decision_variables</td>
   ///     <td>num_decision_variables</td>
   ///   </tr>
   /// </table>
-  std::function<SparseMatrix(const DenseVector& x, const DenseVector& y,
-                             const DenseVector& v, Scalar sqrt_μ)>
+  std::function<SparseMatrix(const DenseVector& x, const DenseVector& v,
+                             Scalar sqrt_μ)>
       H;
 
-  /// Constraint part of Lagrangian Hessian ∇ₓₓ²(−yₖᵀcₑ(x) − √(μ)eᵛᵀcᵢ(x))
-  /// getter.
+  /// Constraint part of Lagrangian Hessian ∇ₓₓ²(−√(μ)eᵛᵀcᵢ(x)) getter.
   ///
   /// Only the lower triangle is used.
   ///
@@ -136,63 +130,14 @@ struct InteriorPointMatrixCallbacks {
   ///     <td>1</td>
   ///   </tr>
   ///   <tr>
-  ///     <td>∇ₓₓ²(−yₖᵀcₑ(x) − √(μ)eᵛᵀcᵢ(x))</td>
+  ///     <td>∇ₓₓ²(−√(μ)eᵛᵀcᵢ(x))</td>
   ///     <td>num_decision_variables</td>
   ///     <td>num_decision_variables</td>
   ///   </tr>
   /// </table>
-  std::function<SparseMatrix(const DenseVector& x, const DenseVector& y,
-                             const DenseVector& v, Scalar sqrt_μ)>
+  std::function<SparseMatrix(const DenseVector& x, const DenseVector& v,
+                             Scalar sqrt_μ)>
       H_c;
-
-  /// Equality constraint value cₑ(x) getter.
-  ///
-  /// <table>
-  ///   <tr>
-  ///     <th>Variable</th>
-  ///     <th>Rows</th>
-  ///     <th>Columns</th>
-  ///   </tr>
-  ///   <tr>
-  ///     <td>x</td>
-  ///     <td>num_decision_variables</td>
-  ///     <td>1</td>
-  ///   </tr>
-  ///   <tr>
-  ///     <td>cₑ(x)</td>
-  ///     <td>num_equality_constraints</td>
-  ///     <td>1</td>
-  ///   </tr>
-  /// </table>
-  std::function<DenseVector(const DenseVector& x)> c_e;
-
-  /// Equality constraint Jacobian ∂cₑ/∂x getter.
-  ///
-  /// ```
-  ///         [∇ᵀcₑ₁(x)]
-  /// Aₑ(x) = [∇ᵀcₑ₂(x)]
-  ///         [   ⋮    ]
-  ///         [∇ᵀcₑₘ(x)]
-  /// ```
-  ///
-  /// <table>
-  ///   <tr>
-  ///     <th>Variable</th>
-  ///     <th>Rows</th>
-  ///     <th>Columns</th>
-  ///   </tr>
-  ///   <tr>
-  ///     <td>x</td>
-  ///     <td>num_decision_variables</td>
-  ///     <td>1</td>
-  ///   </tr>
-  ///   <tr>
-  ///     <td>Aₑ(x)</td>
-  ///     <td>num_equality_constraints</td>
-  ///     <td>num_decision_variables</td>
-  ///   </tr>
-  /// </table>
-  std::function<SparseMatrix(const DenseVector& x)> A_e;
 
   /// Inequality constraint value cᵢ(x) getter.
   ///
