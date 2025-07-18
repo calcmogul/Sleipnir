@@ -42,6 +42,6 @@ TEST_CASE("multistart - Mishra's Bird function", "[nonlinear_problem]") {
 
   CHECK(status == slp::ExitStatus::SUCCESS);
 
-  CHECK(variables.x == Catch::Approx(-3.130246803458174).margin(1e-15));
-  CHECK(variables.y == Catch::Approx(-1.5821421769364057).margin(1e-15));
+  CHECK(variables.x == Catch::Approx(-3.130246803458174).margin(1e-11));
+  CHECK(variables.y == Catch::Approx(-1.5821421769364057).margin(1e-11));
 }

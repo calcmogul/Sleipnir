@@ -101,7 +101,7 @@ void TestFlywheel(
         // steady-states.
         CHECK(problem.U().value(0, k) == Catch::Approx(u).margin(2.0));
       } else {
-        CHECK(problem.U().value(0, k) == Catch::Approx(u).margin(1e-4));
+        CHECK(problem.U().value(0, k) == Catch::Approx(u).margin(2e-4));
       }
     }
 

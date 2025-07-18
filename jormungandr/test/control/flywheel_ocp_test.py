@@ -93,7 +93,7 @@ def flywheel_test(
                 # steady-states.
                 assert problem.U().value(0, k) == pytest.approx(u, abs=2.0)
             else:
-                assert problem.U().value(0, k) == pytest.approx(u, abs=1e-4)
+                assert problem.U().value(0, k) == pytest.approx(u, abs=2e-4)
 
         # Project state forward
         x = A_discrete * x + B_discrete * u

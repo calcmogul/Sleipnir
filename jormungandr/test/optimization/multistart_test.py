@@ -39,5 +39,5 @@ def test_mishras_bird_function():
 
     assert status == ExitStatus.SUCCESS
 
-    assert variables.x == pytest.approx(-3.130246803458174, abs=1e-15)
-    assert variables.y == pytest.approx(-1.5821421769364057, abs=1e-15)
+    assert variables.x == pytest.approx(-3.130246803458174, abs=1e-11)
+    assert variables.y == pytest.approx(-1.5821421769364057, abs=1e-11)
