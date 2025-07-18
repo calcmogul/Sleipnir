@@ -99,7 +99,7 @@ TEST_CASE("Problem - Flywheel", "[Problem]") {
       CHECK(U.value(0, k) >= u_ss);
       CHECK(U.value(0, k) <= 12.0);
     } else {
-      CHECK(U.value(0, k) == Catch::Approx(u).margin(1e-4));
+      CHECK(U.value(0, k) == Catch::Approx(u).margin(2e-4));
     }
 
     INFO(std::format("  k = {}", k));

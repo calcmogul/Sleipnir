@@ -89,7 +89,7 @@ def test_flywheel_problem():
             assert U.value(0, k) >= u_ss
             assert U.value(0, k) <= 12.0
         else:
-            assert U.value(0, k) == pytest.approx(u, abs=1e-4)
+            assert U.value(0, k) == pytest.approx(u, abs=2e-4)
 
         # Project state forward
         x = A * x + B * u

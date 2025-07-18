@@ -193,7 +193,7 @@ ExitStatus interior_point(
   const double μ_min = options.tolerance / 10.0;
 
   // Barrier parameter μ
-  double μ = 0.1;
+  double μ = 10.0;
 
   // Fraction-to-the-boundary rule scale factor minimum
   constexpr double τ_min = 0.99;
