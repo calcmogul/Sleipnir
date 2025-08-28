@@ -168,6 +168,7 @@ ExitStatus feasibility_restoration(
 
   DenseVector fr_y = DenseVector::Zero(num_eq);
 
+  DenseVector fr_u = DenseVector::Zero(2 * num_eq);
   DenseVector fr_v = DenseVector::Zero(2 * num_eq);
 
   // Inherit the parent problem's scaling for the constraints, and use no
@@ -305,7 +306,7 @@ ExitStatus feasibility_restoration(
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
       Eigen::ArrayX<bool>::Constant(2 * num_eq, true),
 #endif
-      fr_x, fr_y, fr_v, fr_sqrt_μ, iterations);
+      fr_x, fr_y, fr_u, fr_v, fr_sqrt_μ, iterations);
 
   x = fr_x.segment(0, x.rows());
 
@@ -339,6 +340,8 @@ ExitStatus feasibility_restoration(
 /// @param[in,out] x The current decision variables from the normal solve.
 /// @param[in,out] y The current equality constraint duals from the normal
 ///     solve.
+/// @param[in,out] u The current log-domain slack variables from the normal
+///     solve.
 /// @param[in,out] v The current log-domain variables from the normal solve.
 /// @param[in,out] sqrt_μ Barrier parameter.
 /// @param[in,out] iterations The iteration counter.
@@ -354,6 +357,7 @@ ExitStatus feasibility_restoration(
 #endif
     Eigen::Vector<Scalar, Eigen::Dynamic>& x,
     Eigen::Vector<Scalar, Eigen::Dynamic>& y,
+    Eigen::Vector<Scalar, Eigen::Dynamic>& u,
     Eigen::Vector<Scalar, Eigen::Dynamic>& v, Scalar sqrt_μ, int& iterations) {
   // Feasibility restoration
   //
@@ -389,12 +393,14 @@ ExitStatus feasibility_restoration(
 
   constexpr Scalar ρ(1e3);
 
+  // eᵘ
+  DenseVector exp_u{u.array().exp().matrix()};
   // eᵛ
   DenseVector exp_v{v.array().exp().matrix()};
-  // e⁻ᵛ
-  DenseVector exp_neg_v = exp_v.cwiseInverse();
-  // s = √(μ)e⁻ᵛ
-  DenseVector s = sqrt_μ * exp_neg_v;
+  // e⁻ᵘ
+  DenseVector exp_neg_u = exp_u.cwiseInverse();
+  // s = √(μ)e⁻ᵘ
+  DenseVector s = sqrt_μ * exp_neg_u;
   // z = √(μ)eᵛ
   DenseVector z = sqrt_μ * exp_v;
 
@@ -418,6 +424,10 @@ ExitStatus feasibility_restoration(
   fr_x << x, p_e_0, n_e_0, p_i_0, n_i_0;
 
   DenseVector fr_y = DenseVector::Zero(c_e.rows());
+
+  DenseVector fr_u{v.rows() + 2 * num_eq + 2 * num_ineq};
+  fr_u.segment(0, v.rows()) = u;
+  fr_u.segment(v.rows(), 2 * num_eq + 2 * num_ineq).setZero();
 
   DenseVector fr_v{v.rows() + 2 * num_eq + 2 * num_ineq};
   fr_v.segment(0, v.rows()) = v;
@@ -605,22 +615,25 @@ ExitStatus feasibility_restoration(
 
   Scalar fr_sqrt_μ = sqrt(fr_μ);
 
-  auto status = interior_point<Scalar>(fr_matrix_callbacks, is_nlp,
-                                       iteration_callbacks, options, true,
+  auto status = interior_point<Scalar>(
+      fr_matrix_callbacks, is_nlp, iteration_callbacks, options, true,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
-                                       fr_bound_constraint_mask,
+      fr_bound_constraint_mask,
 #endif
-                                       fr_x, fr_y, fr_v, fr_sqrt_μ, iterations);
+      fr_x, fr_y, fr_u, fr_v, fr_sqrt_μ, iterations);
 
   x = fr_x.segment(0, x.rows());
+  u = fr_u.segment(0, u.rows());
   v = fr_v.segment(0, v.rows());
 
+  // eᵘ
+  exp_v = u.array().exp().matrix();
   // eᵛ
   exp_v = v.array().exp().matrix();
-  // e⁻ᵛ
-  exp_neg_v = exp_v.cwiseInverse();
-  // s = √(μ)e⁻ᵛ
-  s = sqrt_μ * exp_neg_v;
+  // e⁻ᵘ
+  exp_neg_u = exp_u.cwiseInverse();
+  // s = √(μ)e⁻ᵘ
+  s = sqrt_μ * exp_neg_u;
   // z = √(μ)eᵛ
   z = sqrt_μ * exp_v;
 
