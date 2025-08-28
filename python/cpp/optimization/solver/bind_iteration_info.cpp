@@ -23,6 +23,9 @@ void bind_iteration_info(nb::class_<IterationInfo<double>>& cls) {
       "y", [](const IterationInfo<double>& self) { return self.y; },
       DOC(slp, IterationInfo, y));
   cls.def_prop_ro(
+      "u", [](const IterationInfo<double>& self) { return self.u; },
+      DOC(slp, IterationInfo, u));
+  cls.def_prop_ro(
       "v", [](const IterationInfo<double>& self) { return self.v; },
       DOC(slp, IterationInfo, v));
   cls.def_prop_ro(
