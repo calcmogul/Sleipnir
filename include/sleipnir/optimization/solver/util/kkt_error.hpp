@@ -60,7 +60,8 @@ Scalar kkt_error(const Eigen::Vector<Scalar, Eigen::Dynamic>& g,
 /// @param c_i The problem's inequality constraints cᵢ(x) evaluated at the
 ///     current iterate.
 /// @param y Equality constraint dual variables.
-/// @param v Log-domain variables.
+/// @param u Log-domain slack variables.
+/// @param v Log-domain dual variables.
 /// @param sqrt_μ Square root of the barrier parameter.
 template <typename Scalar>
 Scalar kkt_error(const Eigen::Vector<Scalar, Eigen::Dynamic>& g,
@@ -69,6 +70,7 @@ Scalar kkt_error(const Eigen::Vector<Scalar, Eigen::Dynamic>& g,
                  const Eigen::SparseMatrix<Scalar>& A_i,
                  const Eigen::Vector<Scalar, Eigen::Dynamic>& c_i,
                  const Eigen::Vector<Scalar, Eigen::Dynamic>& y,
+                 const Eigen::Vector<Scalar, Eigen::Dynamic>& u,
                  const Eigen::Vector<Scalar, Eigen::Dynamic>& v,
                  Scalar sqrt_μ) {
   // Compute the KKT error as the 1-norm of the KKT conditions.
@@ -83,7 +85,7 @@ Scalar kkt_error(const Eigen::Vector<Scalar, Eigen::Dynamic>& g,
   //   z = √(μ)eᵛ
 
   const Eigen::Vector<Scalar, Eigen::Dynamic> s =
-      sqrt_μ * (-v).array().exp().matrix();
+      sqrt_μ * (-u).array().exp().matrix();
   const Eigen::Vector<Scalar, Eigen::Dynamic> z =
       sqrt_μ * v.array().exp().matrix();
 
