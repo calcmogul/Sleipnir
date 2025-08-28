@@ -385,7 +385,9 @@ constexpr char mkd_doc_slp_IterationInfo_g[] = R"doc(The gradient of the cost fu
 
 constexpr char mkd_doc_slp_IterationInfo_iteration[] = R"doc(The solver iteration.)doc";
 
-constexpr char mkd_doc_slp_IterationInfo_v[] = R"doc(The log-domain variables.)doc";
+constexpr char mkd_doc_slp_IterationInfo_u[] = R"doc(The log-domain slack variables.)doc";
+
+constexpr char mkd_doc_slp_IterationInfo_v[] = R"doc(The log-domain dual variables.)doc";
 
 constexpr char mkd_doc_slp_IterationInfo_x[] = R"doc(The decision variables.)doc";
 
