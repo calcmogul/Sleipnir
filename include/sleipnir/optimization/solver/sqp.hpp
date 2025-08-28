@@ -268,7 +268,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
 
     // Call iteration callbacks
     for (const auto& callback : iteration_callbacks) {
-      if (callback({iterations, x, y, {}, g, H, A_e, {}})) {
+      if (callback({iterations, x, y, {}, {}, g, H, A_e, {}})) {
         return ExitStatus::CALLBACK_REQUESTED_STOP;
       }
     }

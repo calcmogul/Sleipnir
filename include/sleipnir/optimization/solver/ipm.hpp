@@ -80,6 +80,8 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
   using DenseVector = Eigen::Vector<Scalar, Eigen::Dynamic>;
 
   DenseVector y = DenseVector::Zero(matrix_callbacks.num_equality_constraints);
+  DenseVector u =
+      DenseVector::Zero(matrix_callbacks.num_inequality_constraints);
   DenseVector v =
       DenseVector::Zero(matrix_callbacks.num_inequality_constraints);
   Scalar sqrt_μ = Scalar(0.1) * matrix_callbacks.scaling.f;
@@ -89,7 +91,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
              bound_constraint_mask,
 #endif
-             x, y, v, sqrt_μ, iterations);
+             x, y, u, v, sqrt_μ, iterations);
 }
 
 /// Finds the optimal solution to a nonlinear program using the interior-point
@@ -121,8 +123,10 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
 ///     variables.
 /// @param[in,out] y The initial guess and output location for the equality
 ///     constraint dual variables.
+/// @param[in,out] u The initial guess and output location for the log-domain
+///     slack variables.
 /// @param[in,out] v The initial guess and output location for the log-domain
-///     variables.
+///     dual variables.
 /// @param[in,out] sqrt_μ The initial guess and output location for the barrier
 ///     parameter.
 /// @param[in,out] iterations The iteration counter.
@@ -137,6 +141,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
 #endif
                Eigen::Vector<Scalar, Eigen::Dynamic>& x,
                Eigen::Vector<Scalar, Eigen::Dynamic>& y,
+               Eigen::Vector<Scalar, Eigen::Dynamic>& u,
                Eigen::Vector<Scalar, Eigen::Dynamic>& v, Scalar& sqrt_μ,
                int& iterations) {
   using DenseVector = Eigen::Vector<Scalar, Eigen::Dynamic>;
@@ -149,7 +154,9 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
     DenseVector p_x;
     /// Equality constraint dual step.
     DenseVector p_y;
-    /// Log-domain variable step.
+    /// Log-domain slack variable step.
+    DenseVector p_u;
+    /// Log-domain dual variable step.
     DenseVector p_v;
 
     /// Returns the infinity norm of the primal step.
@@ -177,7 +184,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
     Scalar tiny_step_size(const DenseVector& x, const DenseVector& s) const {
       using std::max;
 
-      // The slack variables take a linear step in s-space with pˢ = −s∘pᵛ. A
+      // The slack variables take a linear step in s-space with pˢ = −s∘pᵘ. A
       // primal step α[pˣ pˢ] is negligible if
       //
       //   max(‖αpˣ/(1 + |x|)‖_∞, ‖αpˢ/(1 + |s|)‖_∞) < 10ε
@@ -194,7 +201,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
              max((p_x.array().abs() / (Scalar(1) + x.array().abs()))
                      .matrix()
                      .template lpNorm<Eigen::Infinity>(),
-                 ((s.array() * p_v.array()).abs() /
+                 ((s.array() * p_u.array()).abs() /
                   (Scalar(1) + s.array().abs()))
                      .matrix()
                      .template lpNorm<Eigen::Infinity>());
@@ -262,6 +269,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
 
   DenseVector trial_x;
   DenseVector trial_y;
+  DenseVector trial_u;
   DenseVector trial_v;
 
   Scalar trial_f;
@@ -290,23 +298,25 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
   // We set sʲ = cᵢʲ(x) for each bound inequality constraint index j
   //
-  //   cᵢ − √(μ)e⁻ᵛ = 0
-  //   √(μ)e⁻ᵛ = cᵢ
-  //   e⁻ᵛ = 1/√(μ) cᵢ
-  //   −v = ln(1/√(μ) cᵢ)
-  //   v = −ln(1/√(μ) cᵢ)
-  v = bound_constraint_mask.select(
-      -(c_i * (Scalar(1) / sqrt_μ_min)).array().log().matrix(), v);
+  //   cᵢ − √(μ)e⁻ᵘ = 0
+  //   √(μ)e⁻ᵘ = cᵢ
+  //   e⁻ᵘ = 1/√(μ) cᵢ
+  //   −u = ln(1/√(μ) cᵢ)
+  //   u = −ln(1/√(μ) cᵢ)
+  u = bound_constraint_mask.select(
+      -(c_i * (Scalar(1) / sqrt_μ_min)).array().log().matrix(), u);
 #endif
 
+  // eᵘ
+  DenseVector exp_u{u.array().exp().matrix()};
   // eᵛ
   DenseVector exp_v{v.array().exp().matrix()};
-  // e⁻ᵛ
-  DenseVector exp_neg_v = exp_v.cwiseInverse();
-  // e²ᵛ
-  DenseVector exp_2v = exp_v.cwiseProduct(exp_v);
-  // s = √(μ)e⁻ᵛ
-  DenseVector s = sqrt_μ * exp_neg_v;
+  // eᵘ⁺ᵛ
+  DenseVector exp_u_plus_v = exp_u.cwiseProduct(exp_v);
+  // eᵘ⁻ᵛ
+  DenseVector exp_u_minus_v = exp_u.cwiseProduct(exp_v.cwiseInverse());
+  // s = √(μ)e⁻ᵘ
+  DenseVector s = sqrt_μ * exp_u.cwiseInverse();
 
   Filter<Scalar> filter{constraint_violation(c_e, c_i, s)};
 
@@ -345,12 +355,12 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
   auto build_and_compute_lhs = [&]() -> ExitStatus {
     PhaseTimeTracer phase_tracer{diagnostics[KKT_MATRIX_BUILD]};
 
-    // lhs = [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ]
-    //       [        Aₑ           0 ]
+    // lhs = [H + Aᵢᵀdiag(eᵘ⁺ᵛ)Aᵢ  Aₑᵀ]
+    //       [        Aₑ            0 ]
     //
     // Don't assign upper triangle because solver only uses lower triangle.
     const SparseMatrix top_left =
-        H + (A_i.transpose() * exp_2v.asDiagonal() * A_i)
+        H + (A_i.transpose() * exp_u_plus_v.asDiagonal() * A_i)
                 .template triangularView<Eigen::Lower>();
     triplets.clear();
     triplets.reserve(top_left.nonZeros() + A_e.nonZeros());
@@ -361,8 +371,10 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
 
     // Solve the Newton-KKT system
     //
-    // [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
-    // [        Aₑ           0 ][−pʸ]    [               cₑ                ]
+    // [H + Aᵢᵀdiag(eᵘ⁺ᵛ)Aᵢ  Aₑᵀ][ pˣ] =
+    // [        Aₑ            0 ][−pʸ]
+    //     −[∇f − Aₑᵀy − Aᵢᵀ(√(μ)eᵘ + √(μ)eᵛ − eᵘ⁺ᵛ∘cᵢ)]
+    //      [                    cₑ                    ]
     if (solver.compute(lhs).info() != Eigen::Success) {
       return ExitStatus::FACTORIZATION_FAILED;
     } else {
@@ -372,11 +384,12 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
 
   // r is √(μ)
   auto build_rhs = [&](Scalar r) {
-    // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
-    //        [               cₑ                ]
+    // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(√(μ)eᵘ + √(μ)eᵛ − eᵘ⁺ᵛ∘cᵢ)]
+    //        [                    cₑ                    ]
     rhs.segment(0, x.rows()) =
         -g + A_e.transpose() * y +
-        A_i.transpose() * (Scalar(2) * r * exp_v - exp_2v.asDiagonal() * c_i);
+        A_i.transpose() *
+            (r * exp_u + r * exp_v - exp_u_plus_v.asDiagonal() * c_i);
     rhs.segment(x.rows(), y.rows()) = -c_e;
   };
 
@@ -390,37 +403,86 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
     step.p_x = p.segment(0, x.rows());
     step.p_y = -p.segment(x.rows(), y.rows());
 
-    // pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)
-    step.p_v = DenseVector::Ones(v.rows()) -
-               Scalar(1) / r * exp_v.asDiagonal() * (A_i * step.p_x + c_i);
+    // pᵘ = e − 1/√(μ) eᵘ∘(Aᵢpˣ + cᵢ)
+    step.p_u = DenseVector::Ones(v.rows()) -
+               Scalar(1) / r * exp_u.asDiagonal() * (A_i * step.p_x + c_i);
+
+    // pᵛ = pᵘ + eᵘ⁻ᵛ − e
+    step.p_v = step.p_u + exp_u_minus_v - DenseVector::Ones(v.rows());
 
     return step;
   };
 
-  // The slack variables s = √(μ)e⁻ᵛ take a linear step in s-space,
+  // The slack variables s = √(μ)e⁻ᵘ take a linear step in s-space,
   //
-  //   pˢ = −s∘pᵛ
-  //   s⁺ = s + αpˢ = s∘(e − αpᵛ)
-  //   v⁺ = v − ln(e − αpᵛ)
+  //   pˢ = −s∘pᵘ
+  //   s⁺ = s + αpˢ = s∘(e − αpᵘ)
+  //   u⁺ = u − ln(e − αpᵘ)
   //
-  // rather than the exponential step s∘exp(−αpᵛ). The linear step matches the
+  // rather than the exponential step s∘exp(−αpᵘ). The linear step matches the
   // Newton linearization, so cᵢ − s decreases by exactly (1 − α) per step for
   // linear constraints instead of being thrown off by the overshoot of the
   // exponential.
   //
   // Fraction-to-the-boundary rule for the slack step. Slacks only approach the
-  // boundary where pᵛ > 0, so
+  // boundary where pᵘ > 0, so
   //
   //   αᵐᵃˣ = max(α ∈ (0, 1] : s + αpˢ ≥ (1−τ)s)
-  //        = min(1, τ/max(pᵛ))
+  //        = min(1, τ/max(pᵘ))
   constexpr Scalar τ(0.995);
-  auto max_step_size = [&](const DenseVector& p_v) -> Scalar {
-    const Scalar p_v_max = p_v.size() > 0 ? p_v.maxCoeff() : Scalar(0);
-    return p_v_max > Scalar(0) ? std::min(Scalar(1), τ / p_v_max) : Scalar(1);
+  auto max_step_size = [&](const DenseVector& p_u) -> Scalar {
+    const Scalar p_u_max = p_u.size() > 0 ? p_u.maxCoeff() : Scalar(0);
+    return p_u_max > Scalar(0) ? std::min(Scalar(1), τ / p_u_max) : Scalar(1);
   };
-  auto step_v = [&](const DenseVector& p_v, Scalar α) -> DenseVector {
-    // v⁺ = v − ln(e − αpᵛ)
-    return v - (-α * p_v).array().log1p().matrix();
+  auto step_u = [&](const DenseVector& p_u, Scalar α) -> DenseVector {
+    // u⁺ = u − ln(e − αpᵘ)
+    return u - (-α * p_u).array().log1p().matrix();
+  };
+
+  // The dual variables z = √(μ)eᵛ take a step whose size depends on the
+  // problem type.
+  //
+  // For quadratic models, v takes an additive step with the step size rule of
+  // [3]
+  //
+  //   αᵛ = min(1, 1/|pᵛ|_∞²)
+  //   v⁺ = v + αᵛpᵛ
+  //
+  // The barrier parameter update keeps |pᵛ|_∞ ≤ 1 for these, so the full step
+  // is usually taken.
+  //
+  // For nonlinear models, |pᵛ|_∞ can be orders of magnitude larger than 1
+  // (e.g., after the slacks are reset), which makes that rule stall the duals
+  // and complementarity. Instead, take a linear step in z-space, which matches
+  // the Newton linearization of z,
+  //
+  //   pᶻ = z∘pᵛ
+  //   z⁺ = z + αᵛpᶻ = z∘(e + αᵛpᵛ)
+  //   v⁺ = v + ln(e + αᵛpᵛ)
+  //
+  // with a fraction-to-the-boundary rule for the dual step. Duals only approach
+  // the boundary where pᵛ < 0, so
+  //
+  //   αᵛ = max(α ∈ (0, 1] : z + αpᶻ ≥ (1−τ)z)
+  //      = min(1, τ/max(−pᵛ))
+  auto max_dual_step_size = [&](const DenseVector& p_v) -> Scalar {
+    if (is_nlp) {
+      const Scalar p_v_min = p_v.size() > 0 ? p_v.minCoeff() : Scalar(0);
+      return p_v_min < Scalar(0) ? std::min(Scalar(1), τ / -p_v_min)
+                                 : Scalar(1);
+    } else {
+      const Scalar p_v_infnorm = p_v.template lpNorm<Eigen::Infinity>();
+      return std::min(Scalar(1), Scalar(1) / (p_v_infnorm * p_v_infnorm));
+    }
+  };
+  auto step_v = [&](const DenseVector& p_v, Scalar α_v) -> DenseVector {
+    if (is_nlp) {
+      // v⁺ = v + ln(e + αᵛpᵛ)
+      return v + (α_v * p_v).array().log1p().matrix();
+    } else {
+      // v⁺ = v + αᵛpᵛ
+      return v + α_v * p_v;
+    }
   };
 
   // Initializes the barrier parameter for the current iterate.
@@ -543,8 +605,9 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
 
   // Error
   Scalar E_0 = unscaled_kkt_error<Scalar, KKTErrorType::INF_NORM_SCALED>(
-      matrices.scaling, g, A_e, c_e, A_i, c_i, y, v, sqrt_μ, Scalar(0));
+      matrices.scaling, g, A_e, c_e, A_i, c_i, y, u, v, sqrt_μ, Scalar(0));
 
+  Scalar prev_p_u_infnorm = std::numeric_limits<Scalar>::infinity();
   Scalar prev_p_v_infnorm = std::numeric_limits<Scalar>::infinity();
   bool μ_initialized = false;
 
@@ -576,7 +639,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
 
     // Call iteration callbacks
     for (const auto& callback : iteration_callbacks) {
-      if (callback({iterations, x, y, v, g, H, A_e, A_i})) {
+      if (callback({iterations, x, y, u, v, g, H, A_e, A_i})) {
         return ExitStatus::CALLBACK_REQUESTED_STOP;
       }
     }
@@ -589,7 +652,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
 
     // Update the barrier parameter if necessary
     const Scalar prev_sqrt_μ = sqrt_μ;
-    bool v_reset = false;
+    bool u_reset = false;
     if (!μ_initialized) {
       init_barrier_parameter();
       μ_initialized = true;
@@ -600,31 +663,37 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
         // first Newton steps have to close a large residual cᵢ − s, which
         // produces large dual steps and Hessian regularization.
         //
+        // Start the duals with perfect complementarity, z = μS⁻¹e. Otherwise,
+        // eᵘ⁻ᵛ and thus pᵛ are large for small slacks.
+        //
         //   s = max(cᵢ, κ)
-        //   v = −ln(s/√(μ))
+        //   u = −ln(s/√(μ))
+        //   v = u
         constexpr Scalar κ(1e-2);
-        v = -(c_i.cwiseMax(κ) / sqrt_μ).array().log().matrix();
-        exp_v = v.array().exp().matrix();
-        exp_neg_v = exp_v.cwiseInverse();
-        exp_2v = exp_v.cwiseProduct(exp_v);
-        v_reset = true;
+        u = -(c_i.cwiseMax(κ) / sqrt_μ).array().log().matrix();
+        v = u;
+        exp_u = u.array().exp().matrix();
+        exp_v = exp_u;
+        exp_u_plus_v = exp_u.cwiseProduct(exp_v);
+        exp_u_minus_v = exp_u.cwiseProduct(exp_v.cwiseInverse());
+        u_reset = true;
       }
     } else if (is_nlp) {
       Scalar E_sqrt_μ = kkt_error<Scalar, KKTErrorType::INF_NORM_SCALED>(
-          g, A_e, c_e, A_i, c_i, y, v, sqrt_μ, sqrt_μ * sqrt_μ);
+          g, A_e, c_e, A_i, c_i, y, u, v, sqrt_μ, sqrt_μ * sqrt_μ);
       if (E_sqrt_μ <= Scalar(10) * sqrt_μ * sqrt_μ) {
         ScopedTimeTracer μ_update_tracer{diagnostics[BARRIER_PARAMETER_UPDATE]};
         update_barrier_parameter();
       }
-    } else if (prev_p_v_infnorm <= Scalar(1)) {
+    } else if (prev_p_u_infnorm <= Scalar(1) && prev_p_v_infnorm <= Scalar(1)) {
       ScopedTimeTracer μ_update_tracer{diagnostics[BARRIER_PARAMETER_UPDATE]};
       update_barrier_parameter();
     }
 
     // Update expressions dependent on √(μ)
-    if (sqrt_μ != prev_sqrt_μ || v_reset) {
-      // s = √(μ)e⁻ᵛ
-      s = sqrt_μ * exp_neg_v;
+    if (sqrt_μ != prev_sqrt_μ || u_reset) {
+      // s = √(μ)e⁻ᵘ
+      s = sqrt_μ * exp_u.cwiseInverse();
 
       // When the inequality constraints are nonlinear, the Lagrangian Hessian
       // depends on μ through z = √(μ)eᵛ
@@ -634,7 +703,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
 
       // The Newton-KKT matrix depends on the Lagrangian Hessian, which was just
       // updated
-      if (is_nlp || v_reset) {
+      if (is_nlp || u_reset) {
         if (auto status = build_and_compute_lhs();
             status != ExitStatus::SUCCESS) {
           return status;
@@ -651,30 +720,34 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
 
     phase_tracer.next(diagnostics[LINE_SEARCH]);
 
-    // The slack variables s = √(μ)e⁻ᵛ are part of the primal step, so x and v
+    // The slack variables s = √(μ)e⁻ᵘ are part of the primal step, so x and u
     // share a step size, capped by the fraction-to-the-boundary rule for the
     // slack step.
-    Scalar p_v_infnorm = step.p_v.template lpNorm<Eigen::Infinity>();
-    const Scalar α_max = max_step_size(step.p_v);
+    Scalar p_u_infnorm = step.p_u.template lpNorm<Eigen::Infinity>();
+    const Scalar α_max = max_step_size(step.p_u);
     Scalar α = α_max;
 
     bool call_feasibility_restoration = false;
 
+    prev_p_u_infnorm = p_u_infnorm;
+
+    Scalar p_v_infnorm = step.p_v.template lpNorm<Eigen::Infinity>();
+    const Scalar α_v = max_dual_step_size(step.p_v);
     prev_p_v_infnorm = p_v_infnorm;
 
-    const FilterEntry<Scalar> current_entry{f, v, c_e, c_i, sqrt_μ};
+    const FilterEntry<Scalar> current_entry{f, u, c_e, c_i, sqrt_μ};
 
     // Compute the directional derivative of the log-barrier function along the
     // search direction.
     //
-    //   ϕ_μ(x, v) = f(x) − μ∑ᵢ ln(sᵢ)
-    //             = f(x) − μ∑ᵢ ln(√(μ)e⁻ᵛⁱ)
-    //             = f(x) + μ∑ᵢ vᵢ − μ∑ᵢ ln(√(μ))
+    //   ϕ_μ(x, u) = f(x) − μ∑ᵢ ln(sᵢ)
+    //             = f(x) − μ∑ᵢ ln(√(μ)e⁻ᵘⁱ)
+    //             = f(x) + μ∑ᵢ uᵢ − μ∑ᵢ ln(√(μ))
     //
-    //   D_ϕ = ∇ϕ_μ(x, v)ᵀ[pˣ pᵛ]
-    //       = ∇f(x)ᵀpˣ + μ∑ᵢ pᵢᵛ
+    //   D_ϕ = ∇ϕ_μ(x, u)ᵀ[pˣ pᵘ]
+    //       = ∇f(x)ᵀpˣ + μ∑ᵢ pᵢᵘ
     const Scalar D_ϕ =
-        g.transpose() * step.p_x + sqrt_μ * sqrt_μ * step.p_v.sum();
+        g.transpose() * step.p_x + sqrt_μ * sqrt_μ * step.p_u.sum();
 
     const Scalar α_min = filter.min_step_size(current_entry, D_ϕ);
 
@@ -692,7 +765,8 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
     while (!call_feasibility_restoration) {
       trial_x = x + α * step.p_x;
       trial_y = y + α * step.p_y;
-      trial_v = step_v(step.p_v, α);
+      trial_u = step_u(step.p_u, α);
+      trial_v = step_v(step.p_v, α_v);
       trial_c_i = matrices.c_i(trial_x);
       trial_f = matrices.f(trial_x);
       trial_c_e = matrices.c_e(trial_x);
@@ -723,19 +797,19 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
         // Set the slack variables to the constraint values, which makes the
         // inequality constraint residual zero.
         //
-        //   cᵢ − √(μ)e⁻ᵛ = 0
-        //   √(μ)e⁻ᵛ = cᵢ
-        //   e⁻ᵛ = 1/√(μ) cᵢ
-        //   −v = ln(1/√(μ) cᵢ)
-        //   v = −ln(1/√(μ) cᵢ)
+        //   cᵢ − √(μ)e⁻ᵘ = 0
+        //   √(μ)e⁻ᵘ = cᵢ
+        //   e⁻ᵘ = 1/√(μ) cᵢ
+        //   −u = ln(1/√(μ) cᵢ)
+        //   u = −ln(1/√(μ) cᵢ)
         trial_s = trial_c_i;
-        trial_v = -(trial_c_i * (Scalar(1) / sqrt_μ)).array().log().matrix();
+        trial_u = -(trial_c_i * (Scalar(1) / sqrt_μ)).array().log().matrix();
       } else {
-        trial_s = sqrt_μ * (-trial_v).array().exp().matrix();
+        trial_s = sqrt_μ * (-trial_u).array().exp().matrix();
       }
 
       // Check whether filter accepts trial iterate
-      FilterEntry trial_entry{trial_f, trial_v, trial_c_e, trial_c_i, sqrt_μ};
+      FilterEntry trial_entry{trial_f, trial_u, trial_c_e, trial_c_i, sqrt_μ};
       if (filter.try_add(current_entry, trial_entry, D_ϕ, α)) {
         // Accept step
         watchdog_count = 0;
@@ -756,6 +830,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
         auto soc_step = step;
 
         Scalar α_soc = α_max;
+        Scalar α_v_soc = α_v;
         DenseVector c_e_soc = c_e;
         DenseVector c_i_minus_s_soc = c_i - s;
 
@@ -775,7 +850,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
                   soc_tracer.current_duration(),
                   unscaled_kkt_error<Scalar, KKTErrorType::INF_NORM_SCALED>(
                       matrices.scaling, g, A_e, trial_c_e, A_i, trial_c_i,
-                      trial_y, trial_v, sqrt_μ, Scalar(0)),
+                      trial_y, trial_u, trial_v, sqrt_μ, Scalar(0)),
                   trial_f, constraint_violation(trial_c_e, trial_c_i, trial_s),
                   sqrt_μ * sqrt_μ, solver.hessian_regularization(),
                   solver.constraint_jacobian_regularization(),
@@ -786,47 +861,53 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
 
           // Rebuild Newton-KKT rhs with updated constraint values.
           //
-          // Since e²ᵛ∘s = √(μ)eᵛ, the rhs can be written in terms of the
+          // Since eᵘ⁺ᵛ∘s = √(μ)eᵛ, the rhs can be written in terms of the
           // inequality constraint residual cᵢ − s.
           //
-          // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(√(μ)eᵛ − e²ᵛ∘(cᵢ − s)ˢᵒᶜ)]
-          //        [                  cₑˢᵒᶜ                  ]
+          // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(√(μ)eᵘ − eᵘ⁺ᵛ∘(cᵢ − s)ˢᵒᶜ)]
+          //        [                  cₑˢᵒᶜ                   ]
           //
           // where
           //
           //   cₑˢᵒᶜ = αˢᵒᶜcₑ(xₖ) + cₑ(xₖ + αˢᵒᶜpˣ)
           //   (cᵢ − s)ˢᵒᶜ =
-          //     αˢᵒᶜ(cᵢ(xₖ) − sₖ) + cᵢ(xₖ + αˢᵒᶜpˣ) − sₖ(αˢᵒᶜpᵛ)
+          //     αˢᵒᶜ(cᵢ(xₖ) − sₖ) + cᵢ(xₖ + αˢᵒᶜpˣ) − sₖ(αˢᵒᶜpᵘ)
           c_e_soc = α_soc * c_e_soc + trial_c_e;
           c_i_minus_s_soc = α_soc * c_i_minus_s_soc + trial_c_i - trial_s;
           rhs.segment(0, x.rows()) =
               -g + A_e.transpose() * y +
-              A_i.transpose() *
-                  (sqrt_μ * exp_v - exp_2v.asDiagonal() * c_i_minus_s_soc);
+              A_i.transpose() * (sqrt_μ * exp_u -
+                                 exp_u_plus_v.asDiagonal() * c_i_minus_s_soc);
           rhs.segment(x.rows(), y.rows()) = -c_e_soc;
 
           // Solve the Newton-KKT system
           //
-          //   pᵛ = −1/√(μ) eᵛ∘(Aᵢpˣ + (cᵢ − s)ˢᵒᶜ)
+          //   pᵘ = −1/√(μ) eᵘ∘(Aᵢpˣ + (cᵢ − s)ˢᵒᶜ)
+          //   pᵛ = pᵘ + eᵘ⁻ᵛ − e
           DenseVector p = solver.solve(rhs);
           soc_step.p_x = p.segment(0, x.rows());
           soc_step.p_y = -p.segment(x.rows(), y.rows());
-          soc_step.p_v = -(Scalar(1) / sqrt_μ) * exp_v.asDiagonal() *
+          soc_step.p_u = -(Scalar(1) / sqrt_μ) * exp_u.asDiagonal() *
                          (A_i * soc_step.p_x + c_i_minus_s_soc);
+          soc_step.p_v =
+              soc_step.p_u + exp_u_minus_v - DenseVector::Ones(v.rows());
 
-          α_soc = max_step_size(soc_step.p_v);
+          α_soc = max_step_size(soc_step.p_u);
+
+          α_v_soc = max_dual_step_size(soc_step.p_v);
 
           trial_x = x + α_soc * soc_step.p_x;
           trial_y = y + α_soc * soc_step.p_y;
-          trial_v = step_v(soc_step.p_v, α_soc);
-          trial_s = sqrt_μ * (-trial_v).array().exp().matrix();
+          trial_u = step_u(soc_step.p_u, α_soc);
+          trial_v = step_v(soc_step.p_v, α_v_soc);
+          trial_s = sqrt_μ * (-trial_u).array().exp().matrix();
 
           trial_f = matrices.f(trial_x);
           trial_c_e = matrices.c_e(trial_x);
           trial_c_i = matrices.c_i(trial_x);
 
           // Check whether filter accepts trial iterate
-          FilterEntry trial_entry{trial_f, trial_v, trial_c_e, trial_c_i,
+          FilterEntry trial_entry{trial_f, trial_u, trial_c_e, trial_c_i,
                                   sqrt_μ};
           if (filter.try_add(current_entry, trial_entry, D_ϕ, α)) {
             step = soc_step;
@@ -876,12 +957,13 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
       // KKT error was reduced. If it wasn't, invoke feasibility restoration.
       if (α < α_min || α < α_tiny) {
         Scalar current_kkt_error = kkt_error<Scalar, KKTErrorType::ONE_NORM>(
-            g, A_e, c_e, A_i, c_i, y, v, sqrt_μ, sqrt_μ * sqrt_μ);
+            g, A_e, c_e, A_i, c_i, y, u, v, sqrt_μ, sqrt_μ * sqrt_μ);
 
         trial_x = x + α_max * step.p_x;
         trial_y = y + α_max * step.p_y;
-        trial_v = step_v(step.p_v, α_max);
-        trial_s = sqrt_μ * (-trial_v).array().exp().matrix();
+        trial_u = step_u(step.p_u, α_max);
+        trial_v = step_v(step.p_v, α_v);
+        trial_s = sqrt_μ * (-trial_u).array().exp().matrix();
 
         trial_f = matrices.f(trial_x);
         trial_c_e = matrices.c_e(trial_x);
@@ -889,7 +971,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
 
         Scalar next_kkt_error = kkt_error<Scalar, KKTErrorType::ONE_NORM>(
             matrices.g(trial_x), matrices.A_e(trial_x), trial_c_e,
-            matrices.A_i(trial_x), trial_c_i, trial_y, trial_v, sqrt_μ,
+            matrices.A_i(trial_x), trial_c_i, trial_y, trial_u, trial_v, sqrt_μ,
             sqrt_μ * sqrt_μ);
 
         // If the step using αᵐᵃˣ reduced the KKT error below the current
@@ -922,7 +1004,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
 
     // If solver stalled, invoke feasibility restoration
     if (!call_feasibility_restoration && !in_feasibility_restoration) {
-      FilterEntry trial_entry{trial_f, trial_v, trial_c_e, trial_c_i, sqrt_μ};
+      FilterEntry trial_entry{trial_f, trial_u, trial_c_e, trial_c_i, sqrt_μ};
       if (stall_detector.update(current_entry, trial_entry, α,
                                 filter.min_constraint_violation)) {
         call_feasibility_restoration = true;
@@ -938,7 +1020,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
         return ExitStatus::FEASIBILITY_RESTORATION_FAILED;
       }
 
-      FilterEntry initial_entry{matrices.f(x), v, c_e, c_i, sqrt_μ};
+      FilterEntry initial_entry{matrices.f(x), u, c_e, c_i, sqrt_μ};
 
       // Square root of the feasibility restoration barrier parameter, which
       // feasibility restoration updates in place
@@ -967,15 +1049,15 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
         DenseVector trial_x =
             info.x.segment(0, matrices.num_decision_variables);
 
-        // The feasibility restoration log-domain variables are relative to its
-        // barrier parameter, so convert them to the normal solve's barrier
-        // parameter such that the slack variables are preserved.
+        // The feasibility restoration log-domain slack variables are relative
+        // to its barrier parameter, so convert them to the normal solve's
+        // barrier parameter such that the slack variables are preserved.
         //
-        //   √(μ)e⁻ᵛ = √(fr_μ)exp(−fr_v)
-        //   v = fr_v − ln(√(fr_μ)/√(μ))
+        //   √(μ)e⁻ᵘ = √(fr_μ)exp(−fr_u)
+        //   u = fr_u − ln(√(fr_μ)/√(μ))
         using std::log;
-        DenseVector trial_v =
-            (info.v.segment(0, matrices.num_inequality_constraints).array() -
+        DenseVector trial_u =
+            (info.u.segment(0, matrices.num_inequality_constraints).array() -
              log(fr_sqrt_μ / sqrt_μ))
                 .matrix();
 
@@ -985,16 +1067,16 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
         // Feasibility restoration re-centers the slacks when it returns, so
         // check the iterate the normal phase will resume from.
         //
-        //   s = √(μ)e⁻ᵛ
-        //   v = ln(√(μ)/s)
+        //   s = √(μ)e⁻ᵘ
+        //   u = ln(√(μ)/s)
         DenseVector trial_s =
             (trial_c_i.array() >= Scalar(1e-2))
-                .select(trial_c_i, sqrt_μ * (-trial_v).array().exp().matrix());
-        trial_v = (sqrt_μ / trial_s.array()).log().matrix();
+                .select(trial_c_i, sqrt_μ * (-trial_u).array().exp().matrix());
+        trial_u = (sqrt_μ / trial_s.array()).log().matrix();
 
         // If the current iterate sufficiently reduces constraint violation and
         // is accepted by the normal filter, stop feasibility restoration
-        FilterEntry trial_entry{matrices.f(trial_x), trial_v, trial_c_e,
+        FilterEntry trial_entry{matrices.f(trial_x), trial_u, trial_c_e,
                                 trial_c_i, sqrt_μ};
         return trial_entry.constraint_violation <
                    Scalar(0.9) * initial_entry.constraint_violation &&
@@ -1005,7 +1087,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
           bound_constraint_mask,
 #endif
-          x, y, v, sqrt_μ, fr_sqrt_μ, iterations);
+          x, y, u, v, sqrt_μ, fr_sqrt_μ, iterations);
 
       if (status != ExitStatus::SUCCESS) {
         // Report failure
@@ -1024,7 +1106,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
       // stops at its own convergence tolerance instead of driving constraint
       // violation to zero, so the filter can still hold entries with lower cost
       // and constraint violation.
-      if (!filter.is_acceptable(FilterEntry{f, v, c_e, c_i, sqrt_μ})) {
+      if (!filter.is_acceptable(FilterEntry{f, u, c_e, c_i, sqrt_μ})) {
         return ExitStatus::FEASIBILITY_RESTORATION_FAILED;
       }
     } else {
@@ -1036,6 +1118,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
       // Update iterates
       x = trial_x;
       y = trial_y;
+      u = trial_u;
       v = trial_v;
 
       f = trial_f;
@@ -1043,10 +1126,11 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
       c_i = trial_c_i;
     }
 
+    exp_u = u.array().exp().matrix();
     exp_v = v.array().exp().matrix();
-    exp_neg_v = exp_v.cwiseInverse();
-    exp_2v = exp_v.cwiseProduct(exp_v);
-    s = sqrt_μ * exp_neg_v;
+    exp_u_plus_v = exp_u.cwiseProduct(exp_v);
+    exp_u_minus_v = exp_u.cwiseProduct(exp_v.cwiseInverse());
+    s = sqrt_μ * exp_u.cwiseInverse();
 
     // Update autodiff for Jacobians and Hessian
     A_e = matrices.A_e(x);
@@ -1056,7 +1140,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
 
     // Update the error
     E_0 = unscaled_kkt_error<Scalar, KKTErrorType::INF_NORM_SCALED>(
-        matrices.scaling, g, A_e, c_e, A_i, c_i, y, v, sqrt_μ, Scalar(0));
+        matrices.scaling, g, A_e, c_e, A_i, c_i, y, u, v, sqrt_μ, Scalar(0));
 
     inner_iter_tracer.stop();
 
