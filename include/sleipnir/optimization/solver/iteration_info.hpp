@@ -21,7 +21,10 @@ struct IterationInfo {
   /// The equality constraint dual variables.
   const Eigen::VectorX<Scalar>& y;
 
-  /// The log-domain variables.
+  /// The log-domain slack variables.
+  const Eigen::VectorX<Scalar>& u;
+
+  /// The log-domain dual variables.
   const Eigen::VectorX<Scalar>& v;
 
   /// The gradient of the cost function.

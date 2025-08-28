@@ -270,7 +270,7 @@ ExitStatus sqp(
 
     // Call iteration callbacks
     for (const auto& callback : iteration_callbacks) {
-      if (callback({iterations, x, y, {}, g, H, A_e, {}}) ==
+      if (callback({iterations, x, y, {}, {}, g, H, A_e, {}}) ==
           ControlFlow::BREAK) {
         return ExitStatus::CALLBACK_REQUESTED_STOP;
       }
