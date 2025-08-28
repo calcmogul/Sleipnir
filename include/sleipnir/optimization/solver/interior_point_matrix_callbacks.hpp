@@ -109,7 +109,7 @@ struct InteriorPointMatrixCallbacks {
                              const DenseVector& v, Scalar sqrt_μ)>
       H;
 
-  /// Constraint part of Lagrangian Hessian ∇ₓₓ²(−yₖᵀcₑ(x) − √(μ)eᵛᵀcᵢ(x))
+  /// Constraint part of Lagrangian Hessian ∇ₓₓ²(−yᵀcₑ(x) − √(μ)eᵛᵀcᵢ(x))
   /// getter.
   ///
   /// Only the lower triangle is used.
