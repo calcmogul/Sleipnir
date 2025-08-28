@@ -52,14 +52,14 @@ struct FilterEntry {
   /// Constructs an interior-point method filter entry.
   ///
   /// @param f The cost function value.
-  /// @param v The log-domain variables.
+  /// @param u The log-domain slack variables.
   /// @param c_e The equality constraint values (nonzero means violation).
   /// @param c_i The inequality constraint values (negative means violation).
   /// @param sqrt_μ Square root of the barrier parameter.
-  FilterEntry(Scalar f, DenseVector& v, const DenseVector& c_e,
+  FilterEntry(Scalar f, DenseVector& u, const DenseVector& c_e,
               const DenseVector& c_i, Scalar sqrt_μ) {
-    // s = √(μ)e⁻ᵛ
-    DenseVector s = sqrt_μ * (-v).array().exp().matrix();
+    // s = √(μ)e⁻ᵘ
+    DenseVector s = sqrt_μ * (-u).array().exp().matrix();
 
     cost = f - sqrt_μ * sqrt_μ * s.array().log().sum();
     constraint_violation =
