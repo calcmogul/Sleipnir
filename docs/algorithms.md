@@ -248,35 +248,42 @@ where Aₑ = ∂cₑ/∂x, Aᵢ = ∂cᵢ/∂x, S = diag(s), and e is a column v
 To ensure s ≥ 0 and z ≥ 0, make the following substitutions.
 
 ```
-  s = √(μ)e⁻ᵛ
+  s = √(μ)e⁻ᵘ
   z = √(μ)eᵛ
 ```
 ```
   ∇f − Aₑᵀy − Aᵢᵀ√(μ)eᵛ = 0
+  √(μ)e⁻ᵘ∘√(μ)eᵛ − μe = 0
   cₑ = 0
   cᵢ − √(μ)e⁻ᵛ = 0
 
   ∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ = 0
+  μeᵛ⁻ᵘ − μe = 0
   cₑ = 0
-  cᵢ − √(μ)e⁻ᵛ = 0
+  cᵢ − √(μ)e⁻ᵘ = 0
 ```
-
-The complementarity condition is now always satisfied, so it can be omitted.
 
 ### Newton's method
 
-Next, we'll apply Newton's method to the optimality conditions. Let H be ∂²L/∂x², pˣ be the step for x, pʸ be the step for y, and pᵛ be the step for v.
+Next, we'll apply Newton's method to the optimality conditions. Let H be ∂²L/∂x², pˣ be the step for x, pʸ be the step for y, pᵘ be the step for u, and pᵛ be the step for v.
 
 ```
-  ∇ₓL(x + pˣ, y + pʸ, v + pᵛ)
-    ≈ ∇ₓL(x, y, v) + ∂²L/∂x²pˣ + ∂²L/∂x∂ypʸ + ∂²L/∂x∂vpᵛ
-  ∇ₓL(x, y, v) + Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘pᵛ = 0
+  ∇ₓL(x + pˣ, u + pᵘ, y + pʸ, v + pᵛ)
+    ≈ ∇ₓL(x, u, y, v) + ∂²L/∂x²pˣ + ∂²L/∂x∂upᵘ + ∂²L/∂x∂ypʸ + ∂²L/∂x∂vpᵛ
+  ∇ₓL(x, y, u, v) + Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘pᵛ = 0
   Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘pᵛ = −∇ₓL(x, y, v)
   Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘pᵛ = −(∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ)
 ```
 ```
-  ∇_yL(x + pˣ, y + pʸ, v + pᵛ)
-    ≈ ∇_yL(x, y, v) + ∂²L/∂y∂xpˣ + ∂²L/∂y²pʸ + ∂²L/∂y∂vpᵛ
+  ∇ᵤL(x + pˣ, y + pʸ, u + pᵘ, v + pᵛ)
+    ≈ ∇ᵤL(x, y, u, v) + ∂²L/∂u∂xpˣ + ∂²L/∂u∂ypʸ + ∂²L/∂u²pᵘ + ∂²L/∂u∂vpᵛ
+  ∇ᵤL(x, u, y, v) + Aᵢpˣ + √(μ)e⁻ᵛ∘pᵛ = 0
+  Aᵢpˣ + √(μ)e⁻ᵛ∘pᵛ = −∇ᵤL(x, y, u, v)
+  Aᵢpˣ + √(μ)e⁻ᵘ∘pᵛ = −(cᵢ − √(μ)e⁻ᵘ)
+```
+```
+  ∇_yL(x + pˣ, y + pʸ, u + pᵘ, v + pᵛ)
+    ≈ ∇_yL(x, y, u, v) + ∂²L/∂y∂xpˣ + ∂²L/∂y²pʸ + ∂²L/∂y∂upᵘ + ∂²L/∂y∂vpᵛ
   ∇_yL(x, y, v) + Aₑpˣ = 0
   Aₑpˣ = −∇_yL(x, y, v)
   Aₑpˣ = −cₑ
