@@ -248,45 +248,52 @@ where Aₑ = ∂cₑ/∂x, Aᵢ = ∂cᵢ/∂x, S = diag(s), and e is a column v
 To ensure s ≥ 0 and z ≥ 0, make the following substitutions.
 
 ```
-  s = √(μ)e⁻ᵛ
+  s = √(μ)e⁻ᵘ
   z = √(μ)eᵛ
 ```
 ```
   ∇f − Aₑᵀy − Aᵢᵀ√(μ)eᵛ = 0
+  √(μ)e⁻ᵘ∘√(μ)eᵛ − μe = 0
   cₑ = 0
-  cᵢ − √(μ)e⁻ᵛ = 0
+  cᵢ − √(μ)e⁻ᵘ = 0
 
   ∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ = 0
+  μeᵛ⁻ᵘ − μe = 0
   cₑ = 0
-  cᵢ − √(μ)e⁻ᵛ = 0
+  cᵢ − √(μ)e⁻ᵘ = 0
 ```
-
-The complementarity condition is now always satisfied, so it can be omitted.
 
 ### Newton's method
 
-Next, we'll apply Newton's method to the optimality conditions. Let H be ∂²L/∂x², pˣ be the step for x, pʸ be the step for y, and pᵛ be the step for v.
+Next, we'll apply Newton's method to the optimality conditions. Let H be ∂²L/∂x², pˣ be the step for x, pᵘ be the step for u, pʸ be the step for y, and pᵛ be the step for v.
 
 ```
-  ∇ₓL(x + pˣ, y + pʸ, v + pᵛ)
-    ≈ ∇ₓL(x, y, v) + ∂²L/∂x²pˣ + ∂²L/∂x∂ypʸ + ∂²L/∂x∂vpᵛ
-  ∇ₓL(x, y, v) + Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘pᵛ = 0
-  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘pᵛ = −∇ₓL(x, y, v)
+  ∇ₓL(x + pˣ, u + pᵘ, y + pʸ, v + pᵛ)
+    ≈ ∇ₓL(x, u, y, v) + ∂²L/∂x²pˣ + ∂²L/∂x∂upᵘ + ∂²L/∂x∂ypʸ + ∂²L/∂x∂vpᵛ
+  ∇ₓL(x, u, y, v) + Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘pᵛ = 0
+  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘pᵛ = −∇ₓL(x, u, y, v)
   Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘pᵛ = −(∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ)
 ```
 ```
-  ∇_yL(x + pˣ, y + pʸ, v + pᵛ)
-    ≈ ∇_yL(x, y, v) + ∂²L/∂y∂xpˣ + ∂²L/∂y²pʸ + ∂²L/∂y∂vpᵛ
-  ∇_yL(x, y, v) + Aₑpˣ = 0
-  Aₑpˣ = −∇_yL(x, y, v)
+  ∇ᵤL(x + pˣ, u + pᵘ, y + pʸ, v + pᵛ)
+    ≈ ∇ᵤL(x, u, y, v) + ∂²L/∂u∂xpˣ + ∂²L/∂u²pᵘ + ∂²L/∂u∂ypʸ + ∂²L/∂u∂vpᵛ
+  ∇ᵤL(x, u, y, v) − μeᵛ⁻ᵘ∘pᵘ + μeᵛ⁻ᵘ∘pᵛ = 0
+  −μeᵛ⁻ᵘ∘pᵘ + μeᵛ⁻ᵘ∘pᵛ = −∇ᵤL(x, u, y, v)
+  −μeᵛ⁻ᵘ∘pᵘ + μeᵛ⁻ᵘ∘pᵛ = −(μeᵛ⁻ᵘ − μe)
+```
+```
+  ∇_yL(x + pˣ, u + pᵘ, y + pʸ, v + pᵛ)
+    ≈ ∇_yL(x, u, y, v) + ∂²L/∂y∂xpˣ + ∂²L/∂y∂upᵘ + ∂²L/∂y²pʸ + ∂²L/∂y∂vpᵛ
+  ∇_yL(x, u, y, v) + Aₑpˣ = 0
+  Aₑpˣ = −∇_yL(x, u, y, v)
   Aₑpˣ = −cₑ
 ```
 ```
-  ∇ᵥL(x + pˣ, y + pʸ, v + pᵛ)
-    ≈ ∇ᵥL(x, y, v) + ∂²L/∂v∂xpˣ + ∂²L/∂v∂ypʸ + ∂²L/∂v²pᵛ
-  ∇ᵥL(x, y, v) + Aᵢpˣ + √(μ)e⁻ᵛ∘pᵛ = 0
-  Aᵢpˣ + √(μ)e⁻ᵛ∘pᵛ = −∇ᵥL(x, y, v)
-  Aᵢpˣ + √(μ)e⁻ᵛ∘pᵛ = −(cᵢ − √(μ)e⁻ᵛ)
+  ∇ᵥL(x + pˣ, u + pᵘ, y + pʸ, v + pᵛ)
+    ≈ ∇ᵥL(x, u, y, v) + ∂²L/∂v∂xpˣ + ∂²L/∂v∂upᵘ + ∂²L/∂v∂ypʸ + ∂²L/∂v²pᵛ
+  ∇ᵥL(x, u, y, v) + Aᵢpˣ + √(μ)e⁻ᵘ∘pᵘ = 0
+  Aᵢpˣ + √(μ)e⁻ᵘ∘pᵘ = −∇ᵥL(x, u, y, v)
+  Aᵢpˣ + √(μ)e⁻ᵘ∘pᵘ = −(cᵢ − √(μ)e⁻ᵘ)
 ```
 
 ### Matrix equation
@@ -294,60 +301,110 @@ Next, we'll apply Newton's method to the optimality conditions. Let H be ∂²L/
 Group them into a matrix equation.
 
 ```
-  [H   −Aₑᵀ  −√(μ)Aᵢᵀeᵛ][pˣ]    [∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ]
-  [Aₑ   0         0    ][pʸ] = −[          cₑ         ]
-  [Aᵢ   0     √(μ)e⁻ᵛ  ][pᵛ]    [    cᵢ − √(μ)e⁻ᵛ     ]
+  [H      0     −Aₑᵀ  −√(μ)Aᵢᵀeᵛ][pˣ]    [∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ]
+  [0   −μeᵛ⁻ᵘ    0       μeᵛ⁻ᵘ  ][pᵘ] = −[     μeᵛ⁻ᵘ − μe      ]
+  [Aₑ     0      0         0    ][pʸ]    [          cₑ         ]
+  [Aᵢ  √(μ)e⁻ᵘ   0         0    ][pᵛ]    [    cᵢ − √(μ)e⁻ᵘ     ]
 ```
 
 Invert pʸ.
 
 ```
-  [H   Aₑᵀ  −√(μ)Aᵢᵀeᵛ][ pˣ]    [∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ]
-  [Aₑ   0       0     ][−pʸ] = −[         cₑ          ]
-  [Aᵢ   0    √(μ)e⁻ᵛ  ][ pᵛ]    [    cᵢ − √(μ)e⁻ᵛ     ]
+  [H      0     Aₑᵀ  −√(μ)Aᵢᵀeᵛ][ pˣ]    [∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ]
+  [0   −μeᵛ⁻ᵘ    0     μeᵛ⁻ᵘ   ][ pᵘ] = −[     μeᵛ⁻ᵘ − μe      ]
+  [Aₑ     0      0       0     ][−pʸ]    [          cₑ         ]
+  [Aᵢ  √(μ)e⁻ᵘ   0       0     ][ pᵛ]    [    cᵢ − √(μ)e⁻ᵘ     ]
+```
+
+Solve the second row for pᵘ.
+
+```
+  −μeᵛ⁻ᵘ∘pᵘ + μeᵛ⁻ᵘ∘pᵛ = μe − μeᵛ⁻ᵘ
+  −eᵛ⁻ᵘ∘pᵘ + eᵛ⁻ᵘ∘pᵛ = e − eᵛ⁻ᵘ
+  eᵛ⁻ᵘ∘pᵘ − eᵛ⁻ᵘ∘pᵛ =  eᵛ⁻ᵘ − e
+  pᵘ − pᵛ = −eᵘ⁻ᵛ
+  pᵘ = −eᵘ⁻ᵛ + pᵛ
+```
+
+Substitute the explicit formula for pᵘ into the fourth row and simplify.
+
+```
+  Aᵢpˣ + √(μ)e⁻ᵘ∘pᵘ = √(μ)e⁻ᵘ − cᵢ
+  Aᵢpˣ + √(μ)e⁻ᵘ(−eᵘ⁻ᵛ + pᵛ) = √(μ)e⁻ᵘ − cᵢ
+  Aᵢpˣ − √(μ)e⁻ᵛ + √(μ)e⁻ᵘ∘pᵛ = √(μ)e⁻ᵘ − cᵢ
+  Aᵢpˣ + √(μ)e⁻ᵘ∘pᵛ = √(μ)e⁻ᵘ + √(μ)e⁻ᵛ − cᵢ
+  Aᵢpˣ + √(μ)e⁻ᵘ∘pᵛ = −cᵢ + √(μ)e⁻ᵘ + √(μ)e⁻ᵛ
+```
+
+Substitute the new second and fourth rows into the system.
+
+```
+  [H   0  Aₑᵀ  −√(μ)Aᵢᵀeᵛ][ pˣ]    [∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ ]
+  [0   I   0       0     ][ pᵘ] = −[      eᵘ⁻ᵛ − pᵛ       ]
+  [Aₑ  0   0       0     ][−pʸ]    [          cₑ          ]
+  [Aᵢ  0   0    √(μ)e⁻ᵘ  ][ pᵛ]    [cᵢ − √(μ)e⁻ᵘ − √(μ)e⁻ᵛ]
+```
+
+Eliminate the second row and column.
+
+```
+  [H   Aₑᵀ  −√(μ)Aᵢᵀeᵛ][ pˣ]    [∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ ]
+  [Aₑ   0       0     ][−pʸ] = −[          cₑ          ]
+  [Aᵢ   0    √(μ)e⁻ᵘ  ][ pᵛ]    [cᵢ − √(μ)e⁻ᵘ − √(μ)e⁻ᵛ]
 ```
 
 Solve the third row for pᵛ.
 
 ```
-  Aᵢpˣ + √(μ)e⁻ᵛ∘pᵛ = −cᵢ + √(μ)e⁻ᵛ
-  √(μ)e⁻ᵛ∘pᵛ = −Aᵢpˣ − cᵢ + √(μ)e⁻ᵛ
-  pᵛ = −1/√(μ) Aᵢeᵛ∘pˣ − 1/√(μ) eᵛ∘cᵢ + e
-  pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)
+  Aᵢpˣ + √(μ)e⁻ᵘ∘pᵛ = −cᵢ + √(μ)e⁻ᵘ + √(μ)e⁻ᵛ
+  √(μ)e⁻ᵘ∘pᵛ = −Aᵢpˣ − cᵢ + √(μ)e⁻ᵘ + √(μ)e⁻ᵛ
+  e⁻ᵘ∘pᵛ = −1/√(μ)(Aᵢpˣ + cᵢ) + e⁻ᵘ + e⁻ᵛ
+  pᵛ = −1/√(μ) eᵘ∘(Aᵢpˣ + cᵢ) + e + eᵘ⁻ᵛ
+  pᵛ = e − 1/√(μ) eᵘ∘(Aᵢpˣ + cᵢ) + eᵘ⁻ᵛ
 ```
 
 Substitute the explicit formula for pᵛ into the first row.
 
 ```
   Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘pᵛ = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
-  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘(e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)) = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
+  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘(e − 1/√(μ) eᵘ∘(Aᵢpˣ + cᵢ) + eᵘ⁻ᵛ) = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
 ```
 
 Expand and simplify.
 
 ```
-  Hpˣ − Aₑᵀpʸ − Aᵢᵀeᵛ∘(√(μ) − eᵛ∘(Aᵢpˣ + cᵢ)) = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
-  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ + Aᵢᵀe²ᵛ∘(Aᵢpˣ + cᵢ) = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
-  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ + Aᵢᵀdiag(e²ᵛ)Aᵢpˣ + Aᵢᵀe²ᵛ∘cᵢ = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
-  Hpˣ − Aₑᵀpʸ + Aᵢᵀdiag(e²ᵛ)Aᵢpˣ + Aᵢᵀe²ᵛ∘cᵢ = −∇f + Aₑᵀy + 2√(μ)Aᵢᵀeᵛ
-  Hpˣ − Aₑᵀpʸ + Aᵢᵀdiag(e²ᵛ)Aᵢpˣ = −∇f + Aₑᵀy + 2√(μ)Aᵢᵀeᵛ − Aᵢᵀe²ᵛ∘cᵢ
-  (Hpˣ + Aᵢᵀdiag(e²ᵛ)Aᵢ)pˣ − Aₑᵀpʸ = −∇f + Aₑᵀy + 2√(μ)Aᵢᵀeᵛ − Aᵢᵀe²ᵛ∘cᵢ
-  (Hpˣ + Aᵢᵀdiag(e²ᵛ)Aᵢ)pˣ − Aₑᵀpʸ = −∇f + Aₑᵀy + Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)
+  Hpˣ − Aₑᵀpʸ − Aᵢᵀeᵛ∘(√(μ) − eᵘ∘(Aᵢpˣ + cᵢ) + √(μ)eᵘ⁻ᵛ) = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
+  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ + Aᵢᵀeᵘ⁺ᵛ∘(Aᵢpˣ + cᵢ) + √(μ)Aᵢᵀeᵘ = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
+  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ + Aᵢᵀdiag(eᵘ⁺ᵛ)Aᵢpˣ + Aᵢᵀeᵘ⁺ᵛ∘cᵢ + √(μ)Aᵢᵀeᵘ = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
+  Hpˣ − Aₑᵀpʸ + Aᵢᵀdiag(eᵘ⁺ᵛ)Aᵢpˣ = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ − Aᵢᵀeᵘ⁺ᵛ∘cᵢ + √(μ)Aᵢᵀeᵛ − √(μ)Aᵢᵀeᵘ
+  Hpˣ − Aₑᵀpʸ + Aᵢᵀdiag(eᵘ⁺ᵛ)Aᵢpˣ = −∇f + Aₑᵀy + Aᵢᵀ(√(μ)eᵛ − eᵘ⁺ᵛ∘cᵢ + √(μ)eᵛ − √(μ)eᵘ)
+  Hpˣ − Aₑᵀpʸ + Aᵢᵀdiag(eᵘ⁺ᵛ)Aᵢpˣ = −∇f + Aₑᵀy + Aᵢᵀ(−√(μ)eᵘ + 2√(μ)eᵛ − eᵘ⁺ᵛ∘cᵢ)
+  (H + Aᵢᵀdiag(eᵘ⁺ᵛ)Aᵢ)pˣ − Aₑᵀpʸ = −∇f + Aₑᵀy + Aᵢᵀ(−√(μ)eᵘ + 2√(μ)eᵛ − eᵘ⁺ᵛ∘cᵢ)
 ```
 
 Substitute the new first and third rows into the system.
 
 ```
-  [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ  0][ pˣ]    [∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
-  [        Aₑ           0   0][−pʸ] = −[               cₑ                ]
-  [        0            0   I][ pᵛ]    [    e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)    ]
+  [H + Aᵢᵀdiag(eᵘ⁺ᵛ)Aᵢ  Aₑᵀ  0][ pˣ]    [∇f − Aₑᵀy − Aᵢᵀ(−√(μ)eᵘ + 2√(μ)eᵛ − eᵘ⁺ᵛ∘cᵢ)]
+  [        Aₑ            0   0][−pʸ] = −[                     cₑ                     ]
+  [        0             0   I][ pᵛ]    [      e − 1/√(μ) eᵘ∘(Aᵢpˣ + cᵢ) + eᵘ⁻ᵛ      ]
 ```
 
 Eliminate the third row and column.
 
 ```
-  [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
-  [        Aₑ           0 ][−pʸ]    [               cₑ                ]
+  [H + Aᵢᵀdiag(eᵘ⁺ᵛ)Aᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(−√(μ)eᵘ + 2√(μ)eᵛ − eᵘ⁺ᵛ∘cᵢ)]
+  [        Aₑ            0 ][−pʸ]    [                     cₑ                     ]
+```
+
+Now, solve Aᵢpˣ + √(μ)e⁻ᵘ∘pᵘ = −(cᵢ − √(μ)e⁻ᵘ) for pᵘ to obtain an explicit equation for pᵘ.
+
+```
+  Aᵢpˣ + √(μ)e⁻ᵘ∘pᵘ = −(cᵢ − √(μ)e⁻ᵘ)
+  Aᵢpˣ + √(μ)e⁻ᵘ∘pᵘ = −cᵢ + √(μ)e⁻ᵘ
+  √(μ)e⁻ᵘ∘pᵘ = −cᵢ + √(μ)e⁻ᵘ − Aᵢpˣ
+  pᵘ = −1/√(μ) eᵘ∘cᵢ + e − 1/√(μ) eᵘ∘Aᵢpˣ
+  pᵘ = e − 1/√(μ) eᵘ∘(Aᵢpˣ + cᵢ)
 ```
 
 ### Final results
@@ -355,22 +412,25 @@ Eliminate the third row and column.
 In summary, the reduced 2x2 block system gives the iterates pₖˣ and pₖʸ.
 
 ```
-  [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
-  [        Aₑ           0 ][−pʸ]    [               cₑ                ]
+  [H + Aᵢᵀdiag(eᵘ⁺ᵛ)Aᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(−√(μ)eᵘ + 2√(μ)eᵛ − eᵘ⁺ᵛ∘cᵢ)]
+  [        Aₑ            0 ][−pʸ]    [                     cₑ                     ]
 ```
 
-The iterate pᵛ is given by
+The iterates pᵘ and pᵛ are given by
 
 ```
-  pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)
+  pᵘ = e − 1/√(μ) eᵘ∘(Aᵢpˣ + cᵢ)
+  pᵛ = e − 1/√(μ) eᵘ∘(Aᵢpˣ + cᵢ) + eᵘ⁻ᵛ
 ```
 
 The iterates are applied like so
 
 ```
+  αₖᵘ = min(1, 1/|pᵘ|_∞²)
   αₖᵛ = min(1, 1/|pᵛ|_∞²)
 
   xₖ₊₁ = xₖ + αₖpₖˣ
+  uₖ₊₁ = uₖ + αₖᵘpₖᵘ
   yₖ₊₁ = yₖ + αₖpₖʸ
   vₖ₊₁ = vₖ + αₖᵛpₖᵛ
 ```
