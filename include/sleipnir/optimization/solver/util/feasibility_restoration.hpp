@@ -173,11 +173,13 @@ ExitStatus feasibility_restoration(
   // Start the constraints pₑ, nₑ ≥ 0 with zero violation and perfect
   // complementarity.
   //
-  //   √(fr_μ)exp(−fr_v) = p
-  //   fr_v = ln(√(fr_μ)/p)
-  DenseVector fr_v{2 * num_eq};
-  fr_v << (fr_sqrt_μ / p_e_0.array()).log().matrix(),
+  //   √(fr_μ)exp(−fr_u) = p
+  //   fr_u = ln(√(fr_μ)/p)
+  //   fr_v = fr_u
+  DenseVector fr_u{2 * num_eq};
+  fr_u << (fr_sqrt_μ / p_e_0.array()).log().matrix(),
       (fr_sqrt_μ / n_e_0.array()).log().matrix();
+  DenseVector fr_v = fr_u;
 
   // Inherit the parent problem's scaling for the constraints, and use no
   // scaling for the cost function since it has changed. The new rows introduced
@@ -309,7 +311,7 @@ ExitStatus feasibility_restoration(
       fr_scaling};
 
   IPMIterates<Scalar> fr_iterates{std::move(fr_x), std::move(fr_y),
-                                  std::move(fr_v)};
+                                  std::move(fr_u), std::move(fr_v)};
 
   auto status = ipm<Scalar>(fr_matrix_callbacks, is_nlp, iteration_callbacks,
                             options, true,
@@ -421,7 +423,7 @@ ExitStatus feasibility_restoration(
   using std::log;
   using std::sqrt;
 
-  auto& [x, y, v] = iterates;
+  auto& [x, y, u, v] = iterates;
 
   const auto& matrices = matrix_callbacks;
   const auto& num_vars = matrices.num_decision_variables;
@@ -430,8 +432,8 @@ ExitStatus feasibility_restoration(
 
   constexpr Scalar ρ(1e3);
 
-  // s = √(μ)e⁻ᵛ
-  DenseVector s = sqrt_μ * (-v).array().exp().matrix();
+  // s = √(μ)e⁻ᵘ
+  DenseVector s = sqrt_μ * (-u).array().exp().matrix();
 
   const DenseVector c_e = matrices.c_e(x);
   const DenseVector c_i = matrices.c_i(x);
@@ -455,24 +457,26 @@ ExitStatus feasibility_restoration(
 
   DenseVector fr_y = DenseVector::Zero(c_e.rows());
 
-  DenseVector fr_v{v.rows() + 2 * num_eq + 2 * num_ineq};
+  DenseVector fr_u{u.rows() + 2 * num_eq + 2 * num_ineq};
   // Carry the slack variables over to feasibility restoration. Since it uses a
-  // different barrier parameter, shift v so s is preserved.
+  // different barrier parameter, shift u so s is preserved.
   //
-  //   √(fr_μ)exp(−fr_v) = √(μ)e⁻ᵛ
-  //   fr_v = v + ln(√(fr_μ)/√(μ))
+  //   √(fr_μ)exp(−fr_u) = √(μ)e⁻ᵘ
+  //   fr_u = u + ln(√(fr_μ)/√(μ))
   //
-  // Start the constraints pₑ, nₑ, pᵢ, nᵢ ≥ 0 with zero violation and perfect
-  // complementarity.
+  // Start the constraints pₑ, nₑ, pᵢ, nᵢ ≥ 0 with zero violation.
   //
-  //   √(fr_μ)exp(−fr_v) = p
-  //   fr_v = ln(√(fr_μ)/p)
-  fr_v.segment(0, v.rows()) = (v.array() + log(fr_sqrt_μ / sqrt_μ)).matrix();
-  fr_v.segment(v.rows(), 2 * num_eq + 2 * num_ineq)
+  //   √(fr_μ)exp(−fr_u) = p
+  //   fr_u = ln(√(fr_μ)/p)
+  fr_u.segment(0, u.rows()) = (u.array() + log(fr_sqrt_μ / sqrt_μ)).matrix();
+  fr_u.segment(u.rows(), 2 * num_eq + 2 * num_ineq)
       << (fr_sqrt_μ / p_e_0.array()).log().matrix(),
       (fr_sqrt_μ / n_e_0.array()).log().matrix(),
       (fr_sqrt_μ / p_i_0.array()).log().matrix(),
       (fr_sqrt_μ / n_i_0.array()).log().matrix();
+
+  // Start with perfect complementarity, z = fr_μS⁻¹e.
+  DenseVector fr_v = fr_u;
 
   // Inherit the parent problem's scaling for the constraints, and use no
   // scaling for the cost function since it has changed. The new rows introduced
@@ -655,7 +659,7 @@ ExitStatus feasibility_restoration(
 #endif
 
   IPMIterates<Scalar> fr_iterates{std::move(fr_x), std::move(fr_y),
-                                  std::move(fr_v)};
+                                  std::move(fr_u), std::move(fr_v)};
 
   auto status = ipm<Scalar>(fr_matrix_callbacks, is_nlp, iteration_callbacks,
                             options, true,
@@ -666,13 +670,14 @@ ExitStatus feasibility_restoration(
 
   x = fr_iterates.x.segment(0, x.rows());
 
-  // Carry the slack variables back to the normal solve, shifting v so s is
-  // preserved.
+  // Carry the slack variables back to the normal solve, shifting u so s is
+  // preserved, and set v = u so the duals satisfy z = μS⁻¹e.
   //
-  //   √(μ)e⁻ᵛ = √(fr_μ)exp(−fr_v)
-  //   v = fr_v − ln(√(fr_μ)/√(μ))
-  v = (fr_iterates.v.segment(0, v.rows()).array() - log(fr_sqrt_μ / sqrt_μ))
+  //   √(μ)e⁻ᵘ = √(fr_μ)exp(−fr_u)
+  //   u = fr_u − ln(√(fr_μ)/√(μ))
+  u = (fr_iterates.u.segment(0, u.rows()).array() - log(fr_sqrt_μ / sqrt_μ))
           .matrix();
+  v = u;
 
   // If feasibility restoration converged, check the constraint violation in the
   // original problem's scaling
@@ -708,7 +713,8 @@ ExitStatus feasibility_restoration(
       (status == ExitStatus::SUCCESS && !c_e_violated && !c_i_violated)) {
     // Re-center the slacks on the original constraints cᵢ(x) if they're
     // sufficiently feasible, which zeroes their constraint violation.
-    // Otherwise, keep feasibility restoration's slacks. Then shift v to match.
+    // Otherwise, keep feasibility restoration's slacks. Then shift u and v to
+    // match.
     //
     // Note that those slacks can make z = μS⁻¹e very large because fr_μ drives
     // them toward 0 independently of μ, so they can end up much smaller than μ.
@@ -718,12 +724,14 @@ ExitStatus feasibility_restoration(
     // The normal phase's early-exit callback computes the slacks the same way,
     // so the returned iterate is the one the filter accepted.
     //
-    //   √(μ)e⁻ᵛ = s
-    //   v = ln(√(μ)/s)
+    //   √(μ)e⁻ᵘ = s
+    //   u = ln(√(μ)/s)
+    //   v = u
     const DenseVector c_i = matrices.c_i(x);
     s = (c_i.array() >= Scalar(1e-2))
-            .select(c_i, sqrt_μ * (-v).array().exp().matrix());
-    v = (sqrt_μ / s.array()).log().matrix();
+            .select(c_i, sqrt_μ * (-u).array().exp().matrix());
+    u = (sqrt_μ / s.array()).log().matrix();
+    v = u;
 
     // Reset the equality constraint duals since feasibility restoration didn't
     // account for the cost function

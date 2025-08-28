@@ -173,20 +173,38 @@ The iterates are applied like so
   yₖ₊₁ = yₖ + pₖʸ
 ```
 
+For nonlinear models, the v update corresponds to a linear step in the dual variables, which matches the Newton linearization of z = √(μ)eᵛ
+
+```
+  pᶻ = z∘pᵛ
+  zₖ₊₁ = zₖ + αₖᵛpₖᶻ = zₖ∘(e + αₖᵛpₖᵛ)
+```
+
+with its own fraction-to-the-boundary rule
+
+```
+  αₖᵛ = max(α ∈ (0, 1] : zₖ + αpₖᶻ ≥ (1−τ)zₖ)
+      = min(1, τ/max(−pₖᵛ))
+```
+
+For quadratic models, v takes the additive step of [^3] with αₖᵛ = min(1, 1/|pᵛ|_∞²). The barrier parameter update keeps |pᵛ|_∞ ≤ 1 there, so the full step is usually taken. For nonlinear models, |pᵛ|_∞ can be orders of magnitude larger than 1, so that rule would stall the duals and complementarity.
+
+The slacks are initialized to s = max(cᵢ, κ) with κ = 10⁻², and the duals are initialized with perfect complementarity (v = u, so z = μS⁻¹e). Otherwise, eᵘ⁻ᵛ and pᵛ are large for small slacks.
+
 Local infeasibility is only declared when the feasibility restoration phase converges to a minimizer of the constraint violation that still violates the constraints; testing for infeasibility at arbitrary iterates risks false positives. See section 3.3, p. 14 of [^2].
 
 ## Log-domain interior-point method
 
-This is a primal-dual interior-point method whose slack and dual variables are parameterized by log-domain variables v, as in [^3]:
+This is a primal-dual interior-point method whose slack and dual variables are parameterized by log-domain variables u and v, as in [^3]:
 
 ```
-  s = √(μ)e⁻ᵛ
+  s = √(μ)e⁻ᵘ
   z = √(μ)eᵛ
 ```
 
-This keeps s and z positive and satisfies the complementarity condition s∘z = μe exactly, so z is tied to the slacks via z = μS⁻¹e and no fraction-to-the-boundary rule is needed for the dual variables. The barrier parameter update also follows [^3].
+This keeps s and z positive, so no fraction-to-the-boundary rule is needed for the dual variables. Using separate coordinates for s and z means the complementarity condition s∘z = μe is no longer satisfied by construction (it holds when u = v), so it's kept as an optimality condition. The barrier parameter update also follows [^3].
 
-[^3] is for convex QPs, though, and its convergence guarantees depend on that structure. With a quadratic cost and linear constraints, x is eliminated exactly by the linear solve, so the method reduces to Newton's method on v alone with a simple step size rule. That doesn't hold for nonlinear programs, so the step rules follow the filter line-search method of [^2] instead. The slacks take a linear step in s rather than an additive step in v, the step size is capped by a fraction-to-the-boundary rule on the slacks, and step acceptance is determined by a filter. The resulting algorithm is closer to a standard primal-dual interior-point method than to the method of [^3], and it doesn't inherit the latter's convergence guarantees.
+[^3] is for convex QPs, though, and its convergence guarantees depend on that structure. With a quadratic cost and linear constraints, x is eliminated exactly by the linear solve, so the method reduces to Newton's method on u and v alone with a simple step size rule. That doesn't hold for nonlinear programs, so the step rules follow the filter line-search method of [^2] instead. The slacks take a linear step in s rather than an additive step in u, the step size is capped by a fraction-to-the-boundary rule on the slacks, and step acceptance is determined by a filter. The resulting algorithm is closer to a standard primal-dual interior-point method than to the method of [^3], and it doesn't inherit the latter's convergence guarantees.
 
 We want to solve the following optimization problem.
 
@@ -259,45 +277,52 @@ where Aₑ = ∂cₑ/∂x, Aᵢ = ∂cᵢ/∂x, S = diag(s), and e is a column v
 To ensure s ≥ 0 and z ≥ 0, make the following substitutions.
 
 ```
-  s = √(μ)e⁻ᵛ
+  s = √(μ)e⁻ᵘ
   z = √(μ)eᵛ
 ```
 ```
   ∇f − Aₑᵀy − Aᵢᵀ√(μ)eᵛ = 0
+  √(μ)e⁻ᵘ∘√(μ)eᵛ − μe = 0
   cₑ = 0
-  cᵢ − √(μ)e⁻ᵛ = 0
+  cᵢ − √(μ)e⁻ᵘ = 0
 
   ∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ = 0
+  μeᵛ⁻ᵘ − μe = 0
   cₑ = 0
-  cᵢ − √(μ)e⁻ᵛ = 0
+  cᵢ − √(μ)e⁻ᵘ = 0
 ```
-
-The complementarity condition is now always satisfied, so it can be omitted.
 
 ### Newton's method
 
-Next, we'll apply Newton's method to the optimality conditions. Let H be ∂²L/∂x², pˣ be the step for x, pʸ be the step for y, and pᵛ be the step for v.
+Next, we'll apply Newton's method to the optimality conditions. Let H be ∂²L/∂x², pˣ be the step for x, pᵘ be the step for u, pʸ be the step for y, and pᵛ be the step for v.
 
 ```
-  ∇ₓL(x + pˣ, y + pʸ, v + pᵛ)
-    ≈ ∇ₓL(x, y, v) + ∂²L/∂x²pˣ + ∂²L/∂x∂ypʸ + ∂²L/∂x∂vpᵛ
-  ∇ₓL(x, y, v) + Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘pᵛ = 0
-  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘pᵛ = −∇ₓL(x, y, v)
+  ∇ₓL(x + pˣ, u + pᵘ, y + pʸ, v + pᵛ)
+    ≈ ∇ₓL(x, u, y, v) + ∂²L/∂x²pˣ + ∂²L/∂x∂upᵘ + ∂²L/∂x∂ypʸ + ∂²L/∂x∂vpᵛ
+  ∇ₓL(x, u, y, v) + Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘pᵛ = 0
+  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘pᵛ = −∇ₓL(x, u, y, v)
   Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘pᵛ = −(∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ)
 ```
 ```
-  ∇_yL(x + pˣ, y + pʸ, v + pᵛ)
-    ≈ ∇_yL(x, y, v) + ∂²L/∂y∂xpˣ + ∂²L/∂y²pʸ + ∂²L/∂y∂vpᵛ
-  ∇_yL(x, y, v) + Aₑpˣ = 0
-  Aₑpˣ = −∇_yL(x, y, v)
+  ∇ᵤL(x + pˣ, u + pᵘ, y + pʸ, v + pᵛ)
+    ≈ ∇ᵤL(x, u, y, v) + ∂²L/∂u∂xpˣ + ∂²L/∂u²pᵘ + ∂²L/∂u∂ypʸ + ∂²L/∂u∂vpᵛ
+  ∇ᵤL(x, u, y, v) − μeᵛ⁻ᵘ∘pᵘ + μeᵛ⁻ᵘ∘pᵛ = 0
+  −μeᵛ⁻ᵘ∘pᵘ + μeᵛ⁻ᵘ∘pᵛ = −∇ᵤL(x, u, y, v)
+  −μeᵛ⁻ᵘ∘pᵘ + μeᵛ⁻ᵘ∘pᵛ = −(μeᵛ⁻ᵘ − μe)
+```
+```
+  ∇_yL(x + pˣ, u + pᵘ, y + pʸ, v + pᵛ)
+    ≈ ∇_yL(x, u, y, v) + ∂²L/∂y∂xpˣ + ∂²L/∂y∂upᵘ + ∂²L/∂y²pʸ + ∂²L/∂y∂vpᵛ
+  ∇_yL(x, u, y, v) + Aₑpˣ = 0
+  Aₑpˣ = −∇_yL(x, u, y, v)
   Aₑpˣ = −cₑ
 ```
 ```
-  ∇ᵥL(x + pˣ, y + pʸ, v + pᵛ)
-    ≈ ∇ᵥL(x, y, v) + ∂²L/∂v∂xpˣ + ∂²L/∂v∂ypʸ + ∂²L/∂v²pᵛ
-  ∇ᵥL(x, y, v) + Aᵢpˣ + √(μ)e⁻ᵛ∘pᵛ = 0
-  Aᵢpˣ + √(μ)e⁻ᵛ∘pᵛ = −∇ᵥL(x, y, v)
-  Aᵢpˣ + √(μ)e⁻ᵛ∘pᵛ = −(cᵢ − √(μ)e⁻ᵛ)
+  ∇ᵥL(x + pˣ, u + pᵘ, y + pʸ, v + pᵛ)
+    ≈ ∇ᵥL(x, u, y, v) + ∂²L/∂v∂xpˣ + ∂²L/∂v∂upᵘ + ∂²L/∂v∂ypʸ + ∂²L/∂v²pᵛ
+  ∇ᵥL(x, u, y, v) + Aᵢpˣ + √(μ)e⁻ᵘ∘pᵘ = 0
+  Aᵢpˣ + √(μ)e⁻ᵘ∘pᵘ = −∇ᵥL(x, u, y, v)
+  Aᵢpˣ + √(μ)e⁻ᵘ∘pᵘ = −(cᵢ − √(μ)e⁻ᵘ)
 ```
 
 ### Matrix equation
@@ -305,60 +330,65 @@ Next, we'll apply Newton's method to the optimality conditions. Let H be ∂²L/
 Group them into a matrix equation.
 
 ```
-  [H   −Aₑᵀ  −√(μ)Aᵢᵀeᵛ][pˣ]    [∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ]
-  [Aₑ   0         0    ][pʸ] = −[          cₑ         ]
-  [Aᵢ   0     √(μ)e⁻ᵛ  ][pᵛ]    [    cᵢ − √(μ)e⁻ᵛ     ]
+  [H      0     −Aₑᵀ  −√(μ)Aᵢᵀeᵛ][pˣ]    [∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ]
+  [0   −μeᵛ⁻ᵘ    0       μeᵛ⁻ᵘ  ][pᵘ] = −[     μeᵛ⁻ᵘ − μe      ]
+  [Aₑ     0      0         0    ][pʸ]    [          cₑ         ]
+  [Aᵢ  √(μ)e⁻ᵘ   0         0    ][pᵛ]    [    cᵢ − √(μ)e⁻ᵘ     ]
 ```
 
 Invert pʸ.
 
 ```
-  [H   Aₑᵀ  −√(μ)Aᵢᵀeᵛ][ pˣ]    [∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ]
-  [Aₑ   0       0     ][−pʸ] = −[         cₑ          ]
-  [Aᵢ   0    √(μ)e⁻ᵛ  ][ pᵛ]    [    cᵢ − √(μ)e⁻ᵛ     ]
+  [H      0     Aₑᵀ  −√(μ)Aᵢᵀeᵛ][ pˣ]    [∇f − Aₑᵀy − √(μ)Aᵢᵀeᵛ]
+  [0   −μeᵛ⁻ᵘ    0     μeᵛ⁻ᵘ   ][ pᵘ] = −[     μeᵛ⁻ᵘ − μe      ]
+  [Aₑ     0      0       0     ][−pʸ]    [          cₑ         ]
+  [Aᵢ  √(μ)e⁻ᵘ   0       0     ][ pᵛ]    [    cᵢ − √(μ)e⁻ᵘ     ]
 ```
 
-Solve the third row for pᵛ.
+Solve the second row for pᵛ.
 
 ```
-  Aᵢpˣ + √(μ)e⁻ᵛ∘pᵛ = −cᵢ + √(μ)e⁻ᵛ
-  √(μ)e⁻ᵛ∘pᵛ = −Aᵢpˣ − cᵢ + √(μ)e⁻ᵛ
-  pᵛ = −1/√(μ) Aᵢeᵛ∘pˣ − 1/√(μ) eᵛ∘cᵢ + e
-  pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)
+  −μeᵛ⁻ᵘ∘pᵘ + μeᵛ⁻ᵘ∘pᵛ = μe − μeᵛ⁻ᵘ
+  −pᵘ + pᵛ = eᵘ⁻ᵛ − e
+  pᵛ = pᵘ + eᵘ⁻ᵛ − e
+```
+
+Solve the fourth row for pᵘ.
+
+```
+  Aᵢpˣ + √(μ)e⁻ᵘ∘pᵘ = −cᵢ + √(μ)e⁻ᵘ
+  √(μ)e⁻ᵘ∘pᵘ = −Aᵢpˣ − cᵢ + √(μ)e⁻ᵘ
+  pᵘ = e − 1/√(μ) eᵘ∘(Aᵢpˣ + cᵢ)
+```
+
+Substitute the explicit formula for pᵘ into the formula for pᵛ.
+
+```
+  pᵛ = e − 1/√(μ) eᵘ∘(Aᵢpˣ + cᵢ) + eᵘ⁻ᵛ − e
+  pᵛ = eᵘ⁻ᵛ − 1/√(μ) eᵘ∘(Aᵢpˣ + cᵢ)
 ```
 
 Substitute the explicit formula for pᵛ into the first row.
 
 ```
   Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘pᵛ = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
-  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘(e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)) = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
+  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ∘(eᵘ⁻ᵛ − 1/√(μ) eᵘ∘(Aᵢpˣ + cᵢ)) = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
 ```
 
 Expand and simplify.
 
 ```
-  Hpˣ − Aₑᵀpʸ − Aᵢᵀeᵛ∘(√(μ) − eᵛ∘(Aᵢpˣ + cᵢ)) = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
-  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ + Aᵢᵀe²ᵛ∘(Aᵢpˣ + cᵢ) = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
-  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵛ + Aᵢᵀdiag(e²ᵛ)Aᵢpˣ + Aᵢᵀe²ᵛ∘cᵢ = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
-  Hpˣ − Aₑᵀpʸ + Aᵢᵀdiag(e²ᵛ)Aᵢpˣ + Aᵢᵀe²ᵛ∘cᵢ = −∇f + Aₑᵀy + 2√(μ)Aᵢᵀeᵛ
-  Hpˣ − Aₑᵀpʸ + Aᵢᵀdiag(e²ᵛ)Aᵢpˣ = −∇f + Aₑᵀy + 2√(μ)Aᵢᵀeᵛ − Aᵢᵀe²ᵛ∘cᵢ
-  (Hpˣ + Aᵢᵀdiag(e²ᵛ)Aᵢ)pˣ − Aₑᵀpʸ = −∇f + Aₑᵀy + 2√(μ)Aᵢᵀeᵛ − Aᵢᵀe²ᵛ∘cᵢ
-  (Hpˣ + Aᵢᵀdiag(e²ᵛ)Aᵢ)pˣ − Aₑᵀpʸ = −∇f + Aₑᵀy + Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)
+  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵘ + Aᵢᵀeᵘ⁺ᵛ∘(Aᵢpˣ + cᵢ) = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
+  Hpˣ − Aₑᵀpʸ − √(μ)Aᵢᵀeᵘ + Aᵢᵀdiag(eᵘ⁺ᵛ)Aᵢpˣ + Aᵢᵀeᵘ⁺ᵛ∘cᵢ = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ
+  Hpˣ − Aₑᵀpʸ + Aᵢᵀdiag(eᵘ⁺ᵛ)Aᵢpˣ = −∇f + Aₑᵀy + √(μ)Aᵢᵀeᵛ + √(μ)Aᵢᵀeᵘ − Aᵢᵀeᵘ⁺ᵛ∘cᵢ
+  (H + Aᵢᵀdiag(eᵘ⁺ᵛ)Aᵢ)pˣ − Aₑᵀpʸ = −∇f + Aₑᵀy + Aᵢᵀ(√(μ)eᵘ + √(μ)eᵛ − eᵘ⁺ᵛ∘cᵢ)
 ```
 
-Substitute the new first and third rows into the system.
+Together with the third row, this gives the reduced system.
 
 ```
-  [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ  0][ pˣ]    [∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
-  [        Aₑ           0   0][−pʸ] = −[               cₑ                ]
-  [        0            0   I][ pᵛ]    [    e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)    ]
-```
-
-Eliminate the third row and column.
-
-```
-  [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
-  [        Aₑ           0 ][−pʸ]    [               cₑ                ]
+  [H + Aᵢᵀdiag(eᵘ⁺ᵛ)Aᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(√(μ)eᵘ + √(μ)eᵛ − eᵘ⁺ᵛ∘cᵢ)]
+  [        Aₑ            0 ][−pʸ]    [                    cₑ                    ]
 ```
 
 ### Final results
@@ -366,45 +396,50 @@ Eliminate the third row and column.
 In summary, the reduced 2x2 block system gives the iterates pₖˣ and pₖʸ.
 
 ```
-  [H + Aᵢᵀdiag(e²ᵛ)Aᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ)]
-  [        Aₑ           0 ][−pʸ]    [               cₑ                ]
+  [H + Aᵢᵀdiag(eᵘ⁺ᵛ)Aᵢ  Aₑᵀ][ pˣ] = −[∇f − Aₑᵀy − Aᵢᵀ(√(μ)eᵘ + √(μ)eᵛ − eᵘ⁺ᵛ∘cᵢ)]
+  [        Aₑ            0 ][−pʸ]    [                    cₑ                    ]
 ```
 
-The iterate pᵛ is given by
+The iterates pᵘ and pᵛ are given by
 
 ```
-  pᵛ = e − 1/√(μ) eᵛ∘(Aᵢpˣ + cᵢ)
+  pᵘ = e − 1/√(μ) eᵘ∘(Aᵢpˣ + cᵢ)
+  pᵛ = pᵘ + eᵘ⁻ᵛ − e
 ```
+
+When u = v (i.e., s∘z = μe), these reduce to pᵛ = pᵘ and the right-hand side Aᵢᵀ(2√(μ)eᵛ − e²ᵛ∘cᵢ) of a single log-domain coordinate.
 
 The iterates are applied like so
 
 ```
   xₖ₊₁ = xₖ + αₖpₖˣ
+  uₖ₊₁ = uₖ − ln(e − αₖpₖᵘ)
   yₖ₊₁ = yₖ + αₖpₖʸ
-  vₖ₊₁ = vₖ − ln(e − αₖpₖᵛ)
+  vₖ₊₁ = vₖ + ln(e + αₖᵛpₖᵛ)  (nonlinear models)
+  vₖ₊₁ = vₖ + αₖᵛpₖᵛ          (quadratic models)
 ```
 
-The v update corresponds to a linear step in the slack variables
+The u update corresponds to a linear step in the slack variables
 
 ```
-  pˢ = −s∘pᵛ
-  sₖ₊₁ = sₖ + αₖpₖˢ = sₖ∘(e − αₖpₖᵛ)
+  pˢ = −s∘pᵘ
+  sₖ₊₁ = sₖ + αₖpₖˢ = sₖ∘(e − αₖpₖᵘ)
 ```
 
-instead of the exponential step sₖ∘exp(−αₖpₖᵛ). The linear step matches the Newton linearization, so for linear constraints cᵢ − s decreases by exactly a factor of (1 − αₖ) per step. With the exponential step, the overshoot of exp(−αₖpₖᵛ) relative to its linearization can make cᵢ − s grow. The dual variables follow from z = μS⁻¹e.
+instead of the exponential step sₖ∘exp(−αₖpₖᵘ). The linear step matches the Newton linearization, so for linear constraints cᵢ − s decreases by exactly a factor of (1 − αₖ) per step. With the exponential step, the overshoot of exp(−αₖpₖᵘ) relative to its linearization can make cᵢ − s grow.
 
-x and v share a step size because v parameterizes the slack variables s = √(μ)e⁻ᵛ, which are part of the primal step. αₖ is found via backtracking line search starting from the fraction-to-the-boundary rule for the slack step
+x and u share a step size because u parameterizes the slack variables s = √(μ)e⁻ᵘ, which are part of the primal step. αₖ is found via backtracking line search starting from the fraction-to-the-boundary rule for the slack step
 
 ```
   αₖᵐᵃˣ = max(α ∈ (0, 1] : sₖ + αpₖˢ ≥ (1−τ)sₖ)
-        = min(1, τ/max(pₖᵛ))
+        = min(1, τ/max(pₖᵘ))
 ```
 
-where τ = 0.995. Only slacks with pᵢᵛ > 0 approach the boundary, so slacks that need to grow don't limit the step. If αₖᵐᵃˣ is below the minimum step size, backtracking can't help, so feasibility restoration is invoked. A filter method determines acceptance of the step. The filter's sufficient decrease condition uses the directional derivative of the log-barrier function
+where τ = 0.995. Only slacks with pᵢᵘ > 0 approach the boundary, so slacks that need to grow don't limit the step. If αₖᵐᵃˣ is below the minimum step size, backtracking can't help, so feasibility restoration is invoked. A filter method determines acceptance of the step. The filter's sufficient decrease condition uses the directional derivative of the log-barrier function
 
 ```
-  ϕ_μ(x, v) = f(x) − μ∑ᵢ ln(sᵢ) = f(x) + μ∑ᵢ vᵢ − μ∑ᵢ ln(√(μ))
-  D_ϕ = ∇f(x)ᵀpˣ + μ∑ᵢ pᵢᵛ
+  ϕ_μ(x, u) = f(x) − μ∑ᵢ ln(sᵢ) = f(x) + μ∑ᵢ uᵢ − μ∑ᵢ ln(√(μ))
+  D_ϕ = ∇f(x)ᵀpˣ + μ∑ᵢ pᵢᵘ
 ```
 
 Local infeasibility is only declared when the feasibility restoration phase converges to a minimizer of the constraint violation that still violates the constraints; testing for infeasibility at arbitrary iterates risks false positives. See section 3.3, p. 14 of [^2].

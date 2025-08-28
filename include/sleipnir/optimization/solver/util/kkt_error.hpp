@@ -141,10 +141,9 @@ Scalar kkt_error_inf_norm(const IPMIterates<Scalar>& iterates,
                           const IPMFunctionValues<Scalar>& function_values,
                           const IPMFirstDerivatives<Scalar>& first_derivatives,
                           Scalar sqrt_μ, Scalar μ_target, Scalar tolerance) {
-  using std::abs;
   using std::pow;
 
-  const auto& [x, y, v] = iterates;
+  const auto& [x, y, u, v] = iterates;
   const auto& [f, c_e, c_i] = function_values;
   const auto& [g, A_e, A_i] = first_derivatives;
 
@@ -157,13 +156,10 @@ Scalar kkt_error_inf_norm(const IPMIterates<Scalar>& iterates,
   //
   // where
   //
-  //   s = √(μ)e⁻ᵛ
+  //   s = √(μ)e⁻ᵘ
   //   z = √(μ)eᵛ
-  //
-  // The log-domain parameterization satisfies Sz = μe exactly, so the
-  // complementarity error relative to μ_target is |μ − μ_target|.
 
-  const Eigen::VectorX<Scalar> s = sqrt_μ * (-v).array().exp().matrix();
+  const Eigen::VectorX<Scalar> s = sqrt_μ * (-u).array().exp().matrix();
   const Eigen::VectorX<Scalar> z = sqrt_μ * v.array().exp().matrix();
 
   constexpr Scalar ε = std::numeric_limits<Scalar>::epsilon();
@@ -202,14 +198,16 @@ Scalar kkt_error_inf_norm(const IPMIterates<Scalar>& iterates,
   // ‖Sz − μe‖_∞ / s_c
   // ‖cₑ‖_∞
   // ‖cᵢ − s‖_∞
-  return std::max(
-      {(g - A_e.transpose() * y - A_i.transpose() * z)
-               .toDense()
-               .template lpNorm<Eigen::Infinity>() /
-           s_d,
-       z.rows() > 0 ? abs(sqrt_μ * sqrt_μ - μ_target) / s_c : Scalar(0),
-       c_e.template lpNorm<Eigen::Infinity>(),
-       (c_i - s).template lpNorm<Eigen::Infinity>()});
+  return std::max({(g - A_e.transpose() * y - A_i.transpose() * z)
+                           .toDense()
+                           .template lpNorm<Eigen::Infinity>() /
+                       s_d,
+                   (s.cwiseProduct(z).array() - μ_target)
+                           .matrix()
+                           .template lpNorm<Eigen::Infinity>() /
+                       s_c,
+                   c_e.template lpNorm<Eigen::Infinity>(),
+                   (c_i - s).template lpNorm<Eigen::Infinity>()});
 }
 
 /// Returns the 1-norm of the KKT condition errors for the interior-point
@@ -228,9 +226,7 @@ Scalar kkt_error_one_norm(const IPMIterates<Scalar>& iterates,
                           const IPMFunctionValues<Scalar>& function_values,
                           const IPMFirstDerivatives<Scalar>& first_derivatives,
                           Scalar sqrt_μ, Scalar μ_target) {
-  using std::abs;
-
-  const auto& [x, y, v] = iterates;
+  const auto& [x, y, u, v] = iterates;
   const auto& [f, c_e, c_i] = function_values;
   const auto& [g, A_e, A_i] = first_derivatives;
 
@@ -243,19 +239,16 @@ Scalar kkt_error_one_norm(const IPMIterates<Scalar>& iterates,
   //
   // where
   //
-  //   s = √(μ)e⁻ᵛ
+  //   s = √(μ)e⁻ᵘ
   //   z = √(μ)eᵛ
-  //
-  // The log-domain parameterization satisfies Sz = μe exactly, so the
-  // complementarity error relative to μ_target is |μ − μ_target|.
 
-  const Eigen::VectorX<Scalar> s = sqrt_μ * (-v).array().exp().matrix();
+  const Eigen::VectorX<Scalar> s = sqrt_μ * (-u).array().exp().matrix();
   const Eigen::VectorX<Scalar> z = sqrt_μ * v.array().exp().matrix();
 
   return (g - A_e.transpose() * y - A_i.transpose() * z)
              .toDense()
              .template lpNorm<1>() +
-         Scalar(z.rows()) * abs(sqrt_μ * sqrt_μ - μ_target) +
+         (s.cwiseProduct(z).array() - μ_target).matrix().template lpNorm<1>() +
          c_e.template lpNorm<1>() + (c_i - s).template lpNorm<1>();
 }
 
@@ -362,15 +355,16 @@ Scalar unscaled_kkt_error_inf_norm(
   //   sᵤ = D_cᵢ⁻¹s
   //   zᵤ = D_cᵢz/d_f
   //
-  // so sᵤzᵤ = μ/d_f. Matching sᵤ = √(μᵤ)exp(−vᵤ) and zᵤ = √(μᵤ)exp(vᵤ) gives
+  // Matching sᵤ = √(μᵤ)exp(−uᵤ) and zᵤ = √(μᵤ)exp(vᵤ) gives
   //
   //   √(μᵤ) = √(μ/d_f)
+  //   uᵤ = u + ln(D_cᵢ) − ½ln(d_f)
   //   vᵤ = v + ln(D_cᵢ) − ½ln(d_f)
+  const DenseVector log_shift =
+      (scaling.c_i.array().log() - Scalar(0.5) * log(scaling.f)).matrix();
   const IPMIterates<Scalar> iterates_unscaled{
       iterates.x, scaling.c_e.cwiseProduct(iterates.y) * inv_d_f,
-      (iterates.v.array() + scaling.c_i.array().log() -
-       Scalar(0.5) * log(scaling.f))
-          .matrix()};
+      iterates.u + log_shift, iterates.v + log_shift};
   const Scalar sqrt_μ_unscaled = sqrt_μ * sqrt(inv_d_f);
 
   const Scalar μ_target_unscaled = μ_target * inv_d_f;

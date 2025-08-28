@@ -141,7 +141,7 @@ ExitStatus newton(
 
     // Call iteration callbacks
     for (const auto& callback : iteration_callbacks) {
-      if (callback({iterations, x, {}, {}, g, H, {}, {}}) ==
+      if (callback({iterations, x, {}, {}, {}, g, H, {}, {}}) ==
           ControlFlow::BREAK) {
         return ExitStatus::CALLBACK_REQUESTED_STOP;
       }

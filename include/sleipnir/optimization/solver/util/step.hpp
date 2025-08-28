@@ -118,7 +118,9 @@ struct IPMStep {
   DenseVector p_x;
   /// Equality constraint dual step.
   DenseVector p_y;
-  /// Log-domain variable step.
+  /// Log-domain slack variable step.
+  DenseVector p_u;
+  /// Log-domain dual variable step.
   DenseVector p_v;
 
   /// Returns the infinity norm of the primal step.
@@ -144,7 +146,7 @@ struct IPMStep {
   /// @return The step size below which the primal step is negligible relative
   ///     to the iterate.
   Scalar tiny_step_size(const DenseVector& x, const DenseVector& s) const {
-    // The slack variables take a linear step in s-space with pˢ = −s∘pᵛ. A
+    // The slack variables take a linear step in s-space with pˢ = −s∘pᵘ. A
     // primal step α[pˣ pˢ] is negligible if
     //
     //   max(‖αpˣ/(1 + |x|)‖_∞, ‖αpˢ/(1 + |s|)‖_∞) < 10ε
@@ -162,7 +164,7 @@ struct IPMStep {
                (p_x.array().abs() / (Scalar(1) + x.array().abs()))
                    .matrix()
                    .template lpNorm<Eigen::Infinity>(),
-               ((s.array() * p_v.array()).abs() / (Scalar(1) + s.array().abs()))
+               ((s.array() * p_u.array()).abs() / (Scalar(1) + s.array().abs()))
                    .matrix()
                    .template lpNorm<Eigen::Infinity>());
   }

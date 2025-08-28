@@ -88,6 +88,7 @@ ExitStatus ipm(
   IPMIterates<Scalar> iterates{
       .x = std::move(x),
       .y = DenseVector::Zero(matrix_callbacks.num_equality_constraints),
+      .u = DenseVector::Zero(matrix_callbacks.num_inequality_constraints),
       .v = DenseVector::Zero(matrix_callbacks.num_inequality_constraints)};
   Scalar sqrt_μ = Scalar(0.1) * matrix_callbacks.scaling.f;
   int iterations = 0;
@@ -151,7 +152,7 @@ ExitStatus ipm(
   using std::isfinite;
   using std::sqrt;
 
-  auto& [x, y, v] = iterates;
+  auto& [x, y, u, v] = iterates;
 
   const auto solve_start_time = std::chrono::steady_clock::now();
 
@@ -210,7 +211,7 @@ ExitStatus ipm(
   slp_assert(A_i.cols() == matrices.num_decision_variables);
 
   IPMIterates<Scalar> trial_iterates;
-  auto& [trial_x, trial_y, trial_v] = trial_iterates;
+  auto& [trial_x, trial_y, trial_u, trial_v] = trial_iterates;
 
   IPMFunctionValues<Scalar> trial_function_values;
   auto& [trial_f, trial_c_e, trial_c_i] = trial_function_values;
@@ -237,21 +238,21 @@ ExitStatus ipm(
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
   // We set sʲ = cᵢʲ(x) for each bound inequality constraint index j
   //
-  //   cᵢ − √(μ)e⁻ᵛ = 0
-  //   √(μ)e⁻ᵛ = cᵢ
-  //   e⁻ᵛ = 1/√(μ) cᵢ
-  //   −v = ln(1/√(μ) cᵢ)
-  //   v = −ln(1/√(μ) cᵢ)
-  v = bound_constraint_mask.select(
-      -(c_i * (Scalar(1) / sqrt_μ_min)).array().log().matrix(), v);
+  //   cᵢ − √(μ)e⁻ᵘ = 0
+  //   √(μ)e⁻ᵘ = cᵢ
+  //   e⁻ᵘ = 1/√(μ) cᵢ
+  //   −u = ln(1/√(μ) cᵢ)
+  //   u = −ln(1/√(μ) cᵢ)
+  u = bound_constraint_mask.select(
+      -(c_i * (Scalar(1) / sqrt_μ_min)).array().log().matrix(), u);
 #endif
 
+  // eᵘ
+  DenseVector exp_u{u.array().exp().matrix()};
   // eᵛ
   DenseVector exp_v{v.array().exp().matrix()};
-  // e⁻ᵛ
-  DenseVector exp_neg_v = exp_v.cwiseInverse();
-  // s = √(μ)e⁻ᵛ
-  DenseVector s = sqrt_μ * exp_neg_v;
+  // s = √(μ)e⁻ᵘ
+  DenseVector s = sqrt_μ * exp_u.cwiseInverse();
 
   Filter<Scalar> filter{constraint_violation(c_e, c_i, s)};
 
@@ -268,7 +269,7 @@ ExitStatus ipm(
   auto build_and_factorize_kkt_matrix = [&]() -> bool {
     PhaseTimeTracer phase_tracer{diagnostics[KKT_MATRIX_BUILD]};
 
-    kkt_system.build(H, A_e, A_i, exp_v);
+    kkt_system.build(H, A_e, A_i, exp_u, exp_v);
 
     phase_tracer.next(diagnostics[KKT_MATRIX_FACTOR]);
 
@@ -280,30 +281,76 @@ ExitStatus ipm(
     return kkt_system.solve(g, A_e, A_i, y, r, c_e, c_i);
   };
 
-  // The slack variables s = √(μ)e⁻ᵛ take a linear step in s-space,
+  // The slack variables s = √(μ)e⁻ᵘ take a linear step in s-space,
   //
-  //   pˢ = −s∘pᵛ
-  //   s⁺ = s + αpˢ = s∘(e − αpᵛ)
-  //   v⁺ = v − ln(e − αpᵛ)
+  //   pˢ = −s∘pᵘ
+  //   s⁺ = s + αpˢ = s∘(e − αpᵘ)
+  //   u⁺ = u − ln(e − αpᵘ)
   //
-  // rather than the exponential step s∘exp(−αpᵛ). The linear step matches the
+  // rather than the exponential step s∘exp(−αpᵘ). The linear step matches the
   // Newton linearization, so cᵢ − s decreases by exactly (1 − α) per step for
   // linear constraints instead of being thrown off by the overshoot of the
   // exponential.
   //
   // Fraction-to-the-boundary rule for the slack step. Slacks only approach the
-  // boundary where pᵛ > 0, so
+  // boundary where pᵘ > 0, so
   //
   //   αᵐᵃˣ = max(α ∈ (0, 1] : s + αpˢ ≥ (1−τ)s)
-  //        = min(1, τ/max(pᵛ))
+  //        = min(1, τ/max(pᵘ))
   constexpr Scalar τ(0.995);
-  auto max_step_size = [&](const DenseVector& p_v) -> Scalar {
-    const Scalar p_v_max = p_v.size() > 0 ? p_v.maxCoeff() : Scalar(0);
-    return p_v_max > Scalar(0) ? std::min(Scalar(1), τ / p_v_max) : Scalar(1);
+  auto max_step_size = [&](const DenseVector& p_u) -> Scalar {
+    const Scalar p_u_max = p_u.size() > 0 ? p_u.maxCoeff() : Scalar(0);
+    return p_u_max > Scalar(0) ? std::min(Scalar(1), τ / p_u_max) : Scalar(1);
   };
-  auto step_v = [&](const DenseVector& p_v, Scalar α) -> DenseVector {
-    // v⁺ = v − ln(e − αpᵛ)
-    return v - (-α * p_v).array().log1p().matrix();
+  auto step_u = [&](const DenseVector& p_u, Scalar α) -> DenseVector {
+    // u⁺ = u − ln(e − αpᵘ)
+    return u - (-α * p_u).array().log1p().matrix();
+  };
+
+  // The dual variables z = √(μ)eᵛ take a step whose size depends on the
+  // problem type.
+  //
+  // For quadratic models, v takes an additive step with the step size rule of
+  // [3]
+  //
+  //   αᵛ = min(1, 1/|pᵛ|_∞²)
+  //   v⁺ = v + αᵛpᵛ
+  //
+  // The barrier parameter update keeps |pᵛ|_∞ ≤ 1 for these, so the full step
+  // is usually taken.
+  //
+  // For nonlinear models, |pᵛ|_∞ can be orders of magnitude larger than 1
+  // (e.g., after the slacks are reset), which makes that rule stall the duals
+  // and complementarity. Instead, take a linear step in z-space, which matches
+  // the Newton linearization of z,
+  //
+  //   pᶻ = z∘pᵛ
+  //   z⁺ = z + αᵛpᶻ = z∘(e + αᵛpᵛ)
+  //   v⁺ = v + ln(e + αᵛpᵛ)
+  //
+  // with a fraction-to-the-boundary rule for the dual step. Duals only approach
+  // the boundary where pᵛ < 0, so
+  //
+  //   αᵛ = max(α ∈ (0, 1] : z + αpᶻ ≥ (1−τ)z)
+  //      = min(1, τ/max(−pᵛ))
+  auto max_dual_step_size = [&](const DenseVector& p_v) -> Scalar {
+    if (is_nlp) {
+      const Scalar p_v_min = p_v.size() > 0 ? p_v.minCoeff() : Scalar(0);
+      return p_v_min < Scalar(0) ? std::min(Scalar(1), τ / -p_v_min)
+                                 : Scalar(1);
+    } else {
+      const Scalar p_v_infnorm = p_v.template lpNorm<Eigen::Infinity>();
+      return std::min(Scalar(1), Scalar(1) / (p_v_infnorm * p_v_infnorm));
+    }
+  };
+  auto step_v = [&](const DenseVector& p_v, Scalar α_v) -> DenseVector {
+    if (is_nlp) {
+      // v⁺ = v + ln(e + αᵛpᵛ)
+      return v + (α_v * p_v).array().log1p().matrix();
+    } else {
+      // v⁺ = v + αᵛpᵛ
+      return v + α_v * p_v;
+    }
   };
 
   // Initializes the barrier parameter for the current iterate.
@@ -430,6 +477,7 @@ ExitStatus ipm(
       matrices.scaling, iterates, function_values, first_derivatives, sqrt_μ,
       Scalar(0), options.tolerance);
 
+  Scalar prev_p_u_infnorm = std::numeric_limits<Scalar>::infinity();
   Scalar prev_p_v_infnorm = std::numeric_limits<Scalar>::infinity();
   bool μ_initialized = false;
 
@@ -461,7 +509,7 @@ ExitStatus ipm(
 
     // Call iteration callbacks
     for (const auto& callback : iteration_callbacks) {
-      if (callback({iterations, x, y, v, g, H, A_e, A_i}) ==
+      if (callback({iterations, x, y, u, v, g, H, A_e, A_i}) ==
           ControlFlow::BREAK) {
         return ExitStatus::CALLBACK_REQUESTED_STOP;
       }
@@ -475,7 +523,7 @@ ExitStatus ipm(
 
     // Update the barrier parameter if necessary
     const Scalar prev_sqrt_μ = sqrt_μ;
-    bool v_reset = false;
+    bool u_reset = false;
     if (!μ_initialized) {
       init_barrier_parameter();
       μ_initialized = true;
@@ -486,13 +534,18 @@ ExitStatus ipm(
         // first Newton steps have to close a large residual cᵢ − s, which
         // produces large dual steps and Hessian regularization.
         //
+        // Start the duals with perfect complementarity, z = μS⁻¹e. Otherwise,
+        // eᵘ⁻ᵛ and thus pᵛ are large for small slacks.
+        //
         //   s = max(cᵢ, κ)
-        //   v = −ln(s/√(μ))
+        //   u = −ln(s/√(μ))
+        //   v = u
         constexpr Scalar κ(1e-2);
-        v = -(c_i.cwiseMax(κ) / sqrt_μ).array().log().matrix();
-        exp_v = v.array().exp().matrix();
-        exp_neg_v = exp_v.cwiseInverse();
-        v_reset = true;
+        u = -(c_i.cwiseMax(κ) / sqrt_μ).array().log().matrix();
+        v = u;
+        exp_u = u.array().exp().matrix();
+        exp_v = exp_u;
+        u_reset = true;
       }
     } else if (is_nlp) {
       Scalar E_μ = kkt_error_inf_norm<Scalar>(
@@ -502,15 +555,15 @@ ExitStatus ipm(
         ScopedTimeTracer μ_update_tracer{diagnostics[BARRIER_PARAMETER_UPDATE]};
         update_barrier_parameter();
       }
-    } else if (prev_p_v_infnorm <= Scalar(1)) {
+    } else if (prev_p_u_infnorm <= Scalar(1) && prev_p_v_infnorm <= Scalar(1)) {
       ScopedTimeTracer μ_update_tracer{diagnostics[BARRIER_PARAMETER_UPDATE]};
       update_barrier_parameter();
     }
 
     // Update expressions dependent on √(μ)
-    if (sqrt_μ != prev_sqrt_μ || v_reset) {
-      // s = √(μ)e⁻ᵛ
-      s = sqrt_μ * exp_neg_v;
+    if (sqrt_μ != prev_sqrt_μ || u_reset) {
+      // s = √(μ)e⁻ᵘ
+      s = sqrt_μ * exp_u.cwiseInverse();
 
       // When the inequality constraints are nonlinear, the Lagrangian Hessian
       // depends on μ through z = √(μ)eᵛ
@@ -520,7 +573,7 @@ ExitStatus ipm(
 
       // The Newton-KKT matrix depends on the Lagrangian Hessian, which was just
       // updated
-      if ((is_nlp || v_reset) && !build_and_factorize_kkt_matrix())
+      if ((is_nlp || u_reset) && !build_and_factorize_kkt_matrix())
           [[unlikely]] {
         return ExitStatus::FACTORIZATION_FAILED;
       }
@@ -533,30 +586,34 @@ ExitStatus ipm(
 
     phase_tracer.next(diagnostics[LINE_SEARCH]);
 
-    // The slack variables s = √(μ)e⁻ᵛ are part of the primal step, so x and v
+    // The slack variables s = √(μ)e⁻ᵘ are part of the primal step, so x and u
     // share a step size, capped by the fraction-to-the-boundary rule for the
     // slack step.
-    Scalar p_v_infnorm = step.p_v.template lpNorm<Eigen::Infinity>();
-    const Scalar α_max = max_step_size(step.p_v);
+    Scalar p_u_infnorm = step.p_u.template lpNorm<Eigen::Infinity>();
+    const Scalar α_max = max_step_size(step.p_u);
     Scalar α = α_max;
 
     bool call_feasibility_restoration = false;
 
+    prev_p_u_infnorm = p_u_infnorm;
+
+    Scalar p_v_infnorm = step.p_v.template lpNorm<Eigen::Infinity>();
+    const Scalar α_v = max_dual_step_size(step.p_v);
     prev_p_v_infnorm = p_v_infnorm;
 
-    const FilterEntry<Scalar> current_entry{v, function_values, sqrt_μ};
+    const FilterEntry<Scalar> current_entry{u, function_values, sqrt_μ};
 
     // Compute the directional derivative of the log-barrier function along the
     // search direction.
     //
-    //   ϕ_μ(x, v) = f(x) − μ∑ᵢ ln(sᵢ)
-    //             = f(x) − μ∑ᵢ ln(√(μ)e⁻ᵛⁱ)
-    //             = f(x) + μ∑ᵢ vᵢ − μ∑ᵢ ln(√(μ))
+    //   ϕ_μ(x, u) = f(x) − μ∑ᵢ ln(sᵢ)
+    //             = f(x) − μ∑ᵢ ln(√(μ)e⁻ᵘⁱ)
+    //             = f(x) + μ∑ᵢ uᵢ − μ∑ᵢ ln(√(μ))
     //
-    //   D_ϕ = ∇ϕ_μ(x, v)ᵀ[pˣ pᵛ]
-    //       = ∇f(x)ᵀpˣ + μ∑ᵢ pᵢᵛ
+    //   D_ϕ = ∇ϕ_μ(x, u)ᵀ[pˣ pᵘ]
+    //       = ∇f(x)ᵀpˣ + μ∑ᵢ pᵢᵘ
     const Scalar D_ϕ =
-        g.transpose() * step.p_x + sqrt_μ * sqrt_μ * step.p_v.sum();
+        g.transpose() * step.p_x + sqrt_μ * sqrt_μ * step.p_u.sum();
 
     const Scalar α_min = filter.min_step_size(current_entry, D_ϕ);
 
@@ -574,7 +631,8 @@ ExitStatus ipm(
     while (!call_feasibility_restoration) {
       trial_x = x + α * step.p_x;
       trial_y = y + α * step.p_y;
-      trial_v = step_v(step.p_v, α);
+      trial_u = step_u(step.p_u, α);
+      trial_v = step_v(step.p_v, α_v);
       trial_c_i = matrices.c_i(trial_x);
       trial_f = matrices.f(trial_x);
       trial_c_e = matrices.c_e(trial_x);
@@ -604,19 +662,19 @@ ExitStatus ipm(
         // Set the slack variables to the constraint values, which makes the
         // inequality constraint residual zero.
         //
-        //   cᵢ − √(μ)e⁻ᵛ = 0
-        //   √(μ)e⁻ᵛ = cᵢ
-        //   e⁻ᵛ = 1/√(μ) cᵢ
-        //   −v = ln(1/√(μ) cᵢ)
-        //   v = −ln(1/√(μ) cᵢ)
+        //   cᵢ − √(μ)e⁻ᵘ = 0
+        //   √(μ)e⁻ᵘ = cᵢ
+        //   e⁻ᵘ = 1/√(μ) cᵢ
+        //   −u = ln(1/√(μ) cᵢ)
+        //   u = −ln(1/√(μ) cᵢ)
         trial_s = trial_c_i;
-        trial_v = -(trial_c_i * (Scalar(1) / sqrt_μ)).array().log().matrix();
+        trial_u = -(trial_c_i * (Scalar(1) / sqrt_μ)).array().log().matrix();
       } else {
-        trial_s = sqrt_μ * (-trial_v).array().exp().matrix();
+        trial_s = sqrt_μ * (-trial_u).array().exp().matrix();
       }
 
       // Check whether filter accepts trial iterate
-      FilterEntry trial_entry{trial_v, trial_function_values, sqrt_μ};
+      FilterEntry trial_entry{trial_u, trial_function_values, sqrt_μ};
       if (filter.try_add(current_entry, trial_entry, D_ϕ, α)) {
         // Accept step
         watchdog_count = 0;
@@ -637,6 +695,7 @@ ExitStatus ipm(
         auto soc_step = step;
 
         Scalar α_soc = α_max;
+        Scalar α_v_soc = α_v;
         DenseVector c_e_soc = c_e;
         DenseVector c_i_minus_s_soc = c_i - s;
 
@@ -669,25 +728,28 @@ ExitStatus ipm(
           //
           //   cₑˢᵒᶜ = αˢᵒᶜcₑ(xₖ) + cₑ(xₖ + αˢᵒᶜpˣ)
           //   (cᵢ − s)ˢᵒᶜ =
-          //     αˢᵒᶜ(cᵢ(xₖ) − sₖ) + cᵢ(xₖ + αˢᵒᶜpˣ) − sₖ(αˢᵒᶜpᵛ)
+          //     αˢᵒᶜ(cᵢ(xₖ) − sₖ) + cᵢ(xₖ + αˢᵒᶜpˣ) − sₖ(αˢᵒᶜpᵘ)
           c_e_soc = α_soc * c_e_soc + trial_c_e;
           c_i_minus_s_soc = α_soc * c_i_minus_s_soc + trial_c_i - trial_s;
           soc_step = kkt_system.solve_soc(g, A_e, A_i, y, sqrt_μ, c_e_soc,
                                           c_i_minus_s_soc);
 
-          α_soc = max_step_size(soc_step.p_v);
+          α_soc = max_step_size(soc_step.p_u);
+
+          α_v_soc = max_dual_step_size(soc_step.p_v);
 
           trial_x = x + α_soc * soc_step.p_x;
           trial_y = y + α_soc * soc_step.p_y;
-          trial_v = step_v(soc_step.p_v, α_soc);
-          trial_s = sqrt_μ * (-trial_v).array().exp().matrix();
+          trial_u = step_u(soc_step.p_u, α_soc);
+          trial_v = step_v(soc_step.p_v, α_v_soc);
+          trial_s = sqrt_μ * (-trial_u).array().exp().matrix();
 
           trial_f = matrices.f(trial_x);
           trial_c_e = matrices.c_e(trial_x);
           trial_c_i = matrices.c_i(trial_x);
 
           // Check whether filter accepts trial iterate
-          FilterEntry trial_entry{trial_v, trial_function_values, sqrt_μ};
+          FilterEntry trial_entry{trial_u, trial_function_values, sqrt_μ};
           if (filter.try_add(current_entry, trial_entry, D_ϕ, α)) {
             step = soc_step;
             α = α_max;
@@ -741,8 +803,9 @@ ExitStatus ipm(
 
         trial_x = x + α_max * step.p_x;
         trial_y = y + α_max * step.p_y;
-        trial_v = step_v(step.p_v, α_max);
-        trial_s = sqrt_μ * (-trial_v).array().exp().matrix();
+        trial_u = step_u(step.p_u, α_max);
+        trial_v = step_v(step.p_v, α_v);
+        trial_s = sqrt_μ * (-trial_u).array().exp().matrix();
 
         trial_f = matrices.f(trial_x);
         trial_c_e = matrices.c_e(trial_x);
@@ -785,7 +848,7 @@ ExitStatus ipm(
 
     // If solver stalled, invoke feasibility restoration
     if (!call_feasibility_restoration && !in_feasibility_restoration) {
-      FilterEntry trial_entry{trial_v, trial_function_values, sqrt_μ};
+      FilterEntry trial_entry{trial_u, trial_function_values, sqrt_μ};
       if (stall_detector.update(current_entry, trial_entry, α,
                                 filter.min_constraint_violation)) {
         call_feasibility_restoration = true;
@@ -801,7 +864,7 @@ ExitStatus ipm(
         return ExitStatus::FEASIBILITY_RESTORATION_FAILED;
       }
 
-      FilterEntry initial_entry{v, function_values, sqrt_μ};
+      FilterEntry initial_entry{u, function_values, sqrt_μ};
 
       // Square root of the feasibility restoration barrier parameter, which
       // feasibility restoration updates in place
@@ -831,15 +894,15 @@ ExitStatus ipm(
         DenseVector trial_x =
             info.x.segment(0, matrices.num_decision_variables);
 
-        // The feasibility restoration log-domain variables are relative to its
-        // barrier parameter, so convert them to the normal solve's barrier
-        // parameter such that the slack variables are preserved.
+        // The feasibility restoration log-domain slack variables are relative
+        // to its barrier parameter, so convert them to the normal solve's
+        // barrier parameter such that the slack variables are preserved.
         //
-        //   √(μ)e⁻ᵛ = √(fr_μ)exp(−fr_v)
-        //   v = fr_v − ln(√(fr_μ)/√(μ))
+        //   √(μ)e⁻ᵘ = √(fr_μ)exp(−fr_u)
+        //   u = fr_u − ln(√(fr_μ)/√(μ))
         using std::log;
-        DenseVector trial_v =
-            (info.v.segment(0, matrices.num_inequality_constraints).array() -
+        DenseVector trial_u =
+            (info.u.segment(0, matrices.num_inequality_constraints).array() -
              log(fr_sqrt_μ / sqrt_μ))
                 .matrix();
 
@@ -849,17 +912,17 @@ ExitStatus ipm(
         // Feasibility restoration re-centers the slacks when it returns, so
         // check the iterate the normal phase will resume from.
         //
-        //   s = √(μ)e⁻ᵛ
-        //   v = ln(√(μ)/s)
+        //   s = √(μ)e⁻ᵘ
+        //   u = ln(√(μ)/s)
         DenseVector trial_s =
             (trial_function_values.c_i.array() >= Scalar(1e-2))
                 .select(trial_function_values.c_i,
-                        sqrt_μ * (-trial_v).array().exp().matrix());
-        trial_v = (sqrt_μ / trial_s.array()).log().matrix();
+                        sqrt_μ * (-trial_u).array().exp().matrix());
+        trial_u = (sqrt_μ / trial_s.array()).log().matrix();
 
         // If the current iterate sufficiently reduces constraint violation and
         // is accepted by the normal filter, stop feasibility restoration
-        FilterEntry trial_entry{trial_v, trial_function_values, sqrt_μ};
+        FilterEntry trial_entry{trial_u, trial_function_values, sqrt_μ};
         if (trial_entry.constraint_violation <
                 Scalar(0.9) * initial_entry.constraint_violation &&
             filter.is_acceptable(trial_entry)) {
@@ -890,7 +953,7 @@ ExitStatus ipm(
       // stops at its own convergence tolerance instead of driving constraint
       // violation to zero, so the filter can still hold entries with lower cost
       // and constraint violation.
-      if (!filter.is_acceptable(FilterEntry{v, function_values, sqrt_μ})) {
+      if (!filter.is_acceptable(FilterEntry{u, function_values, sqrt_μ})) {
         return ExitStatus::FEASIBILITY_RESTORATION_FAILED;
       }
     } else {
@@ -904,9 +967,9 @@ ExitStatus ipm(
       function_values = trial_function_values;
     }
 
+    exp_u = u.array().exp().matrix();
     exp_v = v.array().exp().matrix();
-    exp_neg_v = exp_v.cwiseInverse();
-    s = sqrt_μ * exp_neg_v;
+    s = sqrt_μ * exp_u.cwiseInverse();
 
     // Update autodiff for Jacobians and Hessian
     A_e = matrices.A_e(x);
