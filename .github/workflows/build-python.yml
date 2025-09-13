@@ -25,6 +25,10 @@ jobs:
             os: windows-2022
             version: "3.13"
             cmake-env:
+          - name: Windows x86_64
+            os: windows-2022
+            version: "3.14-dev"
+            cmake-env:
           - name: Linux x86_64
             os: ubuntu-24.04
             version: "3.11"
@@ -37,6 +41,10 @@ jobs:
             os: ubuntu-24.04
             version: "3.13"
             cmake-env:
+          - name: Linux x86_64
+            os: ubuntu-24.04
+            version: "3.14-dev"
+            cmake-env:
           - name: Linux aarch64
             os: ubuntu-24.04-arm
             version: "3.11"
@@ -48,6 +56,10 @@ jobs:
           - name: Linux aarch64
             os: ubuntu-24.04-arm
             version: "3.13"
+            cmake-env:
+          - name: Linux aarch64
+            os: ubuntu-24.04-arm
+            version: "3.14-dev"
             cmake-env:
           - name: macOS universal
             os: macOS-14
@@ -60,6 +72,10 @@ jobs:
           - name: macOS universal
             os: macOS-14
             version: "3.13"
+            cmake-env: _PYTHON_HOST_PLATFORM=macosx_14_0_universal2 ARCHFLAGS="-arch x86_64 -arch arm64" MACOSX_DEPLOYMENT_TARGET=14.0
+          - name: macOS universal
+            os: macOS-14
+            version: "3.14-dev"
             cmake-env: _PYTHON_HOST_PLATFORM=macosx_14_0_universal2 ARCHFLAGS="-arch x86_64 -arch arm64" MACOSX_DEPLOYMENT_TARGET=14.0
 
     name: ${{ matrix.version }} ${{ matrix.name }} wheel
@@ -107,7 +123,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: 3.13
+          python-version: 3.14-dev
 
       - run: python3 ./tools/update_version.py
       - run: pip3 install build
