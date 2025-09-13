@@ -3,7 +3,7 @@ name = "sleipnirgroup-jormungandr"
 description = "A linearity-exploiting sparse nonlinear constrained optimization problem solver that uses the interior-point method."
 version = "0.1.1.dev3"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [ "matplotlib", "numpy", "scipy" ]
 
   [project.license]
@@ -17,7 +17,6 @@ requires = [
   "nanobind",
   "py-build-cmake~=0.4.3",
   "pybind11-mkdoc",
-  "typing_extensions; python_version < '3.11'"
 ]
 build-backend = "py_build_cmake.build"
 

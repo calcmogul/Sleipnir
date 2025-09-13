@@ -160,7 +160,7 @@ See the [examples](https://github.com/SleipnirGroup/Sleipnir/tree/main/examples)
   * On Windows, install from the link above
   * On Linux, install via `sudo apt install cmake`
   * On macOS, install via `brew install cmake`
-* [Python](https://www.python.org/downloads/) 3.10 or greater
+* [Python](https://www.python.org/downloads/) 3.11 or greater
   * On Windows, install from the link above
   * On Linux, install via `sudo apt install python`
   * On macOS, install via `brew install python`
