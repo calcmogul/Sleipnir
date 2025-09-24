@@ -52,7 +52,7 @@ class ExpressionTape {
   ///     allocated.
   ExpressionTape(std::span<Expression<Scalar>* const> roots, int max_order)
       : m_max_order{max_order}, m_roots{roots.begin(), roots.end()} {
-    slp_assert(max_order >= 0 && max_order <= 1);
+    slp_assert(max_order >= 0 && max_order <= 2);
 
     m_top_list = topological_sort(roots);
 
@@ -85,8 +85,12 @@ class ExpressionTape {
     // The branch predictor learns its conditional branches from the recent
     // operator sequence, and that history also lets it predict the virtual
     // op() calls. Without it, they mispredict about three times per node.
+    uint32_t num_second_partials = 0;
     m_ops.reserve(m_num_non_leaves);
     m_first_partials.reserve(m_num_non_leaves + 1);
+    if (max_order >= 2) {
+      m_first_second_partials.reserve(m_num_non_leaves);
+    }
     m_args.reserve(2 * m_num_non_leaves);
     for (size_t i = 0; i < m_num_non_leaves; ++i) {
       auto op = m_top_list[i]->op();
@@ -95,6 +99,10 @@ class ExpressionTape {
       visit_op<Scalar>(op, [&, i]<typename T>() {
         for (const auto& arg : static_cast<const T&>(*m_top_list[i]).args) {
           m_args.emplace_back(arg->scratch);
+        }
+        if (max_order >= 2) {
+          m_first_second_partials.emplace_back(num_second_partials);
+          num_second_partials += NUM_VARYING_SECOND_PARTIALS<T>;
         }
       });
     }
@@ -108,6 +116,7 @@ class ExpressionTape {
     if (max_order >= 1) {
       m_partials.resize(m_args.size());
     }
+    m_second_partials.resize(num_second_partials);
   }
 
   /// Returns the highest order of partial derivatives update_values() can be
@@ -170,6 +179,18 @@ class ExpressionTape {
   /// @return The index of the node's first partial derivative.
   uint32_t first_partial(size_t idx) const { return m_first_partials[idx]; }
 
+  /// Returns the index of ∂²ϕᵢ/∂a₀∂a₀ in second_partials(). ∂²ϕᵢ/∂aⱼ∂aₖ with
+  /// j ≥ k is at index first_second_partial(idx) + j(j + 1)/2 + k.
+  ///
+  /// Only meaningful if max_order() is 2 and the node's operator has varying
+  /// second partial derivatives (see NUM_VARYING_SECOND_PARTIALS).
+  ///
+  /// @param idx The node's index in top_list(). Must be a non-leaf.
+  /// @return The index of the node's first second partial derivative.
+  uint32_t first_second_partial(size_t idx) const {
+    return m_first_second_partials[idx];
+  }
+
   /// Returns the non-leaf nodes's partial derivatives from the last
   /// update_values() call with ORDER ≥ 1, followed by extra_partials().
   /// Structurally zero partial derivatives are zero.
@@ -205,6 +226,13 @@ class ExpressionTape {
             m_partials.size() - m_args.size()};
   }
 
+  /// Returns the non-leaf nodes's second partial derivatives from the last
+  /// update_values<2>() call. Structurally zero second partial derivatives
+  /// are zero. Constant ones (see HAS_CONSTANT_SECOND_PARTIALS) aren't stored.
+  ///
+  /// @return The non-leaf nodes's second partial derivatives.
+  std::span<const Scalar> second_partials() const { return m_second_partials; }
+
   /// Evaluates each node's value and each non-leaf node's partial derivatives
   /// up to the given order from the leaves's current values.
   ///
@@ -212,10 +240,10 @@ class ExpressionTape {
   /// nodes, which are left unmodified.
   ///
   /// @tparam ORDER The highest order of partial derivatives to evaluate: 0 for
-  ///     only values, or 1 for partial derivatives. Must be at most
-  ///     max_order().
+  ///     only values, 1 for partial derivatives, or 2 for second partial
+  ///     derivatives too. Must be at most max_order().
   template <int ORDER>
-    requires(ORDER >= 0 && ORDER <= 1)
+    requires(ORDER >= 0 && ORDER <= 2)
   void update_values() {
     slp_assert(ORDER <= m_max_order);
 
@@ -247,6 +275,17 @@ class ExpressionTape {
           op_grad<T>(expr, x, val, g);
           for (size_t k = 0; k < T::NUM_ARGS; ++k) {
             m_partials[first_partial + k] = g[k];
+          }
+        }
+
+        if constexpr (ORDER >= 2 && NUM_VARYING_SECOND_PARTIALS<T> > 0) {
+          std::array<std::array<Scalar, T::NUM_ARGS>, T::NUM_ARGS> H{};
+          op_hess<T>(expr, x, val, H);
+          Scalar* h = &m_second_partials[m_first_second_partials[i]];
+          for (size_t j = 0; j < T::NUM_ARGS; ++j) {
+            for (size_t k = 0; k <= j; ++k) {
+              *h++ = H[j][k];
+            }
           }
         }
       });
@@ -283,6 +322,11 @@ class ExpressionTape {
   /// list index and followed by m_args's size.
   gch::small_vector<uint32_t> m_first_partials;
 
+  /// Each non-leaf node's first second partial derivative's index in
+  /// m_second_partials, indexed by topological list index. Empty unless
+  /// m_max_order is 2.
+  gch::small_vector<uint32_t> m_first_second_partials;
+
   /// Each node's value, indexed by topological list index.
   gch::small_vector<Scalar> m_values;
 
@@ -290,6 +334,11 @@ class ExpressionTape {
   /// laid out like m_args, followed by the extra elements (see
   /// resize_extra_partials()). Empty if m_max_order is 0.
   gch::small_vector<Scalar> m_partials;
+
+  /// Each non-leaf node's second partial derivatives with respect to its
+  /// arguments (lower triangle, row-major), except constant ones. Empty unless
+  /// m_max_order is 2.
+  gch::small_vector<Scalar> m_second_partials;
 };
 
 }  // namespace slp::detail

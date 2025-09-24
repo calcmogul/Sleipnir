@@ -2,13 +2,14 @@
 
 #pragma once
 
-#include <cstddef>
 #include <utility>
 
 #include <Eigen/Core>
 #include <Eigen/SparseCore>
 #include <gch/small_vector.hpp>
 
+#include "sleipnir/autodiff/adjoint_tape.hpp"
+#include "sleipnir/autodiff/edge_pushing_program.hpp"
 #include "sleipnir/autodiff/expression.hpp"
 #include "sleipnir/autodiff/expression_graph.hpp"
 #include "sleipnir/autodiff/variable.hpp"
@@ -23,9 +24,10 @@ namespace slp {
 /// This class calculates the Hessian of a variable with respect to a vector of
 /// variables.
 ///
-/// The gradient tree is cached so subsequent Hessian calculations are faster,
-/// and the Hessian is only recomputed if the variable expression is nonlinear
-/// or its quadratic coefficients depend on parameters.
+/// The Hessian is computed with edge pushing. The pushes are recorded once on
+/// construction, then replayed with new values on each call to value() (see
+/// detail::EdgePushingProgram) if the variable expression is nonlinear or its
+/// quadratic coefficients depend on parameters.
 ///
 /// @tparam Scalar Scalar type.
 /// @tparam UpLo Which part of the Hessian to compute (Lower or Lower | Upper).
@@ -47,56 +49,26 @@ class Hessian {
   /// @param wrt Vector of variables with respect to which to compute the
   ///     Hessian.
   Hessian(Variable<Scalar> variable, SleipnirMatrixLike<Scalar> auto wrt)
-      : m_variables{detail::gradient_tree(
-            detail::topological_sort(variable.expr), wrt)},
-        m_wrt{std::move(wrt)} {
+      : m_variable{std::move(variable)}, m_wrt{std::move(wrt)} {
     slp_assert(m_wrt.cols() == 1);
 
-    for (auto& variable : m_variables) {
-      m_top_lists.emplace_back(detail::topological_sort(variable.expr));
+    gch::small_vector<detail::Expression<Scalar>*> roots{m_variable.expr.get()};
+    gch::small_vector<detail::Expression<Scalar>*> wrt_exprs;
+    for (auto& elem : m_wrt) {
+      wrt_exprs.emplace_back(elem.expr.get());
     }
+    m_tape = detail::AdjointTape<Scalar>{roots, wrt_exprs, 2};
 
-    // Initialize column each expression's adjoint occupies in the Jacobian
-    for (size_t col = 0; col < m_wrt.size(); ++col) {
-      m_wrt[col].expr->scratch = col;
-    }
+    slp_assert(m_tape.nodes().empty() ||
+               m_tape.top_list()[m_tape.nodes()[0].idx] ==
+                   m_variable.expr.get());
+    m_program = detail::EdgePushingProgram<Scalar, UpLo>{m_tape, m_wrt.rows()};
 
-    // Make list of only nodes in output row, and their output columns
-    for (auto& top_list : m_top_lists) {
-      m_output_lists.emplace_back();
-      for (const auto& node : top_list) {
-        if (node->scratch != -1) {
-          m_output_lists.back().emplace_back(node->scratch, node);
-        }
-      }
-    }
-
-    // Reset col to -1
-    for (auto& node : m_wrt) {
-      node.expr->scratch = -1;
-    }
-
-    for (int row = 0; row < m_variables.rows(); ++row) {
-      if (m_variables[row].expr == nullptr) {
-        continue;
-      }
-
-      if (detail::has_constant_gradient(m_top_lists[row])) {
-        // If the row's gradient is constant, compute it once here and cache
-        // its triplets
-        detail::append_triplets(m_top_lists[row], m_output_lists[row],
-                                m_cached_triplets, row);
-      } else {
-        // Otherwise, add it to the list of rows to be recomputed in value()
-        m_nonlinear_rows.emplace_back(row);
-      }
-    }
-
-    if (m_nonlinear_rows.empty()) {
-      m_H.setFromTriplets(m_cached_triplets.begin(), m_cached_triplets.end());
-      if constexpr (UpLo == Eigen::Lower) {
-        m_H = m_H.template triangularView<Eigen::Lower>();
-      }
+    m_is_constant =
+        detail::has_constant_hessian(detail::topological_sort(m_variable.expr));
+    if (m_is_constant) {
+      m_tape.template update_values<2>();
+      m_program.compute(m_tape);
     }
   }
 
@@ -107,15 +79,25 @@ class Hessian {
   ///
   /// @return The Hessian as a VariableMatrix.
   VariableMatrix<Scalar> get() const {
-    VariableMatrix<Scalar> result{detail::empty, m_variables.rows(),
-                                  m_wrt.rows()};
+    VariableMatrix<Scalar> result{detail::empty, m_wrt.rows(), m_wrt.rows()};
 
-    for (int row = 0; row < m_variables.rows(); ++row) {
-      auto grad = detail::gradient_tree(m_top_lists[row], m_wrt);
-      for (int col = 0; col < m_wrt.rows(); ++col) {
-        if (grad[col].expr != nullptr) {
-          result[row, col] = std::move(grad[col]);
-        } else {
+    // The program's nonzeros are laid out like value()'s
+    auto values = m_program.symbolic_values(m_tape);
+    const auto& pattern = m_program.value();
+    slp_assert(pattern.isCompressed());
+    for (int col = 0; col < pattern.outerSize(); ++col) {
+      for (int idx = pattern.outerIndexPtr()[col];
+           idx < pattern.outerIndexPtr()[col + 1]; ++idx) {
+        result[pattern.innerIndexPtr()[idx], col] =
+            Variable{std::move(values[idx])};
+      }
+    }
+
+    // The program only has entries that aren't structurally zero
+    for (int row = 0; row < m_wrt.rows(); ++row) {
+      const int num_cols = UpLo == Eigen::Lower ? row + 1 : m_wrt.rows();
+      for (int col = 0; col < num_cols; ++col) {
+        if (result[row, col].expr == nullptr) {
           result[row, col] = Variable{Scalar(0)};
         }
       }
@@ -128,52 +110,23 @@ class Hessian {
   ///
   /// @return The Hessian at wrt's value.
   const Eigen::SparseMatrix<Scalar>& value() {
-    if (m_nonlinear_rows.empty()) {
-      return m_H;
+    if (!m_is_constant) {
+      m_tape.template update_values<2>();
+      m_program.compute(m_tape);
     }
 
-    for (auto& top_list : m_top_lists) {
-      detail::update_values(top_list);
-    }
-
-    // Copy the cached triplets so triplets added for the nonlinear rows are
-    // thrown away at the end of the function
-    auto triplets = m_cached_triplets;
-
-    // Compute each nonlinear row of the Hessian
-    for (int row : m_nonlinear_rows) {
-      detail::append_triplets(m_top_lists[row], m_output_lists[row], triplets,
-                              row);
-    }
-
-    m_H.setFromTriplets(triplets.begin(), triplets.end());
-    if constexpr (UpLo == Eigen::Lower) {
-      m_H = m_H.template triangularView<Eigen::Lower>();
-    }
-
-    return m_H;
+    return m_program.value();
   }
 
  private:
-  VariableMatrix<Scalar> m_variables;
+  Variable<Scalar> m_variable;
   VariableMatrix<Scalar> m_wrt;
 
-  /// List of topologically sorted graphs from parent to child, one for each row
-  gch::small_vector<detail::ExpressionGraph<Scalar>> m_top_lists;
+  detail::AdjointTape<Scalar> m_tape;
+  detail::EdgePushingProgram<Scalar, UpLo> m_program;
 
-  /// List of output rows as column-node pairs
-  gch::small_vector<
-      gch::small_vector<std::pair<int, detail::Expression<Scalar>*>>>
-      m_output_lists;
-
-  Eigen::SparseMatrix<Scalar> m_H{m_variables.rows(), m_wrt.rows()};
-
-  // Cached triplets for gradients of linear rows
-  gch::small_vector<Eigen::Triplet<Scalar>> m_cached_triplets;
-
-  // List of row indices for nonlinear rows and linear rows with parameters
-  // whose gradients will be computed in value()
-  gch::small_vector<int> m_nonlinear_rows;
+  /// Whether the Hessian is the same at every value of wrt and the parameters
+  bool m_is_constant;
 };
 
 // @cond Suppress Doxygen

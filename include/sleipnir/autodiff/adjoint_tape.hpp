@@ -90,6 +90,12 @@ class AdjointTape {
     /// argument. ∂ϕᵢ/∂aₖ is at index first_partial + k.
     uint32_t first_partial;
 
+    /// The index of ∂²ϕᵢ/∂a₀∂a₀ in second_partials(). ∂²ϕᵢ/∂aⱼ∂aₖ with j ≥ k
+    /// is at index first_second_partial + j(j + 1)/2 + k. Only meaningful if
+    /// the tape was constructed with a max_order of 2 and the node's second
+    /// partial derivatives aren't constant (see HAS_CONSTANT_SECOND_PARTIALS).
+    uint32_t first_second_partial;
+
     /// The number of arguments. children() returns this many children.
     uint32_t num_args;
 
@@ -109,9 +115,13 @@ class AdjointTape {
   /// @param roots The roots whose adjoints to record. Null and constant roots
   ///     are skipped.
   /// @param wrt The variables with respect to which to record adjoints.
+  /// @param max_order The highest order of partial derivatives
+  ///     update_values() will be called with: 1 for partial derivatives or 2
+  ///     for second partial derivatives too.
   AdjointTape(std::span<Expression<Scalar>* const> roots,
-              std::span<Expression<Scalar>* const> wrt)
-      : m_exprs{roots, 1} {
+              std::span<Expression<Scalar>* const> wrt, int max_order = 1)
+      : m_exprs{roots, max_order} {
+    slp_assert(max_order >= 1);
     Recorder{*this, wrt}.record();
   }
 
@@ -169,10 +179,26 @@ class AdjointTape {
   /// @return The non-leaf nodes's partial derivatives.
   std::span<const Scalar> partials() const { return m_exprs.partials(); }
 
-  /// Evaluates each non-leaf node's partial derivatives from the leaves's
-  /// current values.
+  /// Returns the non-leaf nodes's second partial derivatives from the last
+  /// update_values<2>() call. Node::first_second_partial says where a
+  /// node's are. Structurally zero second partial derivatives are zero.
+  /// Constant ones (see HAS_CONSTANT_SECOND_PARTIALS) aren't stored.
+  ///
+  /// @return The non-leaf nodes's second partial derivatives.
+  std::span<const Scalar> second_partials() const {
+    return m_exprs.second_partials();
+  }
+
+  /// Evaluates each non-leaf node's partial derivatives up to the given order
+  /// from the leaves's current values.
+  ///
+  /// @tparam ORDER The highest order of partial derivatives to evaluate: 1 for
+  ///     partial derivatives (needed by replay()), or 2 for second partial
+  ///     derivatives too. Must be at most the constructor's max_order.
+  template <int ORDER = 1>
+    requires(ORDER >= 1 && ORDER <= 2)
   void update_values() {
-    m_exprs.template update_values<1>();
+    m_exprs.template update_values<ORDER>();
 
     const Scalar* partials = m_exprs.partials().data();
     Scalar* negated = m_exprs.extra_partials().data();
@@ -230,6 +256,35 @@ class AdjointTape {
           -partials[m_negated_partials[idx]];
     }
     return partials;
+  }
+
+  /// Returns the second partial derivatives of the nodes that propagate
+  /// adjoints as expressions, laid out like second_partials().
+  ///
+  /// Structurally zero second partial derivatives are null. Constant ones
+  /// aren't stored, like second_partials().
+  ///
+  /// @return The second partial derivatives as expressions.
+  gch::small_vector<ExpressionPtr<Scalar>> symbolic_second_partials() const {
+    gch::small_vector<ExpressionPtr<Scalar>> second_partials(
+        m_exprs.second_partials().size());
+    for (const auto& node : m_nodes) {
+      visit_op<Scalar>(node.expr->op(), [&]<typename T>() {
+        if constexpr (NUM_VARYING_SECOND_PARTIALS<T> > 0) {
+          std::array<std::array<ExpressionPtr<Scalar>, MAX_ARGS<Scalar>>,
+                     MAX_ARGS<Scalar>>
+              H;
+          hess_expr(node.expr, H);
+          auto h = second_partials.begin() + node.first_second_partial;
+          for (size_t j = 0; j < T::NUM_ARGS; ++j) {
+            for (size_t k = 0; k <= j; ++k) {
+              *h++ = std::move(H[j][k]);
+            }
+          }
+        }
+      });
+    }
+    return second_partials;
   }
 
   /// Computes the adjoints as expressions, like replay() does with values.
@@ -750,6 +805,7 @@ class AdjointTape {
     /// Records the tape's nodes and each recorded node's instruction.
     void record_instructions() {
       const auto& top_list = m_exprs.top_list();
+      const bool has_second_partials = m_exprs.max_order() >= 2;
 
       for (size_t i = 0; i < m_num_nodes; ++i) {
         const auto state = m_states[i];
@@ -768,6 +824,7 @@ class AdjointTape {
         slp_assert(state == NodeState::RECORDED || num_instructions > 0);
         m_tape.m_nodes.push_back(
             {top_list[i], static_cast<uint32_t>(i), m_exprs.first_partial(i),
+             has_second_partials ? m_exprs.first_second_partial(i) : 0,
              static_cast<uint32_t>(node_children.size()),
              state == NodeState::ELIMINATED ? num_instructions - 1
                                             : num_instructions});
