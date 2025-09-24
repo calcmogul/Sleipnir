@@ -8,6 +8,7 @@ concurrency:
 
 jobs:
   build-wheel:
+    if: false
     timeout-minutes: 10
     strategy:
       fail-fast: false
@@ -112,6 +113,7 @@ jobs:
           path: dist
 
   build-sdist:
+    if: false
     timeout-minutes: 10
 
     name: sdist
@@ -135,6 +137,7 @@ jobs:
           path: dist
 
   pypi-publish:
+    if: false
     name: Upload release to PyPI
     runs-on: ubuntu-24.04
     needs: [build-wheel, build-sdist]

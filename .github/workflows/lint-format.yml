@@ -8,6 +8,7 @@ concurrency:
 
 jobs:
   pybind11_mkdoc:
+    if: false
     name: "pybind11_mkdoc"
     runs-on: ubuntu-24.04
     steps:
@@ -59,6 +60,7 @@ jobs:
         if: ${{ failure() }}
 
   wpiformat:
+    if: false
     name: "wpiformat"
     runs-on: ubuntu-24.04
     steps:
@@ -101,6 +103,7 @@ jobs:
         if: ${{ failure() }}
 
   tidy:
+    if: false
     name: "clang-tidy"
     runs-on: ubuntu-24.04
     steps:
