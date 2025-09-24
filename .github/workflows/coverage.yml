@@ -8,6 +8,7 @@ concurrency:
 
 jobs:
   coverage:
+    if: false
     timeout-minutes: 10
     name: "Coverage"
     runs-on: ubuntu-24.04

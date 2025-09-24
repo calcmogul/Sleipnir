@@ -193,13 +193,9 @@ Returns:
 
 static const char *__doc_slp_Hessian_m_H = R"doc()doc";
 
-static const char *__doc_slp_Hessian_m_cached_triplets = R"doc()doc";
+static const char *__doc_slp_Hessian_m_graph = R"doc()doc";
 
-static const char *__doc_slp_Hessian_m_graphs = R"doc()doc";
-
-static const char *__doc_slp_Hessian_m_nonlinear_rows = R"doc()doc";
-
-static const char *__doc_slp_Hessian_m_variables = R"doc()doc";
+static const char *__doc_slp_Hessian_m_variable = R"doc()doc";
 
 static const char *__doc_slp_Hessian_m_wrt = R"doc()doc";
 
