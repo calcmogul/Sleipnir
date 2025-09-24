@@ -86,8 +86,8 @@ class Jacobian {
         // If the row is linear, compute its gradient once here and cache its
         // triplets. Constant rows are ignored because their gradients have no
         // nonzero triplets.
-        detail::append_triplets(m_top_lists[row], m_output_lists[row],
-                                m_cached_triplets, row);
+        append_triplets(m_top_lists[row], m_output_lists[row],
+                        m_cached_triplets, row);
       } else if (m_variables[row].type() > ExpressionType::LINEAR) {
         // If the row is quadratic or nonlinear, add it to the list of nonlinear
         // rows to be recomputed in value().
@@ -111,7 +111,7 @@ class Jacobian {
                                   m_wrt.rows()};
 
     for (int row = 0; row < m_variables.rows(); ++row) {
-      auto grad = detail::gradient_tree(m_top_lists[row], m_wrt);
+      auto grad = gradient_tree(m_top_lists[row]);
       for (int col = 0; col < m_wrt.rows(); ++col) {
         if (grad[col].expr != nullptr) {
           result[row, col] = std::move(grad[col]);
@@ -142,8 +142,7 @@ class Jacobian {
 
     // Compute each nonlinear row of the Jacobian
     for (int row : m_nonlinear_rows) {
-      detail::append_triplets(m_top_lists[row], m_output_lists[row], triplets,
-                              row);
+      append_triplets(m_top_lists[row], m_output_lists[row], triplets, row);
     }
 
     m_J.setFromTriplets(triplets.begin(), triplets.end());
@@ -171,6 +170,121 @@ class Jacobian {
   /// List of row indices for nonlinear rows whose graients will be computed in
   /// value()
   gch::small_vector<int> m_nonlinear_rows;
+
+  /// Returns the variable's gradient tree.
+  ///
+  /// This function lazily allocates variables, so elements of the returned
+  /// VariableMatrix will be empty if the corresponding element of wrt had no
+  /// adjoint. Ensure Variable::expr isn't nullptr before calling member
+  /// functions.
+  ///
+  /// @param top_list Topologically sorted graph from parent to child.
+  /// @param wrt Variables with respect to which to compute the gradient.
+  /// @return The variable's gradient tree.
+  VariableMatrix<Scalar> gradient_tree(
+      const detail::ExpressionGraph<Scalar>& top_list) const {
+    slp_assert(m_wrt.cols() == 1);
+
+    // Read docs/algorithms.md#Reverse_accumulation_automatic_differentiation
+    // for background on reverse accumulation automatic differentiation.
+
+    if (top_list.empty()) {
+      return VariableMatrix<Scalar>{detail::empty, m_wrt.rows(), 1};
+    }
+
+    // Set root node's adjoint to 1 since df/df is 1
+    top_list[0]->adjoint_expr = detail::constant_ptr(Scalar(1));
+
+    // df/dx = (df/dy)(dy/dx). The adjoint of x is equal to the adjoint of y
+    // multiplied by dy/dx. If there are multiple "paths" from the root node to
+    // variable; the variable's adjoint is the sum of each path's adjoint
+    // contribution.
+    for (auto& node : top_list) {
+      auto& lhs = node->args[0];
+      auto& rhs = node->args[1];
+
+      if (lhs != nullptr) {
+        if (rhs != nullptr) {
+          // Binary operator
+          lhs->adjoint_expr += node->grad_expr_l(lhs, rhs);
+          rhs->adjoint_expr += node->grad_expr_r(lhs, rhs);
+        } else {
+          // Unary operator
+          lhs->adjoint_expr += node->grad_expr_l(lhs, rhs);
+        }
+      }
+    }
+
+    // Move gradient tree to return value
+    VariableMatrix<Scalar> grad{detail::empty, m_wrt.rows(), 1};
+    for (int row = 0; row < grad.rows(); ++row) {
+      grad[row] = Variable{std::move(m_wrt[row].expr->adjoint_expr)};
+    }
+
+    // Unlink adjoints to avoid circular references between them and their
+    // parent expressions. This ensures all expressions are returned to the free
+    // list.
+    for (auto& node : top_list) {
+      node->adjoint_expr = nullptr;
+    }
+
+    return grad;
+  }
+
+  /// Updates the adjoints in the expression graph (computes the gradient) then
+  /// appends the adjoints of wrt to the sparse matrix triplets.
+  ///
+  /// @param top_list Topologically sorted graph from parent to child.
+  /// @param output_list Output row as column-node pairs.
+  /// @param triplets The sparse matrix triplets.
+  /// @param row The row of wrt.
+  static void append_triplets(
+      const detail::ExpressionGraph<Scalar>& top_list,
+      const gch::small_vector<std::pair<int, detail::Expression<Scalar>*>>&
+          output_list,
+      gch::small_vector<Eigen::Triplet<Scalar>>& triplets, int row) {
+    // Read docs/algorithms.md#Reverse_accumulation_automatic_differentiation
+    // for background on reverse accumulation automatic differentiation.
+
+    if (top_list.empty()) {
+      return;
+    }
+
+    // Set root node's adjoint to 1 since df/df is 1
+    top_list[0]->adjoint = Scalar(1);
+
+    // Zero the rest of the adjoints
+    for (auto& node : top_list | std::views::drop(1)) {
+      node->adjoint = Scalar(0);
+    }
+
+    // df/dx = (df/dy)(dy/dx). The adjoint of x is equal to the adjoint of y
+    // multiplied by dy/dx. If there are multiple "paths" from the root node to
+    // variable; the variable's adjoint is the sum of each path's adjoint
+    // contribution.
+    for (const auto& node : top_list) {
+      auto& lhs = node->args[0];
+      auto& rhs = node->args[1];
+
+      if (lhs != nullptr) {
+        if (rhs != nullptr) {
+          // Binary operator
+          lhs->adjoint += node->grad_l(lhs->val, rhs->val);
+          rhs->adjoint += node->grad_r(lhs->val, rhs->val);
+        } else {
+          // Unary operator
+          lhs->adjoint += node->grad_l(lhs->val, Scalar(0));
+        }
+      }
+    }
+
+    // Exploit the row's sparsity pattern by only appending wrt adjoints that
+    // appear in the expression graph
+    for (const auto& [col, node] : output_list) {
+      // Append adjoints of wrt to sparse matrix triplets
+      triplets.emplace_back(row, col, node->adjoint);
+    }
+  }
 };
 
 extern template class EXPORT_TEMPLATE_DECLARE(SLEIPNIR_DLLEXPORT)

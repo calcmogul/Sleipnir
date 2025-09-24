@@ -277,6 +277,16 @@ Parameter ``variable``:
 Parameter ``wrt``:
     Vector of variables with respect to which to compute the Hessian.)doc";
 
+static const char *__doc_slp_Hessian_append_triplets =
+R"doc(Updates the adjoints in the expression graph (computes the Hessian)
+then appends the adjoints of wrt to the sparse matrix triplets.
+
+Parameter ``triplets``:
+    The sparse matrix triplets.
+
+Parameter ``wrt``:
+    Vector of variables with respect to which to compute the Hessian.)doc";
+
 static const char *__doc_slp_Hessian_get =
 R"doc(Returns the Hessian as a VariableMatrix.
 
@@ -286,19 +296,29 @@ derivatives in them.
 Returns:
     The Hessian as a VariableMatrix.)doc";
 
+static const char *__doc_slp_Hessian_hessian_tree =
+R"doc(Returns the variable's Hessian tree.
+
+This function lazily allocates variables, so elements of the returned
+VariableMatrix will be empty if the corresponding element of wrt had
+no adjoint. Ensure Variable::expr isn't nullptr before calling member
+functions.
+
+Parameter ``wrt``:
+    Variables with respect to which to compute the Hessian.
+
+Returns:
+    The variable's Hessian tree.)doc";
+
 static const char *__doc_slp_Hessian_m_H = R"doc()doc";
 
-static const char *__doc_slp_Hessian_m_cached_triplets = R"doc()doc";
+static const char *__doc_slp_Hessian_m_col_list = R"doc(List that maps nodes to their respective column)doc";
 
-static const char *__doc_slp_Hessian_m_nonlinear_rows = R"doc()doc";
+static const char *__doc_slp_Hessian_m_top_list = R"doc(Topological sort of graph from parent to child)doc";
 
-static const char *__doc_slp_Hessian_m_output_lists = R"doc(List of output rows as column-node pairs)doc";
+static const char *__doc_slp_Hessian_m_top_list_end = R"doc(Index after dependent variables)doc";
 
-static const char *__doc_slp_Hessian_m_top_lists =
-R"doc(List of topologically sorted graphs from parent to child, one for each
-row)doc";
-
-static const char *__doc_slp_Hessian_m_variables = R"doc()doc";
+static const char *__doc_slp_Hessian_m_variable = R"doc()doc";
 
 static const char *__doc_slp_Hessian_m_wrt = R"doc()doc";
 
@@ -410,6 +430,22 @@ Parameter ``variables``:
 Parameter ``wrt``:
     Vector of variables with respect to which to compute the Jacobian.)doc";
 
+static const char *__doc_slp_Jacobian_append_triplets =
+R"doc(Updates the adjoints in the expression graph (computes the gradient)
+then appends the adjoints of wrt to the sparse matrix triplets.
+
+Parameter ``top_list``:
+    Topologically sorted graph from parent to child.
+
+Parameter ``output_list``:
+    Output row as column-node pairs.
+
+Parameter ``triplets``:
+    The sparse matrix triplets.
+
+Parameter ``row``:
+    The row of wrt.)doc";
+
 static const char *__doc_slp_Jacobian_get =
 R"doc(Returns the Jacobian as a VariableMatrix.
 
@@ -418,6 +454,23 @@ derivatives in them.
 
 Returns:
     The Jacobian as a VariableMatrix.)doc";
+
+static const char *__doc_slp_Jacobian_gradient_tree =
+R"doc(Returns the variable's gradient tree.
+
+This function lazily allocates variables, so elements of the returned
+VariableMatrix will be empty if the corresponding element of wrt had
+no adjoint. Ensure Variable::expr isn't nullptr before calling member
+functions.
+
+Parameter ``top_list``:
+    Topologically sorted graph from parent to child.
+
+Parameter ``wrt``:
+    Variables with respect to which to compute the gradient.
+
+Returns:
+    The variable's gradient tree.)doc";
 
 static const char *__doc_slp_Jacobian_m_J = R"doc()doc";
 
@@ -1549,9 +1602,7 @@ R"doc(Returns the contents of the variable matrix.
 Returns:
     The contents of the variable matrix.)doc";
 
-static const char *__doc_slp_VariableMatrix = R"doc()doc";
-
-static const char *__doc_slp_VariableMatrix_2 =
+static const char *__doc_slp_VariableMatrix =
 R"doc(A matrix of autodiff variables.
 
 Template parameter ``Scalar_``:
@@ -2440,28 +2491,6 @@ Parameter ``rhs``:
 
 Parameter ``binary_op``:
     The binary operator to use for the reduce operation.)doc";
-
-static const char *__doc_slp_detail_gradient_tree = R"doc()doc";
-
-static const char *__doc_slp_detail_gradient_tree_2 =
-R"doc(Returns the variable's gradient tree.
-
-This function lazily allocates variables, so elements of the returned
-VariableMatrix will be empty if the corresponding element of wrt had
-no adjoint. Ensure Variable::expr isn't nullptr before calling member
-functions.
-
-Template parameter ``Scalar``:
-    Scalar type.
-
-Parameter ``top_list``:
-    Topologically sorted graph from parent to child.
-
-Parameter ``wrt``:
-    Variables with respect to which to compute the gradient.
-
-Returns:
-    The variable's gradient tree.)doc";
 
 static const char *__doc_slp_erf =
 R"doc(erf() for Variables.
