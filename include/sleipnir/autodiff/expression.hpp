@@ -9,12 +9,14 @@
 #include <cmath>
 #include <memory>
 #include <numbers>
+#include <optional>
 #include <string_view>
 #include <utility>
 
 #include <gch/small_vector.hpp>
 
 #include "sleipnir/autodiff/expression_type.hpp"
+#include "sleipnir/util/flat_map.hpp"
 #include "sleipnir/util/intrusive_shared_ptr.hpp"
 #include "sleipnir/util/pool.hpp"
 
@@ -96,9 +98,23 @@ struct Expression {
   /// The adjoint of the expression node, used during autodiff.
   Scalar adjoint{0};
 
+  /// The Hessian of the expression node's row, used during autodiff.
+  ///
+  /// Maps column index to value.
+  flat_map<size_t, Scalar> hessian;
+
+  /// This expression's index in the topological list.
+  size_t idx = 0;
+
   /// The adjoint of the expression node, used during gradient expression tree
   /// generation.
   ExpressionPtr<Scalar> adjoint_expr;
+
+  /// The Hessian of the expression node's row, used during Hessian expression
+  /// tree generation.
+  ///
+  /// Maps column index to value.
+  flat_map<size_t, ExpressionPtr<Scalar>> hessian_expr;
 
   /// Expression arguments.
   std::array<ExpressionPtr<Scalar>, 2> args{nullptr, nullptr};
@@ -118,7 +134,7 @@ struct Expression {
   uint32_t ref_count = 0;
 
   /// Constructs a constant expression with a value of zero.
-  constexpr Expression() = default;
+  Expression() = default;
 
   /// Constructs a nullary expression (an operator with no arguments).
   ///
@@ -416,6 +432,69 @@ struct Expression {
       [[maybe_unused]] const ExpressionPtr<Scalar>& rhs) const {
     return constant_ptr(Scalar(0));
   }
+
+  /// Returns ∂²/∂l² as a Scalar.
+  ///
+  /// @param lhs Left argument to binary operator.
+  /// @param rhs Right argument to binary operator.
+  /// @return ∂²/∂l² as a Scalar, or empty optional if it's structurally zero.
+  virtual std::optional<Scalar> hess_ll([[maybe_unused]] Scalar lhs,
+                                        [[maybe_unused]] Scalar rhs) const {
+    return std::nullopt;
+  }
+
+  /// Returns ∂²/∂l∂r as a Scalar. This is equivalent to ∂²/∂r∂l.
+  ///
+  /// @param lhs Left argument to binary operator.
+  /// @param rhs Right argument to binary operator.
+  /// @return ∂²/∂l∂r as a Scalar, or empty optional if it's structurally zero.
+  virtual std::optional<Scalar> hess_lr([[maybe_unused]] Scalar lhs,
+                                        [[maybe_unused]] Scalar rhs) const {
+    return std::nullopt;
+  }
+
+  /// Returns ∂²/∂r² as a Scalar.
+  ///
+  /// @param lhs Left argument to binary operator.
+  /// @param rhs Right argument to binary operator.
+  /// @return ∂²/∂r² as a Scalar, or empty optional if it's structurally zero.
+  virtual std::optional<Scalar> hess_rr([[maybe_unused]] Scalar lhs,
+                                        [[maybe_unused]] Scalar rhs) const {
+    return std::nullopt;
+  }
+
+  /// Returns ∂²/∂l² as an Expression.
+  ///
+  /// @param lhs Left argument to binary operator.
+  /// @param rhs Right argument to binary operator.
+  /// @return ∂²/∂l² as an Expression.
+  virtual ExpressionPtr<Scalar> hess_expr_ll(
+      [[maybe_unused]] const ExpressionPtr<Scalar>& lhs,
+      [[maybe_unused]] const ExpressionPtr<Scalar>& rhs) const {
+    return constant_ptr(Scalar(0));
+  }
+
+  /// Returns ∂²/∂l∂r as an Expression. This is equivalent to ∂²/∂r∂l.
+  ///
+  /// @param lhs Left argument to binary operator.
+  /// @param rhs Right argument to binary operator.
+  /// @return ∂²/∂l∂r as an Expression.
+  virtual ExpressionPtr<Scalar> hess_expr_lr(
+      [[maybe_unused]] const ExpressionPtr<Scalar>& lhs,
+      [[maybe_unused]] const ExpressionPtr<Scalar>& rhs) const {
+    return constant_ptr(Scalar(0));
+  }
+
+  /// Returns ∂²/∂r² as an Expression.
+  ///
+  /// @param lhs Left argument to binary operator.
+  /// @param rhs Right argument to binary operator.
+  /// @return ∂²/∂r² as an Expression.
+  virtual ExpressionPtr<Scalar> hess_expr_rr(
+      [[maybe_unused]] const ExpressionPtr<Scalar>& lhs,
+      [[maybe_unused]] const ExpressionPtr<Scalar>& rhs) const {
+    return constant_ptr(Scalar(0));
+  }
 };
 
 template <typename Scalar>
@@ -424,17 +503,25 @@ ExpressionPtr<Scalar> constant_ptr(Scalar value) {
 }
 
 template <typename Scalar>
-ExpressionPtr<Scalar> cbrt(const ExpressionPtr<Scalar>& x);
+inline ExpressionPtr<Scalar> cbrt(const ExpressionPtr<Scalar>& x);
 template <typename Scalar>
-ExpressionPtr<Scalar> exp(const ExpressionPtr<Scalar>& x);
+inline ExpressionPtr<Scalar> cos(const ExpressionPtr<Scalar>& x);
 template <typename Scalar>
-ExpressionPtr<Scalar> sign(const ExpressionPtr<Scalar>& x);
+inline ExpressionPtr<Scalar> cosh(const ExpressionPtr<Scalar>& x);
 template <typename Scalar>
-ExpressionPtr<Scalar> sin(const ExpressionPtr<Scalar>& x);
+inline ExpressionPtr<Scalar> exp(const ExpressionPtr<Scalar>& x);
 template <typename Scalar>
-ExpressionPtr<Scalar> sinh(const ExpressionPtr<Scalar>& x);
+inline ExpressionPtr<Scalar> sign(const ExpressionPtr<Scalar>& x);
 template <typename Scalar>
-ExpressionPtr<Scalar> sqrt(const ExpressionPtr<Scalar>& x);
+inline ExpressionPtr<Scalar> sin(const ExpressionPtr<Scalar>& x);
+template <typename Scalar>
+inline ExpressionPtr<Scalar> sinh(const ExpressionPtr<Scalar>& x);
+template <typename Scalar>
+inline ExpressionPtr<Scalar> sqrt(const ExpressionPtr<Scalar>& x);
+template <typename Scalar>
+inline ExpressionPtr<Scalar> tan(const ExpressionPtr<Scalar>& x);
+template <typename Scalar>
+inline ExpressionPtr<Scalar> tanh(const ExpressionPtr<Scalar>& x);
 
 /// Derived expression type for binary minus operator.
 ///
@@ -543,6 +630,20 @@ struct CbrtExpression final : Expression<Scalar> {
     auto c = cbrt(x);
     return this->adjoint_expr / (constant_ptr(Scalar(3)) * c * c);
   }
+
+  std::optional<Scalar> hess_ll(Scalar x, Scalar) const override {
+    using std::cbrt;
+    Scalar c = cbrt(x);
+    return this->adjoint * Scalar(-2) / (Scalar(9) * x * c * c);
+  }
+
+  ExpressionPtr<Scalar> hess_expr_ll(
+      const ExpressionPtr<Scalar>& x,
+      const ExpressionPtr<Scalar>&) const override {
+    auto c = cbrt(x);
+    return this->adjoint_expr * constant_ptr(Scalar(-2)) /
+           (constant_ptr(Scalar(9)) * x * c * c);
+  }
 };
 
 /// cbrt() for Expressions.
@@ -593,12 +694,12 @@ struct ConstantExpression final : Expression<Scalar> {
 template <typename Scalar>
 struct DecisionVariableExpression final : Expression<Scalar> {
   /// Constructs a decision variable expression with a value of zero.
-  constexpr DecisionVariableExpression() = default;
+  DecisionVariableExpression() = default;
 
   /// Constructs a nullary expression (an operator with no arguments).
   ///
   /// @param value The expression value.
-  explicit constexpr DecisionVariableExpression(Scalar value)
+  explicit DecisionVariableExpression(Scalar value)
       : Expression<Scalar>{value} {}
 
   Scalar value(Scalar, Scalar) const override { return this->val; }
@@ -618,7 +719,7 @@ struct DivExpression final : Expression<Scalar> {
   ///
   /// @param lhs Binary operator's left operand.
   /// @param rhs Binary operator's right operand.
-  constexpr DivExpression(ExpressionPtr<Scalar> lhs, ExpressionPtr<Scalar> rhs)
+  DivExpression(ExpressionPtr<Scalar> lhs, ExpressionPtr<Scalar> rhs)
       : Expression<Scalar>{std::move(lhs), std::move(rhs)} {}
 
   Scalar value(Scalar lhs, Scalar rhs) const override { return lhs / rhs; }
@@ -646,6 +747,27 @@ struct DivExpression final : Expression<Scalar> {
       const ExpressionPtr<Scalar>& rhs) const override {
     return this->adjoint_expr * -lhs / (rhs * rhs);
   }
+
+  std::optional<Scalar> hess_lr(Scalar, Scalar rhs) const override {
+    return -this->adjoint / (rhs * rhs);
+  };
+
+  std::optional<Scalar> hess_rr(Scalar lhs, Scalar rhs) const override {
+    return this->adjoint * Scalar(2) * lhs / (rhs * rhs * rhs);
+  }
+
+  ExpressionPtr<Scalar> hess_expr_lr(
+      const ExpressionPtr<Scalar>&,
+      const ExpressionPtr<Scalar>& rhs) const override {
+    return -this->adjoint_expr / (rhs * rhs);
+  }
+
+  ExpressionPtr<Scalar> hess_expr_rr(
+      const ExpressionPtr<Scalar>& lhs,
+      const ExpressionPtr<Scalar>& rhs) const override {
+    return this->adjoint_expr * constant_ptr(Scalar(2)) * lhs /
+           (rhs * rhs * rhs);
+  }
 };
 
 /// Derived expression type for binary multiplication operator.
@@ -658,7 +780,7 @@ struct MultExpression final : Expression<Scalar> {
   ///
   /// @param lhs Binary operator's left operand.
   /// @param rhs Binary operator's right operand.
-  constexpr MultExpression(ExpressionPtr<Scalar> lhs, ExpressionPtr<Scalar> rhs)
+  MultExpression(ExpressionPtr<Scalar> lhs, ExpressionPtr<Scalar> rhs)
       : Expression<Scalar>{std::move(lhs), std::move(rhs)} {}
 
   Scalar value(Scalar lhs, Scalar rhs) const override { return lhs * rhs; }
@@ -686,6 +808,17 @@ struct MultExpression final : Expression<Scalar> {
       [[maybe_unused]] const ExpressionPtr<Scalar>& rhs) const override {
     return this->adjoint_expr * lhs;
   }
+
+  std::optional<Scalar> hess_lr([[maybe_unused]] Scalar lhs,
+                                [[maybe_unused]] Scalar rhs) const override {
+    return this->adjoint;
+  }
+
+  ExpressionPtr<Scalar> hess_expr_lr(
+      [[maybe_unused]] const ExpressionPtr<Scalar>& lhs,
+      [[maybe_unused]] const ExpressionPtr<Scalar>& rhs) const override {
+    return this->adjoint_expr;
+  }
 };
 
 /// Derived expression type for unary minus operator.
@@ -697,7 +830,7 @@ struct UnaryMinusExpression final : Expression<Scalar> {
   /// Constructs an unary expression (an operator with one argument).
   ///
   /// @param lhs Unary operator's operand.
-  explicit constexpr UnaryMinusExpression(ExpressionPtr<Scalar> lhs)
+  explicit UnaryMinusExpression(ExpressionPtr<Scalar> lhs)
       : Expression<Scalar>{std::move(lhs)} {}
 
   Scalar value(Scalar lhs, Scalar) const override { return -lhs; }
@@ -746,6 +879,9 @@ constexpr void dec_ref_count(Expression<Scalar>* expr) {
     if (--elem->ref_count == 0) {
       if (elem->adjoint_expr != nullptr) {
         stack.emplace_back(elem->adjoint_expr.get());
+      }
+      for (const auto& [j, h_i_j] : elem->hessian_expr) {
+        stack.emplace_back(h_i_j.get());
       }
       for (auto& arg : elem->args) {
         if (arg != nullptr) {
@@ -856,6 +992,19 @@ struct AcosExpression final : Expression<Scalar> {
       const ExpressionPtr<Scalar>&) const override {
     return -this->adjoint_expr / sqrt(constant_ptr(Scalar(1)) - x * x);
   }
+
+  std::optional<Scalar> hess_ll(Scalar x, Scalar) const override {
+    using std::sqrt;
+    auto s = sqrt(Scalar(1) - x * x);
+    return this->adjoint * -x / (s * s * s);
+  }
+
+  ExpressionPtr<Scalar> hess_expr_ll(
+      const ExpressionPtr<Scalar>& x,
+      const ExpressionPtr<Scalar>&) const override {
+    auto s = sqrt(constant_ptr(Scalar(1)) - x * x);
+    return this->adjoint_expr * -x / (s * s * s);
+  }
 };
 
 /// acos() for Expressions.
@@ -910,6 +1059,19 @@ struct AsinExpression final : Expression<Scalar> {
       const ExpressionPtr<Scalar>&) const override {
     return this->adjoint_expr / sqrt(constant_ptr(Scalar(1)) - x * x);
   }
+
+  std::optional<Scalar> hess_ll(Scalar x, Scalar) const override {
+    using std::sqrt;
+    auto s = sqrt(Scalar(1) - x * x);
+    return this->adjoint * x / (s * s * s);
+  }
+
+  ExpressionPtr<Scalar> hess_expr_ll(
+      const ExpressionPtr<Scalar>& x,
+      const ExpressionPtr<Scalar>&) const override {
+    auto s = sqrt(constant_ptr(Scalar(1)) - x * x);
+    return this->adjoint_expr * x / (s * s * s);
+  }
 };
 
 /// asin() for Expressions.
@@ -963,6 +1125,18 @@ struct AtanExpression final : Expression<Scalar> {
       const ExpressionPtr<Scalar>& x,
       const ExpressionPtr<Scalar>&) const override {
     return this->adjoint_expr / (constant_ptr(Scalar(1)) + x * x);
+  }
+
+  std::optional<Scalar> hess_ll(Scalar x, Scalar) const override {
+    auto t = Scalar(1) + x * x;
+    return this->adjoint * Scalar(-2) * x / (t * t);
+  }
+
+  ExpressionPtr<Scalar> hess_expr_ll(
+      const ExpressionPtr<Scalar>& x,
+      const ExpressionPtr<Scalar>&) const override {
+    auto t = constant_ptr(Scalar(1)) + x * x;
+    return this->adjoint_expr * constant_ptr(Scalar(-2)) * x / (t * t);
   }
 };
 
@@ -1030,6 +1204,50 @@ struct Atan2Expression final : Expression<Scalar> {
       const ExpressionPtr<Scalar>& x) const override {
     return this->adjoint_expr * -y / (y * y + x * x);
   }
+
+  std::optional<Scalar> hess_ll(Scalar y, Scalar x) const override {
+    auto y2 = y * y;
+    auto x2 = x * x;
+    auto d = y2 + x2;
+    return this->adjoint * (y2 - x2) / (d * d);
+  }
+
+  std::optional<Scalar> hess_lr(Scalar y, Scalar x) const override {
+    auto d = y * y + x * x;
+    return this->adjoint * Scalar(-2) * x * y / (d * d);
+  }
+
+  std::optional<Scalar> hess_rr(Scalar y, Scalar x) const override {
+    auto y2 = y * y;
+    auto x2 = x * x;
+    auto d = y2 + x2;
+    return this->adjoint * (y2 - x2) / (d * d);
+  }
+
+  ExpressionPtr<Scalar> hess_expr_ll(
+      const ExpressionPtr<Scalar>& y,
+      const ExpressionPtr<Scalar>& x) const override {
+    auto y2 = y * y;
+    auto x2 = x * x;
+    auto d = y2 + x2;
+    return this->adjoint_expr * (y2 - x2) / (d * d);
+  }
+
+  ExpressionPtr<Scalar> hess_expr_lr(
+      const ExpressionPtr<Scalar>& y,
+      const ExpressionPtr<Scalar>& x) const override {
+    auto d = y * y + x * x;
+    return this->adjoint_expr * constant_ptr(Scalar(-2)) * x * y / (d * d);
+  }
+
+  ExpressionPtr<Scalar> hess_expr_rr(
+      const ExpressionPtr<Scalar>& y,
+      const ExpressionPtr<Scalar>& x) const override {
+    auto y2 = y * y;
+    auto x2 = x * x;
+    auto d = y2 + x2;
+    return this->adjoint_expr * (y2 - x2) / (d * d);
+  }
 };
 
 /// atan2() for Expressions.
@@ -1080,6 +1298,17 @@ struct CosExpression final : Expression<Scalar> {
       const ExpressionPtr<Scalar>& x,
       const ExpressionPtr<Scalar>&) const override {
     return this->adjoint_expr * -sin(x);
+  }
+
+  std::optional<Scalar> hess_ll(Scalar x, Scalar) const override {
+    using std::cos;
+    return this->adjoint * -cos(x);
+  }
+
+  ExpressionPtr<Scalar> hess_expr_ll(
+      const ExpressionPtr<Scalar>& x,
+      const ExpressionPtr<Scalar>&) const override {
+    return this->adjoint_expr * -cos(x);
   }
 };
 
@@ -1134,6 +1363,17 @@ struct CoshExpression final : Expression<Scalar> {
       const ExpressionPtr<Scalar>& x,
       const ExpressionPtr<Scalar>&) const override {
     return this->adjoint_expr * sinh(x);
+  }
+
+  std::optional<Scalar> hess_ll(Scalar x, Scalar) const override {
+    using std::cosh;
+    return this->adjoint * cosh(x);
+  }
+
+  ExpressionPtr<Scalar> hess_expr_ll(
+      const ExpressionPtr<Scalar>& x,
+      const ExpressionPtr<Scalar>&) const override {
+    return this->adjoint_expr * cosh(x);
   }
 };
 
@@ -1190,6 +1430,20 @@ struct ErfExpression final : Expression<Scalar> {
     return this->adjoint_expr *
            constant_ptr(Scalar(2.0 * std::numbers::inv_sqrtpi)) * exp(-x * x);
   }
+
+  std::optional<Scalar> hess_ll(Scalar x, Scalar) const override {
+    using std::exp;
+    return this->adjoint * Scalar(4.0 * std::numbers::inv_sqrtpi) *
+           exp(-x * x) * x;
+  }
+
+  ExpressionPtr<Scalar> hess_expr_ll(
+      const ExpressionPtr<Scalar>& x,
+      const ExpressionPtr<Scalar>&) const override {
+    return this->adjoint_expr *
+           constant_ptr(Scalar(4.0 * std::numbers::inv_sqrtpi)) * exp(-x * x) *
+           x;
+  }
 };
 
 /// erf() for Expressions.
@@ -1241,6 +1495,17 @@ struct ExpExpression final : Expression<Scalar> {
   }
 
   ExpressionPtr<Scalar> grad_expr_l(
+      const ExpressionPtr<Scalar>& x,
+      const ExpressionPtr<Scalar>&) const override {
+    return this->adjoint_expr * exp(x);
+  }
+
+  std::optional<Scalar> hess_ll(Scalar x, Scalar) const override {
+    using std::exp;
+    return this->adjoint * exp(x);
+  }
+
+  ExpressionPtr<Scalar> hess_expr_ll(
       const ExpressionPtr<Scalar>& x,
       const ExpressionPtr<Scalar>&) const override {
     return this->adjoint_expr * exp(x);
@@ -1315,6 +1580,45 @@ struct HypotExpression final : Expression<Scalar> {
       const ExpressionPtr<Scalar>& x,
       const ExpressionPtr<Scalar>& y) const override {
     return this->adjoint_expr * y / hypot(x, y);
+  }
+
+  std::optional<Scalar> hess_ll(Scalar x, Scalar y) const override {
+    using std::hypot;
+    auto h = hypot(x, y);
+    return this->adjoint * y * y / (h * h * h);
+  }
+
+  std::optional<Scalar> hess_lr(Scalar x, Scalar y) const override {
+    using std::hypot;
+    auto h = hypot(x, y);
+    return this->adjoint * -x * y / (h * h * h);
+  }
+
+  std::optional<Scalar> hess_rr(Scalar x, Scalar y) const override {
+    using std::hypot;
+    auto h = hypot(x, y);
+    return this->adjoint * x * x / (h * h * h);
+  }
+
+  ExpressionPtr<Scalar> hess_expr_ll(
+      const ExpressionPtr<Scalar>& x,
+      const ExpressionPtr<Scalar>& y) const override {
+    auto h = hypot(x, y);
+    return this->adjoint_expr * y * y / (h * h * h);
+  }
+
+  ExpressionPtr<Scalar> hess_expr_lr(
+      const ExpressionPtr<Scalar>& x,
+      const ExpressionPtr<Scalar>& y) const override {
+    auto h = hypot(x, y);
+    return this->adjoint_expr * -x * y / (h * h * h);
+  }
+
+  ExpressionPtr<Scalar> hess_expr_rr(
+      const ExpressionPtr<Scalar>& x,
+      const ExpressionPtr<Scalar>& y) const override {
+    auto h = hypot(x, y);
+    return this->adjoint_expr * x * x / (h * h * h);
   }
 };
 
@@ -1437,6 +1741,16 @@ struct LogExpression final : Expression<Scalar> {
       const ExpressionPtr<Scalar>&) const override {
     return this->adjoint_expr / x;
   }
+
+  std::optional<Scalar> hess_ll(Scalar x, Scalar) const override {
+    return -this->adjoint / (x * x);
+  }
+
+  ExpressionPtr<Scalar> hess_expr_ll(
+      const ExpressionPtr<Scalar>& x,
+      const ExpressionPtr<Scalar>&) const override {
+    return -this->adjoint_expr / (x * x);
+  }
 };
 
 /// log() for Expressions.
@@ -1490,6 +1804,17 @@ struct Log10Expression final : Expression<Scalar> {
       const ExpressionPtr<Scalar>& x,
       const ExpressionPtr<Scalar>&) const override {
     return this->adjoint_expr / (constant_ptr(Scalar(std::numbers::ln10)) * x);
+  }
+
+  std::optional<Scalar> hess_ll(Scalar x, Scalar) const override {
+    return -this->adjoint / (Scalar(std::numbers::ln10) * x * x);
+  }
+
+  ExpressionPtr<Scalar> hess_expr_ll(
+      const ExpressionPtr<Scalar>& x,
+      const ExpressionPtr<Scalar>&) const override {
+    return -this->adjoint_expr /
+           (constant_ptr(Scalar(std::numbers::ln10)) * x * x);
   }
 };
 
@@ -1705,6 +2030,51 @@ struct PowExpression final : Expression<Scalar> {
       const ExpressionPtr<Scalar>& power) const override {
     return this->adjoint_expr * pow(base, power) * log(base);
   }
+
+  std::optional<Scalar> hess_ll(Scalar base, Scalar power) const override {
+    using std::pow;
+    return this->adjoint * pow(base, power - Scalar(2)) * (power - Scalar(1)) *
+           power;
+  }
+
+  std::optional<Scalar> hess_lr(Scalar base, Scalar power) const override {
+    using std::log;
+    using std::pow;
+
+    return this->adjoint * pow(base, power - Scalar(1)) *
+           (power * log(base) + Scalar(1));
+  }
+
+  std::optional<Scalar> hess_rr(Scalar base, Scalar power) const override {
+    using std::log;
+    using std::pow;
+
+    auto l = log(base);
+    return this->adjoint * pow(base, power) * l * l;
+  }
+
+  ExpressionPtr<Scalar> hess_expr_ll(
+      const ExpressionPtr<Scalar>& base,
+      const ExpressionPtr<Scalar>& power) const override {
+    return this->adjoint_expr * pow(base, power - constant_ptr(Scalar(2))) *
+           (power - constant_ptr(Scalar(1))) * power;
+  }
+
+  ExpressionPtr<Scalar> hess_expr_lr(
+      const ExpressionPtr<Scalar>& base,
+      const ExpressionPtr<Scalar>& power) const override {
+    auto one = constant_ptr(Scalar(1));
+
+    return this->adjoint_expr * pow(base, power - one) *
+           (power * log(base) + one);
+  }
+
+  ExpressionPtr<Scalar> hess_expr_rr(
+      const ExpressionPtr<Scalar>& base,
+      const ExpressionPtr<Scalar>& power) const override {
+    auto l = log(base);
+    return this->adjoint_expr * pow(base, power) * l * l;
+  }
 };
 
 /// pow() for Expressions.
@@ -1828,6 +2198,17 @@ struct SinExpression final : Expression<Scalar> {
       const ExpressionPtr<Scalar>&) const override {
     return this->adjoint_expr * cos(x);
   }
+
+  std::optional<Scalar> hess_ll(Scalar x, Scalar) const override {
+    using std::sin;
+    return this->adjoint * -sin(x);
+  }
+
+  ExpressionPtr<Scalar> hess_expr_ll(
+      const ExpressionPtr<Scalar>& x,
+      const ExpressionPtr<Scalar>&) const override {
+    return this->adjoint_expr * -sin(x);
+  }
 };
 
 /// sin() for Expressions.
@@ -1883,6 +2264,17 @@ struct SinhExpression final : Expression<Scalar> {
       const ExpressionPtr<Scalar>&) const override {
     return this->adjoint_expr * cosh(x);
   }
+
+  std::optional<Scalar> hess_ll(Scalar x, Scalar) const override {
+    using std::sinh;
+    return this->adjoint * sinh(x);
+  }
+
+  ExpressionPtr<Scalar> hess_expr_ll(
+      const ExpressionPtr<Scalar>& x,
+      const ExpressionPtr<Scalar>&) const override {
+    return this->adjoint_expr * sinh(x);
+  }
 };
 
 /// sinh() for Expressions.
@@ -1937,6 +2329,20 @@ struct SqrtExpression final : Expression<Scalar> {
       const ExpressionPtr<Scalar>& x,
       const ExpressionPtr<Scalar>&) const override {
     return this->adjoint_expr / (constant_ptr(Scalar(2)) * sqrt(x));
+  }
+
+  std::optional<Scalar> hess_ll(Scalar x, Scalar) const override {
+    using std::sqrt;
+
+    auto s = sqrt(x);
+    return -this->adjoint / (Scalar(4) * s * s * s);
+  }
+
+  ExpressionPtr<Scalar> hess_expr_ll(
+      const ExpressionPtr<Scalar>& x,
+      const ExpressionPtr<Scalar>&) const override {
+    auto s = sqrt(x);
+    return -this->adjoint_expr / (constant_ptr(Scalar(4)) * s * s * s);
   }
 };
 
@@ -1997,6 +2403,21 @@ struct TanExpression final : Expression<Scalar> {
     auto c = cos(x);
     return this->adjoint_expr / (c * c);
   }
+
+  std::optional<Scalar> hess_ll(Scalar x, Scalar) const override {
+    using std::cos;
+    using std::tan;
+
+    auto c = cos(x);
+    return this->adjoint * Scalar(2) * tan(x) / (c * c);
+  }
+
+  ExpressionPtr<Scalar> hess_expr_ll(
+      const ExpressionPtr<Scalar>& x,
+      const ExpressionPtr<Scalar>&) const override {
+    auto c = cos(x);
+    return this->adjoint_expr * constant_ptr(Scalar(2)) * tan(x) / (c * c);
+  }
 };
 
 /// tan() for Expressions.
@@ -2054,6 +2475,21 @@ struct TanhExpression final : Expression<Scalar> {
       const ExpressionPtr<Scalar>&) const override {
     auto c = cosh(x);
     return this->adjoint_expr / (c * c);
+  }
+
+  std::optional<Scalar> hess_ll(Scalar x, Scalar) const override {
+    using std::cosh;
+    using std::tanh;
+
+    auto c = cosh(x);
+    return this->adjoint * Scalar(-2) * tanh(x) / (c * c);
+  }
+
+  ExpressionPtr<Scalar> hess_expr_ll(
+      const ExpressionPtr<Scalar>& x,
+      const ExpressionPtr<Scalar>&) const override {
+    auto c = cosh(x);
+    return this->adjoint_expr * constant_ptr(Scalar(-2)) * tanh(x) / (c * c);
   }
 };
 
