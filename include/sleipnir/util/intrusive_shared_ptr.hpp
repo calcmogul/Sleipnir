@@ -177,6 +177,15 @@ class IntrusiveSharedPtr {
   /// @return The internal pointer.
   constexpr T* get() const noexcept { return m_ptr; }
 
+  /// Releases ownership of the internal pointer without decrementing its
+  /// reference count, then sets the internal pointer to nullptr.
+  ///
+  /// @return The internal pointer.
+  [[nodiscard]]
+  constexpr T* release() noexcept {
+    return std::exchange(m_ptr, nullptr);
+  }
+
   /// Returns the object pointed to by the internal pointer.
   ///
   /// @return The object pointed to by the internal pointer.

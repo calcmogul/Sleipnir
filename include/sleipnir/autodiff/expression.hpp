@@ -5,9 +5,11 @@
 #include <stdint.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <memory>
 #include <numbers>
+#include <optional>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -15,6 +17,7 @@
 #include <gch/small_vector.hpp>
 
 #include "sleipnir/autodiff/expression_type.hpp"
+#include "sleipnir/util/flat_map.hpp"
 #include "sleipnir/util/function_ref.hpp"
 #include "sleipnir/util/intrusive_shared_ptr.hpp"
 #include "sleipnir/util/pool.hpp"
@@ -31,6 +34,15 @@ inline constexpr bool USE_POOL_ALLOCATOR = true;
 
 template <typename Scalar>
 struct Expression;
+
+/// The maximum number of arguments an expression can have.
+inline constexpr size_t MAX_ARGS = 4;
+
+/// Array with one element per expression argument in visit_args() order.
+///
+/// @tparam T Element type.
+template <typename T>
+using ArgArray = std::array<T, MAX_ARGS>;
 
 /// Typedef for intrusive shared pointer to Expression.
 ///
@@ -89,9 +101,23 @@ struct Expression {
   /// The adjoint of the expression node, used during autodiff.
   Scalar adj{0};
 
+  /// The Hessian of the expression node's row, used during autodiff.
+  ///
+  /// Maps column index to value.
+  flat_map<size_t, Scalar> hessian;
+
+  /// This expression's index in the topological list.
+  size_t idx = 0;
+
   /// The adjoint of the expression node, used during gradient expression tree
   /// generation.
   ExpressionPtr<Scalar> adj_expr;
+
+  /// The Hessian of the expression node's row, used during Hessian expression
+  /// tree generation.
+  ///
+  /// Maps column index to value.
+  flat_map<size_t, ExpressionPtr<Scalar>> hessian_expr;
 
   /// True if the expression is a leaf node (a nullary expression).
   ///
@@ -368,6 +394,46 @@ struct Expression {
 
   /// Accumulates the child adjoints as Expressions.
   virtual void accumulate_adjoints_expr() const {}
+
+  /// Returns ∂/∂aₖ as a Scalar for each argument aₖ.
+  ///
+  /// Unlike accumulate_adjoints(), the partial derivatives aren't scaled by the
+  /// adjoint.
+  ///
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     empty are structurally zero.
+  virtual void grad([[maybe_unused]] ArgArray<std::optional<Scalar>>& g) const {
+  }
+
+  /// Returns ∂/∂aₖ as an Expression for each argument aₖ.
+  ///
+  /// Unlike accumulate_adjoints_expr(), the partial derivatives aren't scaled
+  /// by the adjoint.
+  ///
+  /// @param g The partial derivatives in visit_args() order. Elements left as
+  ///     nullptr are structurally zero.
+  virtual void grad_expr(
+      [[maybe_unused]] ArgArray<ExpressionPtr<Scalar>>& g) const {}
+
+  /// Returns ∂²/∂aⱼ∂aₖ as a Scalar for each pair of arguments aⱼ and aₖ.
+  ///
+  /// The partial derivatives aren't scaled by the adjoint.
+  ///
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left empty are
+  ///     structurally zero.
+  virtual void hess(
+      [[maybe_unused]] ArgArray<ArgArray<std::optional<Scalar>>>& H) const {}
+
+  /// Returns ∂²/∂aⱼ∂aₖ as an Expression for each pair of arguments aⱼ and aₖ.
+  ///
+  /// The partial derivatives aren't scaled by the adjoint.
+  ///
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left as nullptr are
+  ///     structurally zero.
+  virtual void hess_expr(
+      [[maybe_unused]] ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const {}
 };
 
 /// Derived expression type for binary minus operator.
@@ -410,6 +476,16 @@ struct BinaryMinusExpression final : Expression<Scalar> {
   void accumulate_adjoints_expr() const override {
     lhs->adj_expr += grad_expr_l();
     rhs->adj_expr += grad_expr_r();
+  }
+
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    g[0] = Scalar(1);
+    g[1] = Scalar(-1);
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = constant_ptr(Scalar(1));
+    g[1] = constant_ptr(Scalar(-1));
   }
 
  private:
@@ -464,6 +540,16 @@ struct BinaryPlusExpression final : Expression<Scalar> {
     rhs->adj_expr += grad_expr_r();
   }
 
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    g[0] = Scalar(1);
+    g[1] = Scalar(1);
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = constant_ptr(Scalar(1));
+    g[1] = constant_ptr(Scalar(1));
+  }
+
  private:
   Scalar grad_l() const { return this->adj; }
 
@@ -506,6 +592,30 @@ struct CbrtExpression final : Expression<Scalar> {
 
   void accumulate_adjoints_expr() const override {
     x->adj_expr += grad_expr_l();
+  }
+
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    using std::cbrt;
+
+    Scalar c = cbrt(x->val);
+    g[0] = Scalar(1) / (Scalar(3) * c * c);
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    auto c = cbrt(x);
+    g[0] = constant_ptr(Scalar(1)) / (constant_ptr(Scalar(3)) * c * c);
+  }
+
+  void hess(ArgArray<ArgArray<std::optional<Scalar>>>& H) const override {
+    using std::cbrt;
+
+    Scalar c = cbrt(x->val);
+    H[0][0] = Scalar(-2) / (Scalar(9) * x->val * c * c);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    auto c = cbrt(x);
+    H[0][0] = constant_ptr(Scalar(-2)) / (constant_ptr(Scalar(9)) * x * c * c);
   }
 
  private:
@@ -631,6 +741,26 @@ struct DivExpression final : Expression<Scalar> {
     rhs->adj_expr += grad_expr_r();
   }
 
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    g[0] = Scalar(1) / rhs->val;
+    g[1] = -lhs->val / (rhs->val * rhs->val);
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = constant_ptr(Scalar(1)) / rhs;
+    g[1] = -lhs / (rhs * rhs);
+  }
+
+  void hess(ArgArray<ArgArray<std::optional<Scalar>>>& H) const override {
+    H[1][0] = Scalar(-1) / (rhs->val * rhs->val);
+    H[1][1] = Scalar(2) * lhs->val / (rhs->val * rhs->val * rhs->val);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    H[1][0] = constant_ptr(Scalar(-1)) / (rhs * rhs);
+    H[1][1] = constant_ptr(Scalar(2)) * lhs / (rhs * rhs * rhs);
+  }
+
  private:
   Scalar grad_l() const { return this->adj / rhs->val; };
 
@@ -686,6 +816,24 @@ struct MultExpression final : Expression<Scalar> {
     rhs->adj_expr += grad_expr_r();
   }
 
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    g[0] = rhs->val;
+    g[1] = lhs->val;
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = rhs;
+    g[1] = lhs;
+  }
+
+  void hess(ArgArray<ArgArray<std::optional<Scalar>>>& H) const override {
+    H[1][0] = Scalar(1);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    H[1][0] = constant_ptr(Scalar(1));
+  }
+
  private:
   Scalar grad_l() const { return this->adj * rhs->val; }
 
@@ -728,6 +876,14 @@ struct UnaryMinusExpression final : Expression<Scalar> {
     lhs->adj_expr += grad_expr_l();
   }
 
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    g[0] = Scalar(-1);
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = constant_ptr(Scalar(-1));
+  }
+
  private:
   Scalar grad_l() const { return -this->adj; }
 
@@ -766,7 +922,18 @@ constexpr void dec_ref_count(Expression<Scalar>* expr) {
       if (elem->adj_expr != nullptr) {
         stack.emplace_back(elem->adj_expr.get());
       }
+      // Release ownership of Hessian entries so destroying the Hessian below
+      // doesn't recursively decrement their refcounts
+      for (auto&& [j, h_i_j] : elem->hessian_expr) {
+        if (h_i_j != nullptr) {
+          stack.emplace_back(h_i_j.release());
+        }
+      }
       elem->visit_args([&stack](const auto& arg) { stack.emplace_back(arg); });
+
+      // The Hessians own heap storage, so they must be destroyed
+      std::destroy_at(&elem->hessian);
+      std::destroy_at(&elem->hessian_expr);
 
       // Not calling the destructor here is safe because it only decrements
       // refcounts, which was already done above.
@@ -812,6 +979,20 @@ struct AbsExpression final : Expression<Scalar> {
 
   void accumulate_adjoints_expr() const override {
     x->adj_expr += grad_expr_l();
+  }
+
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    if (x->val < Scalar(0)) {
+      g[0] = Scalar(-1);
+    } else if (x->val > Scalar(0)) {
+      g[0] = Scalar(1);
+    } else {
+      g[0] = Scalar(0);
+    }
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = sign(x);
   }
 
  private:
@@ -885,6 +1066,27 @@ struct AcosExpression final : Expression<Scalar> {
     x->adj_expr += grad_expr_l();
   }
 
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    using std::sqrt;
+    g[0] = Scalar(-1) / sqrt(Scalar(1) - x->val * x->val);
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = constant_ptr(Scalar(-1)) / sqrt(constant_ptr(Scalar(1)) - x * x);
+  }
+
+  void hess(ArgArray<ArgArray<std::optional<Scalar>>>& H) const override {
+    using std::sqrt;
+
+    Scalar s = sqrt(Scalar(1) - x->val * x->val);
+    H[0][0] = -x->val / (s * s * s);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    auto s = sqrt(constant_ptr(Scalar(1)) - x * x);
+    H[0][0] = -x / (s * s * s);
+  }
+
  private:
   Scalar grad_l() const {
     using std::sqrt;
@@ -950,6 +1152,27 @@ struct AsinExpression final : Expression<Scalar> {
 
   void accumulate_adjoints_expr() const override {
     x->adj_expr += grad_expr_l();
+  }
+
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    using std::sqrt;
+    g[0] = Scalar(1) / sqrt(Scalar(1) - x->val * x->val);
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = constant_ptr(Scalar(1)) / sqrt(constant_ptr(Scalar(1)) - x * x);
+  }
+
+  void hess(ArgArray<ArgArray<std::optional<Scalar>>>& H) const override {
+    using std::sqrt;
+
+    Scalar s = sqrt(Scalar(1) - x->val * x->val);
+    H[0][0] = x->val / (s * s * s);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    auto s = sqrt(constant_ptr(Scalar(1)) - x * x);
+    H[0][0] = x / (s * s * s);
   }
 
  private:
@@ -1018,6 +1241,24 @@ struct AtanExpression final : Expression<Scalar> {
 
   void accumulate_adjoints_expr() const override {
     x->adj_expr += grad_expr_l();
+  }
+
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    g[0] = Scalar(1) / (Scalar(1) + x->val * x->val);
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = constant_ptr(Scalar(1)) / (constant_ptr(Scalar(1)) + x * x);
+  }
+
+  void hess(ArgArray<ArgArray<std::optional<Scalar>>>& H) const override {
+    Scalar t = Scalar(1) + x->val * x->val;
+    H[0][0] = Scalar(-2) * x->val / (t * t);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    auto t = constant_ptr(Scalar(1)) + x * x;
+    H[0][0] = constant_ptr(Scalar(-2)) * x / (t * t);
   }
 
  private:
@@ -1094,6 +1335,38 @@ struct Atan2Expression final : Expression<Scalar> {
     x->adj_expr += grad_expr_r();
   }
 
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    Scalar d = y->val * y->val + x->val * x->val;
+    g[0] = x->val / d;
+    g[1] = -y->val / d;
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    auto d = y * y + x * x;
+    g[0] = x / d;
+    g[1] = -y / d;
+  }
+
+  void hess(ArgArray<ArgArray<std::optional<Scalar>>>& H) const override {
+    Scalar y2 = y->val * y->val;
+    Scalar x2 = x->val * x->val;
+    Scalar d = y2 + x2;
+    Scalar d2 = d * d;
+    H[0][0] = Scalar(-2) * x->val * y->val / d2;
+    H[1][0] = (y2 - x2) / d2;
+    H[1][1] = Scalar(2) * x->val * y->val / d2;
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    auto y2 = y * y;
+    auto x2 = x * x;
+    auto d = y2 + x2;
+    auto d2 = d * d;
+    H[0][0] = constant_ptr(Scalar(-2)) * x * y / d2;
+    H[1][0] = (y2 - x2) / d2;
+    H[1][1] = constant_ptr(Scalar(2)) * x * y / d2;
+  }
+
  private:
   Scalar grad_l() const {
     return this->adj * x->val / (y->val * y->val + x->val * x->val);
@@ -1164,6 +1437,24 @@ struct CosExpression final : Expression<Scalar> {
     x->adj_expr += grad_expr_l();
   }
 
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    using std::sin;
+    g[0] = -sin(x->val);
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = -sin(x);
+  }
+
+  void hess(ArgArray<ArgArray<std::optional<Scalar>>>& H) const override {
+    using std::cos;
+    H[0][0] = -cos(x->val);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    H[0][0] = -cos(x);
+  }
+
  private:
   Scalar grad_l() const {
     using std::sin;
@@ -1229,6 +1520,24 @@ struct CoshExpression final : Expression<Scalar> {
     x->adj_expr += grad_expr_l();
   }
 
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    using std::sinh;
+    g[0] = sinh(x->val);
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = sinh(x);
+  }
+
+  void hess(ArgArray<ArgArray<std::optional<Scalar>>>& H) const override {
+    using std::cosh;
+    H[0][0] = cosh(x->val);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    H[0][0] = cosh(x);
+  }
+
  private:
   Scalar grad_l() const {
     using std::sinh;
@@ -1291,6 +1600,26 @@ struct ErfExpression final : Expression<Scalar> {
 
   void accumulate_adjoints_expr() const override {
     x->adj_expr += grad_expr_l();
+  }
+
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    using std::exp;
+    g[0] = Scalar(2.0 * std::numbers::inv_sqrtpi) * exp(-x->val * x->val);
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = constant_ptr(Scalar(2.0 * std::numbers::inv_sqrtpi)) * exp(-x * x);
+  }
+
+  void hess(ArgArray<ArgArray<std::optional<Scalar>>>& H) const override {
+    using std::exp;
+    H[0][0] = Scalar(-4.0 * std::numbers::inv_sqrtpi) * x->val *
+              exp(-x->val * x->val);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    H[0][0] =
+        constant_ptr(Scalar(-4.0 * std::numbers::inv_sqrtpi)) * x * exp(-x * x);
   }
 
  private:
@@ -1360,6 +1689,24 @@ struct ExpExpression final : Expression<Scalar> {
 
   void accumulate_adjoints_expr() const override {
     x->adj_expr += grad_expr_l();
+  }
+
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    using std::exp;
+    g[0] = exp(x->val);
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = exp(x);
+  }
+
+  void hess(ArgArray<ArgArray<std::optional<Scalar>>>& H) const override {
+    using std::exp;
+    H[0][0] = exp(x->val);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    H[0][0] = exp(x);
   }
 
  private:
@@ -1441,6 +1788,38 @@ struct Hypot2Expression final : Expression<Scalar> {
     auto norm = hypot(x, y);
     x->adj_expr += this->adj_expr * x / norm;
     y->adj_expr += this->adj_expr * y / norm;
+  }
+
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    using std::hypot;
+
+    Scalar norm = hypot(x->val, y->val);
+    g[0] = x->val / norm;
+    g[1] = y->val / norm;
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    auto norm = hypot(x, y);
+    g[0] = x / norm;
+    g[1] = y / norm;
+  }
+
+  void hess(ArgArray<ArgArray<std::optional<Scalar>>>& H) const override {
+    using std::hypot;
+
+    Scalar norm = hypot(x->val, y->val);
+    Scalar norm3 = norm * norm * norm;
+    H[0][0] = y->val * y->val / norm3;
+    H[1][0] = -x->val * y->val / norm3;
+    H[1][1] = x->val * x->val / norm3;
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    auto norm = hypot(x, y);
+    auto norm3 = norm * norm * norm;
+    H[0][0] = y * y / norm3;
+    H[1][0] = -x * y / norm3;
+    H[1][1] = x * x / norm3;
   }
 };
 
@@ -1527,6 +1906,46 @@ struct Hypot3Expression final : Expression<Scalar> {
     x->adj_expr += this->adj_expr * x / norm;
     y->adj_expr += this->adj_expr * y / norm;
     z->adj_expr += this->adj_expr * z / norm;
+  }
+
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    using std::hypot;
+
+    Scalar norm = hypot(x->val, y->val, z->val);
+    g[0] = x->val / norm;
+    g[1] = y->val / norm;
+    g[2] = z->val / norm;
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    auto norm = hypot(x, y, z);
+    g[0] = x / norm;
+    g[1] = y / norm;
+    g[2] = z / norm;
+  }
+
+  void hess(ArgArray<ArgArray<std::optional<Scalar>>>& H) const override {
+    using std::hypot;
+
+    Scalar norm = hypot(x->val, y->val, z->val);
+    Scalar norm3 = norm * norm * norm;
+    H[0][0] = (y->val * y->val + z->val * z->val) / norm3;
+    H[1][0] = -x->val * y->val / norm3;
+    H[1][1] = (x->val * x->val + z->val * z->val) / norm3;
+    H[2][0] = -x->val * z->val / norm3;
+    H[2][1] = -y->val * z->val / norm3;
+    H[2][2] = (x->val * x->val + y->val * y->val) / norm3;
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    auto norm = hypot(x, y, z);
+    auto norm3 = norm * norm * norm;
+    H[0][0] = (y * y + z * z) / norm3;
+    H[1][0] = -x * y / norm3;
+    H[1][1] = (x * x + z * z) / norm3;
+    H[2][0] = -x * z / norm3;
+    H[2][1] = -y * z / norm3;
+    H[2][2] = (x * x + y * y) / norm3;
   }
 };
 
@@ -1628,6 +2047,21 @@ struct IfElseExpression final : Expression<Scalar> {
     f->adj_expr += grad_expr_f();
   }
 
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    // a and b have zero gradient
+    bool c = cond(a->val, b->val);
+    g[2] = c ? Scalar(1) : Scalar(0);
+    g[3] = c ? Scalar(0) : Scalar(1);
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    // a and b have zero gradient
+    auto zero = constant_ptr(Scalar(0));
+    auto one = constant_ptr(Scalar(1));
+    g[2] = if_else(cond, a, b, one, zero);
+    g[3] = if_else(cond, a, b, zero, one);
+  }
+
  private:
   ExpressionPtr<Scalar> grad_expr_t() const {
     // adjoint if cond(a, b), otherwise 0
@@ -1706,6 +2140,22 @@ struct LogExpression final : Expression<Scalar> {
     x->adj_expr += grad_expr_l();
   }
 
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    g[0] = Scalar(1) / x->val;
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = constant_ptr(Scalar(1)) / x;
+  }
+
+  void hess(ArgArray<ArgArray<std::optional<Scalar>>>& H) const override {
+    H[0][0] = Scalar(-1) / (x->val * x->val);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    H[0][0] = constant_ptr(Scalar(-1)) / (x * x);
+  }
+
  private:
   Scalar grad_l() const { return this->adj / x->val; }
 
@@ -1767,6 +2217,24 @@ struct Log10Expression final : Expression<Scalar> {
 
   void accumulate_adjoints_expr() const override {
     x->adj_expr += grad_expr_l();
+  }
+
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    g[0] = Scalar(1) / (Scalar(std::numbers::ln10) * x->val);
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = constant_ptr(Scalar(1)) /
+           (constant_ptr(Scalar(std::numbers::ln10)) * x);
+  }
+
+  void hess(ArgArray<ArgArray<std::optional<Scalar>>>& H) const override {
+    H[0][0] = Scalar(-1) / (Scalar(std::numbers::ln10) * x->val * x->val);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    H[0][0] = constant_ptr(Scalar(-1)) /
+              (constant_ptr(Scalar(std::numbers::ln10)) * x * x);
   }
 
  private:
@@ -1845,6 +2313,20 @@ struct MaxExpression final : Expression<Scalar> {
   void accumulate_adjoints_expr() const override {
     a->adj_expr += grad_expr_l();
     b->adj_expr += grad_expr_r();
+  }
+
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    bool c = a->val >= b->val;
+    g[0] = c ? Scalar(1) : Scalar(0);
+    g[1] = c ? Scalar(0) : Scalar(1);
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    auto zero = constant_ptr(Scalar(0));
+    auto one = constant_ptr(Scalar(1));
+    auto cond = [](Scalar a, Scalar b) { return a >= b; };
+    g[0] = if_else(cond, a, b, one, zero);
+    g[1] = if_else(cond, a, b, zero, one);
   }
 
  private:
@@ -1927,6 +2409,20 @@ struct MinExpression final : Expression<Scalar> {
   void accumulate_adjoints_expr() const override {
     a->adj_expr += grad_expr_l();
     b->adj_expr += grad_expr_r();
+  }
+
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    bool c = a->val <= b->val;
+    g[0] = c ? Scalar(1) : Scalar(0);
+    g[1] = c ? Scalar(0) : Scalar(1);
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    auto zero = constant_ptr(Scalar(0));
+    auto one = constant_ptr(Scalar(1));
+    auto cond = [](Scalar a, Scalar b) { return a <= b; };
+    g[0] = if_else(cond, a, b, one, zero);
+    g[1] = if_else(cond, a, b, zero, one);
   }
 
  private:
@@ -2013,6 +2509,40 @@ struct PowExpression final : Expression<Scalar> {
   void accumulate_adjoints_expr() const override {
     base->adj_expr += grad_expr_l();
     power->adj_expr += grad_expr_r();
+  }
+
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    using std::log;
+    using std::pow;
+
+    g[0] = pow(base->val, power->val - Scalar(1)) * power->val;
+    g[1] = pow(base->val, power->val) * log(base->val);
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = pow(base, power - constant_ptr(Scalar(1))) * power;
+    g[1] = pow(base, power) * log(base);
+  }
+
+  void hess(ArgArray<ArgArray<std::optional<Scalar>>>& H) const override {
+    using std::log;
+    using std::pow;
+
+    Scalar l = log(base->val);
+    H[0][0] = pow(base->val, power->val - Scalar(2)) *
+              (power->val - Scalar(1)) * power->val;
+    H[1][0] =
+        pow(base->val, power->val - Scalar(1)) * (power->val * l + Scalar(1));
+    H[1][1] = pow(base->val, power->val) * l * l;
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    auto one = constant_ptr(Scalar(1));
+    auto l = log(base);
+    H[0][0] =
+        pow(base, power - constant_ptr(Scalar(2))) * (power - one) * power;
+    H[1][0] = pow(base, power - one) * (power * l + one);
+    H[1][1] = pow(base, power) * l * l;
   }
 
  private:
@@ -2169,6 +2699,24 @@ struct SinExpression final : Expression<Scalar> {
     x->adj_expr += grad_expr_l();
   }
 
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    using std::cos;
+    g[0] = cos(x->val);
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = cos(x);
+  }
+
+  void hess(ArgArray<ArgArray<std::optional<Scalar>>>& H) const override {
+    using std::sin;
+    H[0][0] = -sin(x->val);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    H[0][0] = -sin(x);
+  }
+
  private:
   Scalar grad_l() const {
     using std::cos;
@@ -2233,6 +2781,24 @@ struct SinhExpression final : Expression<Scalar> {
 
   void accumulate_adjoints_expr() const override {
     x->adj_expr += grad_expr_l();
+  }
+
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    using std::cosh;
+    g[0] = cosh(x->val);
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = cosh(x);
+  }
+
+  void hess(ArgArray<ArgArray<std::optional<Scalar>>>& H) const override {
+    using std::sinh;
+    H[0][0] = sinh(x->val);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    H[0][0] = sinh(x);
   }
 
  private:
@@ -2301,6 +2867,27 @@ struct SqrtExpression final : Expression<Scalar> {
     x->adj_expr += grad_expr_l();
   }
 
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    using std::sqrt;
+    g[0] = Scalar(1) / (Scalar(2) * sqrt(x->val));
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = constant_ptr(Scalar(1)) / (constant_ptr(Scalar(2)) * sqrt(x));
+  }
+
+  void hess(ArgArray<ArgArray<std::optional<Scalar>>>& H) const override {
+    using std::sqrt;
+
+    Scalar s = sqrt(x->val);
+    H[0][0] = Scalar(-1) / (Scalar(4) * s * s * s);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    auto s = sqrt(x);
+    H[0][0] = constant_ptr(Scalar(-1)) / (constant_ptr(Scalar(4)) * s * s * s);
+  }
+
  private:
   Scalar grad_l() const {
     using std::sqrt;
@@ -2367,6 +2954,31 @@ struct TanExpression final : Expression<Scalar> {
 
   void accumulate_adjoints_expr() const override {
     x->adj_expr += grad_expr_l();
+  }
+
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    using std::cos;
+
+    Scalar c = cos(x->val);
+    g[0] = Scalar(1) / (c * c);
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    auto c = cos(x);
+    g[0] = constant_ptr(Scalar(1)) / (c * c);
+  }
+
+  void hess(ArgArray<ArgArray<std::optional<Scalar>>>& H) const override {
+    using std::cos;
+    using std::tan;
+
+    Scalar c = cos(x->val);
+    H[0][0] = Scalar(2) * tan(x->val) / (c * c);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    auto c = cos(x);
+    H[0][0] = constant_ptr(Scalar(2)) * tan(x) / (c * c);
   }
 
  private:
@@ -2438,6 +3050,31 @@ struct TanhExpression final : Expression<Scalar> {
 
   void accumulate_adjoints_expr() const override {
     x->adj_expr += grad_expr_l();
+  }
+
+  void grad(ArgArray<std::optional<Scalar>>& g) const override {
+    using std::cosh;
+
+    Scalar c = cosh(x->val);
+    g[0] = Scalar(1) / (c * c);
+  }
+
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    auto c = cosh(x);
+    g[0] = constant_ptr(Scalar(1)) / (c * c);
+  }
+
+  void hess(ArgArray<ArgArray<std::optional<Scalar>>>& H) const override {
+    using std::cosh;
+    using std::tanh;
+
+    Scalar c = cosh(x->val);
+    H[0][0] = Scalar(-2) * tanh(x->val) / (c * c);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    auto c = cosh(x);
+    H[0][0] = constant_ptr(Scalar(-2)) * tanh(x) / (c * c);
   }
 
  private:
