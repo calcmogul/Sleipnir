@@ -7,7 +7,7 @@
 #include <Eigen/SparseCore>
 #include <gch/small_vector.hpp>
 
-#include "sleipnir/autodiff/gradient_expression_graph.hpp"
+#include "sleipnir/autodiff/hessian_expression_graph.hpp"
 #include "sleipnir/autodiff/variable.hpp"
 #include "sleipnir/autodiff/variable_matrix.hpp"
 #include "sleipnir/util/assert.hpp"
@@ -40,47 +40,29 @@ class Hessian {
   /// @param wrt Vector of variables with respect to which to compute the
   ///     Hessian.
   Hessian(Variable<Scalar> variable, SleipnirMatrixLike<Scalar> auto wrt)
-      : m_variables{detail::GradientExpressionGraph<Scalar>{variable}
-                        .generate_tree(wrt)},
-        m_wrt{wrt} {
-    slp_assert(m_wrt.cols() == 1);
+      : m_variable{std::move(variable)}, m_wrt{std::move(wrt)}, m_graph{[&] {
+          slp_assert(m_wrt.cols() == 1);
 
-    // Initialize column each expression's adjoint occupies in the Jacobian
-    for (size_t col = 0; col < m_wrt.size(); ++col) {
-      m_wrt[col].expr->col = col;
-    }
+          // Initialize column each expression's adjoint occupies in the
+          // Hessian
+          for (size_t col = 0; col < m_wrt.size(); ++col) {
+            m_wrt[col].expr->col = col;
+          }
 
-    for (auto& variable : m_variables) {
-      m_graphs.emplace_back(variable);
-    }
-
+          return detail::HessianExpressionGraph<Scalar>{m_variable};
+        }()} {
     // Reset col to -1
     for (auto& node : m_wrt) {
       node.expr->col = -1;
     }
 
-    for (int row = 0; row < m_variables.rows(); ++row) {
-      if (m_variables[row].expr == nullptr) {
-        continue;
-      }
+    if (m_variable.type() <= ExpressionType::QUADRATIC) {
+      m_graph.update_values();
 
-      if (m_variables[row].type() == ExpressionType::LINEAR) {
-        // If the row is linear, compute its gradient once here and cache its
-        // triplets. Constant rows are ignored because their gradients have no
-        // nonzero triplets.
-        m_graphs[row].append_triplets(m_cached_triplets, row, m_wrt);
-      } else if (m_variables[row].type() > ExpressionType::LINEAR) {
-        // If the row is quadratic or nonlinear, add it to the list of nonlinear
-        // rows to be recomputed in value().
-        m_nonlinear_rows.emplace_back(row);
-      }
-    }
+      gch::small_vector<Eigen::Triplet<Scalar>> triplets;
+      m_graph.template append_triplets<UpLo>(triplets, m_wrt);
 
-    if (m_nonlinear_rows.empty()) {
-      m_H.setFromTriplets(m_cached_triplets.begin(), m_cached_triplets.end());
-      if constexpr (UpLo == Eigen::Lower) {
-        m_H = m_H.template triangularView<Eigen::Lower>();
-      }
+      m_H.setFromTriplets(triplets.begin(), triplets.end());
     }
   }
 
@@ -91,16 +73,26 @@ class Hessian {
   ///
   /// @return The Hessian as a VariableMatrix.
   VariableMatrix<Scalar> get() const {
-    VariableMatrix<Scalar> result{detail::empty, m_variables.rows(),
-                                  m_wrt.rows()};
+    VariableMatrix<Scalar> result{detail::empty, m_wrt.rows(), m_wrt.rows()};
 
-    for (int row = 0; row < m_variables.rows(); ++row) {
-      auto grad = m_graphs[row].generate_tree(m_wrt);
-      for (int col = 0; col < m_wrt.rows(); ++col) {
-        if (grad[col].expr != nullptr) {
-          result[row, col] = std::move(grad[col]);
-        } else {
-          result[row, col] = Variable{Scalar(0)};
+    auto H = m_graph.template generate_tree<UpLo>(m_wrt);
+
+    for (int row = 0; row < m_wrt.rows(); ++row) {
+      if constexpr (UpLo == Eigen::Lower) {
+        for (int col = 0; col <= row; ++col) {
+          if (H[row, col].expr != nullptr) {
+            result[row, col] = std::move(H[row, col]);
+          } else {
+            result[row, col] = Variable{Scalar(0)};
+          }
+        }
+      } else {
+        for (int col = 0; col < m_wrt.rows(); ++col) {
+          if (H[row, col].expr != nullptr) {
+            result[row, col] = std::move(H[row, col]);
+          } else {
+            result[row, col] = Variable{Scalar(0)};
+          }
         }
       }
     }
@@ -112,45 +104,25 @@ class Hessian {
   ///
   /// @return The Hessian at wrt's value.
   const Eigen::SparseMatrix<Scalar>& value() {
-    if (m_nonlinear_rows.empty()) {
-      return m_H;
-    }
+    if (m_variable.type() > ExpressionType::QUADRATIC) {
+      m_graph.update_values();
 
-    for (auto& graph : m_graphs) {
-      graph.update_values();
-    }
+      gch::small_vector<Eigen::Triplet<Scalar>> triplets;
+      m_graph.template append_triplets<UpLo>(triplets, m_wrt);
 
-    // Copy the cached triplets so triplets added for the nonlinear rows are
-    // thrown away at the end of the function
-    auto triplets = m_cached_triplets;
-
-    // Compute each nonlinear row of the Hessian
-    for (int row : m_nonlinear_rows) {
-      m_graphs[row].append_triplets(triplets, row, m_wrt);
-    }
-
-    m_H.setFromTriplets(triplets.begin(), triplets.end());
-    if constexpr (UpLo == Eigen::Lower) {
-      m_H = m_H.template triangularView<Eigen::Lower>();
+      m_H.setFromTriplets(triplets.begin(), triplets.end());
     }
 
     return m_H;
   }
 
  private:
-  VariableMatrix<Scalar> m_variables;
+  Variable<Scalar> m_variable;
   VariableMatrix<Scalar> m_wrt;
 
-  gch::small_vector<detail::GradientExpressionGraph<Scalar>> m_graphs;
+  detail::HessianExpressionGraph<Scalar> m_graph;
 
-  Eigen::SparseMatrix<Scalar> m_H{m_variables.rows(), m_wrt.rows()};
-
-  // Cached triplets for gradients of linear rows
-  gch::small_vector<Eigen::Triplet<Scalar>> m_cached_triplets;
-
-  // List of row indices for nonlinear rows whose graients will be computed in
-  // value()
-  gch::small_vector<int> m_nonlinear_rows;
+  Eigen::SparseMatrix<Scalar> m_H{m_wrt.rows(), m_wrt.rows()};
 };
 
 // @cond Suppress Doxygen
