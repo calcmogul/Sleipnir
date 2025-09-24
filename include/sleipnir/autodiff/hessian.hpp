@@ -46,47 +46,20 @@ class SLEIPNIR_DLLEXPORT Hessian {
    *   Hessian.
    */
   Hessian(Variable variable, SleipnirMatrixLike auto wrt)
-      : m_variables{detail::AdjointExpressionGraph{variable}
-                        .generate_gradient_tree(wrt)},
-        m_wrt{wrt} {
-    slp_assert(m_wrt.cols() == 1);
+      : m_wrt{wrt}, m_graph{[&] {
+          slp_assert(m_wrt.cols() == 1);
 
-    // Initialize column each expression's adjoint occupies in the Jacobian
-    for (size_t col = 0; col < m_wrt.size(); ++col) {
-      m_wrt[col].expr->col = col;
-    }
+          // Initialize column each expression's adjoint occupies in the
+          // Jacobian
+          for (size_t col = 0; col < m_wrt.size(); ++col) {
+            m_wrt[col].expr->col = col;
+          }
 
-    for (auto& variable : m_variables) {
-      m_graphs.emplace_back(variable);
-    }
-
+          return detail::AdjointExpressionGraph{variable};
+        }()} {
     // Reset col to -1
     for (auto& node : m_wrt) {
       node.expr->col = -1;
-    }
-
-    for (int row = 0; row < m_variables.rows(); ++row) {
-      if (m_variables[row].expr == nullptr) {
-        continue;
-      }
-
-      if (m_variables[row].type() == ExpressionType::LINEAR) {
-        // If the row is linear, compute its gradient once here and cache its
-        // triplets. Constant rows are ignored because their gradients have no
-        // nonzero triplets.
-        m_graphs[row].append_gradient_triplets(m_cached_triplets, row, m_wrt);
-      } else if (m_variables[row].type() > ExpressionType::LINEAR) {
-        // If the row is quadratic or nonlinear, add it to the list of nonlinear
-        // rows to be recomputed in Value().
-        m_nonlinear_rows.emplace_back(row);
-      }
-    }
-
-    if (m_nonlinear_rows.empty()) {
-      m_H.setFromTriplets(m_cached_triplets.begin(), m_cached_triplets.end());
-      if constexpr (UpLo == Eigen::Lower) {
-        m_H = m_H.triangularView<Eigen::Lower>();
-      }
     }
   }
 
@@ -99,10 +72,12 @@ class SLEIPNIR_DLLEXPORT Hessian {
    * @return The Hessian as a VariableMatrix.
    */
   VariableMatrix get() const {
-    VariableMatrix result{VariableMatrix::empty, m_variables.rows(),
-                          m_wrt.rows()};
+#if 1
+    return VariableMatrix{m_wrt.rows(), m_wrt.rows()};
+#else
+    VariableMatrix result{VariableMatrix::empty, m_wrt.rows(), m_wrt.rows()};
 
-    for (int row = 0; row < m_variables.rows(); ++row) {
+    for (int row = 0; row < m_wrt.rows(); ++row) {
       auto grad = m_graphs[row].generate_gradient_tree(m_wrt);
       for (int col = 0; col < m_wrt.rows(); ++col) {
         if (grad[col].expr != nullptr) {
@@ -114,6 +89,7 @@ class SLEIPNIR_DLLEXPORT Hessian {
     }
 
     return result;
+#endif
   }
 
   /**
@@ -122,45 +98,22 @@ class SLEIPNIR_DLLEXPORT Hessian {
    * @return The Hessian at wrt's value.
    */
   const Eigen::SparseMatrix<double>& value() {
-    if (m_nonlinear_rows.empty()) {
-      return m_H;
-    }
+    m_graph.update_values();
 
-    for (auto& graph : m_graphs) {
-      graph.update_values();
-    }
-
-    // Copy the cached triplets so triplets added for the nonlinear rows are
-    // thrown away at the end of the function
-    auto triplets = m_cached_triplets;
-
-    // Compute each nonlinear row of the Hessian
-    for (int row : m_nonlinear_rows) {
-      m_graphs[row].append_gradient_triplets(triplets, row, m_wrt);
-    }
+    gch::small_vector<Eigen::Triplet<double>> triplets;
+    m_graph.append_hessian_triplets<UpLo>(triplets, m_wrt);
 
     m_H.setFromTriplets(triplets.begin(), triplets.end());
-    if constexpr (UpLo == Eigen::Lower) {
-      m_H = m_H.triangularView<Eigen::Lower>();
-    }
 
     return m_H;
   }
 
  private:
-  VariableMatrix m_variables;
   VariableMatrix m_wrt;
 
-  gch::small_vector<detail::AdjointExpressionGraph> m_graphs;
+  detail::AdjointExpressionGraph m_graph;
 
-  Eigen::SparseMatrix<double> m_H{m_variables.rows(), m_wrt.rows()};
-
-  // Cached triplets for gradients of linear rows
-  gch::small_vector<Eigen::Triplet<double>> m_cached_triplets;
-
-  // List of row indices for nonlinear rows whose graients will be computed in
-  // Value()
-  gch::small_vector<int> m_nonlinear_rows;
+  Eigen::SparseMatrix<double> m_H{m_wrt.rows(), m_wrt.rows()};
 };
 
 }  // namespace slp

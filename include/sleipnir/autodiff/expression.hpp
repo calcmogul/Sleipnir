@@ -78,7 +78,7 @@ struct Expression {
   /// The value of the expression node.
   double val = 0.0;
 
-  /// The adjoint of the expression node used during autodiff.
+  /// The adjoint of the expression node, used during autodiff.
   double adjoint = 0.0;
 
   /// Counts incoming edges for this node.
@@ -87,7 +87,10 @@ struct Expression {
   /// This expression's column in a Jacobian, or -1 otherwise.
   int32_t col = -1;
 
-  /// The adjoint of the expression node used during gradient expression tree
+  /// This expression's index in the topological list.
+  size_t idx = 0;
+
+  /// The adjoint of the expression node, used during gradient expression tree
   /// generation.
   ExpressionPtr adjoint_expr;
 
@@ -364,12 +367,12 @@ struct Expression {
   virtual ExpressionType type() const = 0;
 
   /**
-   * Returns double adjoint of the left child expression.
+   * Returns ∂/∂l as a double.
    *
    * @param lhs Left argument to binary operator.
    * @param rhs Right argument to binary operator.
    * @param parent_adjoint Adjoint of parent expression.
-   * @return The double adjoint of the left child expression.
+   * @return ∂/∂l as a double.
    */
   virtual double grad_l([[maybe_unused]] double lhs,
                         [[maybe_unused]] double rhs,
@@ -378,12 +381,12 @@ struct Expression {
   }
 
   /**
-   * Returns double adjoint of the right child expression.
+   * Returns ∂/∂r as a double.
    *
    * @param lhs Left argument to binary operator.
    * @param rhs Right argument to binary operator.
    * @param parent_adjoint Adjoint of parent expression.
-   * @return The double adjoint of the right child expression.
+   * @return ∂/∂r as a double.
    */
   virtual double grad_r([[maybe_unused]] double lhs,
                         [[maybe_unused]] double rhs,
@@ -392,12 +395,12 @@ struct Expression {
   }
 
   /**
-   * Returns Expression adjoint of the left child expression.
+   * Returns ∂/∂l as an Expression.
    *
    * @param lhs Left argument to binary operator.
    * @param rhs Right argument to binary operator.
    * @param parent_adjoint Adjoint of parent expression.
-   * @return The Expression adjoint of the left child expression.
+   * @return ∂/∂l as an Expression.
    */
   virtual ExpressionPtr grad_expr_l(
       [[maybe_unused]] const ExpressionPtr& lhs,
@@ -407,14 +410,101 @@ struct Expression {
   }
 
   /**
-   * Returns Expression adjoint of the right child expression.
+   * Returns ∂/∂r as an Expression.
    *
    * @param lhs Left argument to binary operator.
    * @param rhs Right argument to binary operator.
    * @param parent_adjoint Adjoint of parent expression.
-   * @return The Expression adjoint of the right child expression.
+   * @return ∂/∂r as an Expression.
    */
   virtual ExpressionPtr grad_expr_r(
+      [[maybe_unused]] const ExpressionPtr& lhs,
+      [[maybe_unused]] const ExpressionPtr& rhs,
+      [[maybe_unused]] const ExpressionPtr& parent_adjoint) const {
+    return make_expression_ptr<ConstExpression>();
+  }
+
+  /**
+   * Returns ∂²/∂l² as a double.
+   *
+   * @param lhs Left argument to binary operator.
+   * @param rhs Right argument to binary operator.
+   * @param parent_adjoint Adjoint of parent expression.
+   * @return ∂²/∂l² as a double.
+   */
+  virtual double hess_ll([[maybe_unused]] double lhs,
+                         [[maybe_unused]] double rhs,
+                         [[maybe_unused]] double parent_adjoint) const {
+    return 0.0;
+  }
+
+  /**
+   * Returns ∂²/∂l∂r as a double. This is equivalent to ∂²/∂r∂l.
+   *
+   * @param lhs Left argument to binary operator.
+   * @param rhs Right argument to binary operator.
+   * @param parent_adjoint Adjoint of parent expression.
+   * @return ∂²/∂l∂r as a double.
+   */
+  virtual double hess_lr([[maybe_unused]] double lhs,
+                         [[maybe_unused]] double rhs,
+                         [[maybe_unused]] double parent_adjoint) const {
+    return 0.0;
+  }
+
+  /**
+   * Returns ∂²/∂r² as a double.
+   *
+   * @param lhs Left argument to binary operator.
+   * @param rhs Right argument to binary operator.
+   * @param parent_adjoint Adjoint of parent expression.
+   * @return ∂²/∂r² as a double.
+   */
+  virtual double hess_rr([[maybe_unused]] double lhs,
+                         [[maybe_unused]] double rhs,
+                         [[maybe_unused]] double parent_adjoint) const {
+    return 0.0;
+  }
+
+  /**
+   * Returns ∂²/∂l² as an Expression.
+   *
+   * @param lhs Left argument to binary operator.
+   * @param rhs Right argument to binary operator.
+   * @param parent_adjoint Adjoint of parent expression.
+   * @return ∂²/∂l² as an Expression.
+   */
+  virtual ExpressionPtr hess_expr_ll(
+      [[maybe_unused]] const ExpressionPtr& lhs,
+      [[maybe_unused]] const ExpressionPtr& rhs,
+      [[maybe_unused]] const ExpressionPtr& parent_adjoint) const {
+    return make_expression_ptr<ConstExpression>();
+  }
+
+  /**
+   * Returns ∂²/∂l∂r as an Expression. This is equivalent to ∂²/∂r∂l.
+   *
+   * @param lhs Left argument to binary operator.
+   * @param rhs Right argument to binary operator.
+   * @param parent_adjoint Adjoint of parent expression.
+   * @return ∂²/∂l∂r as an Expression.
+   */
+  virtual ExpressionPtr hess_expr_lr(
+      [[maybe_unused]] const ExpressionPtr& lhs,
+      [[maybe_unused]] const ExpressionPtr& rhs,
+      [[maybe_unused]] const ExpressionPtr& parent_adjoint) const {
+    return make_expression_ptr<ConstExpression>();
+  }
+
+  /**
+   * Returns ∂²/∂r² as an Expression.
+   *
+   * @param lhs Left argument to binary operator.
+   * @param rhs Right argument to binary operator.
+   * @param parent_adjoint Adjoint of parent expression.
+   * @return ∂²/∂r² as an Expression.
+   */
+  virtual ExpressionPtr hess_expr_rr(
       [[maybe_unused]] const ExpressionPtr& lhs,
       [[maybe_unused]] const ExpressionPtr& rhs,
       [[maybe_unused]] const ExpressionPtr& parent_adjoint) const {
@@ -423,10 +513,14 @@ struct Expression {
 };
 
 inline ExpressionPtr cbrt(const ExpressionPtr& x);
+inline ExpressionPtr cos(const ExpressionPtr& x);
+inline ExpressionPtr cosh(const ExpressionPtr& x);
 inline ExpressionPtr exp(const ExpressionPtr& x);
 inline ExpressionPtr sin(const ExpressionPtr& x);
 inline ExpressionPtr sinh(const ExpressionPtr& x);
 inline ExpressionPtr sqrt(const ExpressionPtr& x);
+inline ExpressionPtr tan(const ExpressionPtr& x);
+inline ExpressionPtr tanh(const ExpressionPtr& x);
 
 /**
  * Derived expression type for binary minus operator.
@@ -537,6 +631,19 @@ struct CbrtExpression final : Expression {
     auto c = slp::detail::cbrt(x);
     return parent_adjoint / (make_expression_ptr<ConstExpression>(3.0) * c * c);
   }
+
+  double hess_ll(double x, double, double parent_adjoint) const override {
+    double c = std::cbrt(x);
+    return parent_adjoint * -2.0 / (9.0 * x * c * c);
+  }
+
+  ExpressionPtr hess_expr_ll(
+      const ExpressionPtr& x, const ExpressionPtr&,
+      const ExpressionPtr& parent_adjoint) const override {
+    auto c = slp::detail::cbrt(x);
+    return parent_adjoint * make_expression_ptr<ConstExpression>(-2.0) /
+           (make_expression_ptr<ConstExpression>(9.0) * x * c * c);
+  }
 };
 
 /**
@@ -569,14 +676,14 @@ struct ConstExpression final : Expression {
   /**
    * Constructs a constant expression with a value of zero.
    */
-  constexpr ConstExpression() = default;
+  ConstExpression() = default;
 
   /**
    * Constructs a nullary expression (an operator with no arguments).
    *
    * @param value The expression value.
    */
-  explicit constexpr ConstExpression(double value) : Expression{value} {}
+  explicit ConstExpression(double value) : Expression{value} {}
 
   double value(double, double) const override { return val; }
 
@@ -590,19 +697,28 @@ struct DecisionVariableExpression final : Expression {
   /**
    * Constructs a decision variable expression with a value of zero.
    */
-  constexpr DecisionVariableExpression() = default;
+  DecisionVariableExpression() = default;
 
   /**
    * Constructs a nullary expression (an operator with no arguments).
    *
    * @param value The expression value.
    */
-  explicit constexpr DecisionVariableExpression(double value)
-      : Expression{value} {}
+  explicit DecisionVariableExpression(double value) : Expression{value} {}
 
   double value(double, double) const override { return val; }
 
   ExpressionType type() const override { return ExpressionType::LINEAR; }
+
+  double grad_l(double, double, double parent_adjoint) const override {
+    return parent_adjoint;
+  }
+
+  ExpressionPtr grad_expr_l(
+      const ExpressionPtr&, const ExpressionPtr&,
+      const ExpressionPtr& parent_adjoint) const override {
+    return parent_adjoint;
+  }
 };
 
 /**
@@ -643,6 +759,27 @@ struct DivExpression final : Expression {
       const ExpressionPtr& lhs, const ExpressionPtr& rhs,
       const ExpressionPtr& parent_adjoint) const override {
     return parent_adjoint * -lhs / (rhs * rhs);
+  }
+
+  double hess_lr(double, double rhs, double parent_adjoint) const override {
+    return -parent_adjoint / (rhs * rhs);
+  };
+
+  double hess_rr(double lhs, double rhs, double parent_adjoint) const override {
+    return parent_adjoint * 2.0 * lhs / (rhs * rhs * rhs);
+  }
+
+  ExpressionPtr hess_expr_lr(
+      const ExpressionPtr&, const ExpressionPtr& rhs,
+      const ExpressionPtr& parent_adjoint) const override {
+    return -parent_adjoint / (rhs * rhs);
+  }
+
+  ExpressionPtr hess_expr_rr(
+      const ExpressionPtr& lhs, const ExpressionPtr& rhs,
+      const ExpressionPtr& parent_adjoint) const override {
+    return parent_adjoint * make_expression_ptr<ConstExpression>(2.0) * lhs /
+           (rhs * rhs * rhs);
   }
 };
 
@@ -686,6 +823,18 @@ struct MultExpression final : Expression {
       const ExpressionPtr& lhs, [[maybe_unused]] const ExpressionPtr& rhs,
       const ExpressionPtr& parent_adjoint) const override {
     return parent_adjoint * lhs;
+  }
+
+  double hess_lr([[maybe_unused]] double lhs, [[maybe_unused]] double rhs,
+                 double parent_adjoint) const override {
+    return parent_adjoint;
+  }
+
+  ExpressionPtr hess_expr_lr(
+      [[maybe_unused]] const ExpressionPtr& lhs,
+      [[maybe_unused]] const ExpressionPtr& rhs,
+      const ExpressionPtr& parent_adjoint) const override {
+    return parent_adjoint;
   }
 };
 
@@ -856,6 +1005,19 @@ struct AcosExpression final : Expression {
     return -parent_adjoint /
            slp::detail::sqrt(make_expression_ptr<ConstExpression>(1.0) - x * x);
   }
+
+  double hess_ll(double x, double, double parent_adjoint) const override {
+    auto s = std::sqrt(1.0 - x * x);
+    return parent_adjoint * -x / (s * s * s);
+  }
+
+  ExpressionPtr hess_expr_ll(
+      const ExpressionPtr& x, const ExpressionPtr&,
+      const ExpressionPtr& parent_adjoint) const override {
+    auto s =
+        slp::detail::sqrt(make_expression_ptr<ConstExpression>(1.0) - x * x);
+    return parent_adjoint * -x / (s * s * s);
+  }
 };
 
 /**
@@ -905,6 +1067,19 @@ struct AsinExpression final : Expression {
     return parent_adjoint /
            slp::detail::sqrt(make_expression_ptr<ConstExpression>(1.0) - x * x);
   }
+
+  double hess_ll(double x, double, double parent_adjoint) const override {
+    auto s = std::sqrt(1.0 - x * x);
+    return parent_adjoint * x / (s * s * s);
+  }
+
+  ExpressionPtr hess_expr_ll(
+      const ExpressionPtr& x, const ExpressionPtr&,
+      const ExpressionPtr& parent_adjoint) const override {
+    auto s =
+        slp::detail::sqrt(make_expression_ptr<ConstExpression>(1.0) - x * x);
+    return parent_adjoint * x / (s * s * s);
+  }
 };
 
 /**
@@ -946,13 +1121,16 @@ struct AtanExpression final : Expression {
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   double grad_l(double x, double, double parent_adjoint) const override {
-    return parent_adjoint / (1.0 + x * x);
+    auto t = 1.0 + x * x;
+    return parent_adjoint * -2.0 * x / (t * t);
   }
 
   ExpressionPtr grad_expr_l(
       const ExpressionPtr& x, const ExpressionPtr&,
       const ExpressionPtr& parent_adjoint) const override {
-    return parent_adjoint / (make_expression_ptr<ConstExpression>(1.0) + x * x);
+    auto t = make_expression_ptr<ConstExpression>(1.0) + x * x;
+    return parent_adjoint * make_expression_ptr<ConstExpression>(-2.0) * x /
+           (t * t);
   }
 };
 
@@ -1014,6 +1192,51 @@ struct Atan2Expression final : Expression {
       const ExpressionPtr& parent_adjoint) const override {
     return parent_adjoint * -y / (y * y + x * x);
   }
+
+  double hess_ll(double y, double x, double parent_adjoint) const override {
+    auto y2 = y * y;
+    auto x2 = x * x;
+    auto d = y2 + x2;
+    return parent_adjoint * (y2 - x2) / (d * d);
+  }
+
+  double hess_lr(double y, double x, double parent_adjoint) const override {
+    auto d = y * y + x * x;
+    return parent_adjoint * -2.0 * x * y / (d * d);
+  }
+
+  double hess_rr(double y, double x, double parent_adjoint) const override {
+    auto y2 = y * y;
+    auto x2 = x * x;
+    auto d = y2 + x2;
+    return parent_adjoint * (y2 - x2) / (d * d);
+  }
+
+  ExpressionPtr hess_expr_ll(
+      const ExpressionPtr& y, const ExpressionPtr& x,
+      const ExpressionPtr& parent_adjoint) const override {
+    auto y2 = y * y;
+    auto x2 = x * x;
+    auto d = y2 + x2;
+    return parent_adjoint * (y2 - x2) / (d * d);
+  }
+
+  ExpressionPtr hess_expr_lr(
+      const ExpressionPtr& y, const ExpressionPtr& x,
+      const ExpressionPtr& parent_adjoint) const override {
+    auto d = y * y + x * x;
+    return parent_adjoint * make_expression_ptr<ConstExpression>(-2.0) * x * y /
+           (d * d);
+  }
+
+  ExpressionPtr hess_expr_rr(
+      const ExpressionPtr& y, const ExpressionPtr& x,
+      const ExpressionPtr& parent_adjoint) const override {
+    auto y2 = y * y;
+    auto x2 = x * x;
+    auto d = y2 + x2;
+    return parent_adjoint * (y2 - x2) / (d * d);
+  }
 };
 
 /**
@@ -1058,13 +1281,23 @@ struct CosExpression final : Expression {
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   double grad_l(double x, double, double parent_adjoint) const override {
-    return -parent_adjoint * std::sin(x);
+    return parent_adjoint * -std::sin(x);
   }
 
   ExpressionPtr grad_expr_l(
       const ExpressionPtr& x, const ExpressionPtr&,
       const ExpressionPtr& parent_adjoint) const override {
     return parent_adjoint * -slp::detail::sin(x);
+  }
+
+  double hess_ll(double x, double, double parent_adjoint) const override {
+    return parent_adjoint * -std::cos(x);
+  }
+
+  ExpressionPtr hess_expr_ll(
+      const ExpressionPtr& x, const ExpressionPtr&,
+      const ExpressionPtr& parent_adjoint) const override {
+    return parent_adjoint * -slp::detail::cos(x);
   }
 };
 
@@ -1113,6 +1346,16 @@ struct CoshExpression final : Expression {
       const ExpressionPtr& x, const ExpressionPtr&,
       const ExpressionPtr& parent_adjoint) const override {
     return parent_adjoint * slp::detail::sinh(x);
+  }
+
+  double hess_ll(double x, double, double parent_adjoint) const override {
+    return parent_adjoint * std::cosh(x);
+  }
+
+  ExpressionPtr hess_expr_ll(
+      const ExpressionPtr& x, const ExpressionPtr&,
+      const ExpressionPtr& parent_adjoint) const override {
+    return parent_adjoint * slp::detail::cosh(x);
   }
 };
 
@@ -1165,6 +1408,20 @@ struct ErfExpression final : Expression {
                                                 std::numbers::inv_sqrtpi) *
            slp::detail::exp(-x * x);
   }
+
+  double hess_ll(double x, double, double parent_adjoint) const override {
+    return parent_adjoint * 4.0 * std::numbers::inv_sqrtpi * std::exp(-x * x) *
+           x;
+  }
+
+  ExpressionPtr hess_expr_ll(
+      const ExpressionPtr& x, const ExpressionPtr&,
+      const ExpressionPtr& parent_adjoint) const override {
+    return parent_adjoint *
+           make_expression_ptr<ConstExpression>(4.0 *
+                                                std::numbers::inv_sqrtpi) *
+           slp::detail::exp(-x * x) * x;
+  }
 };
 
 /**
@@ -1210,6 +1467,16 @@ struct ExpExpression final : Expression {
   }
 
   ExpressionPtr grad_expr_l(
+      const ExpressionPtr& x, const ExpressionPtr&,
+      const ExpressionPtr& parent_adjoint) const override {
+    return parent_adjoint * slp::detail::exp(x);
+  }
+
+  double hess_ll(double x, double, double parent_adjoint) const override {
+    return parent_adjoint * std::exp(x);
+  }
+
+  ExpressionPtr hess_expr_ll(
       const ExpressionPtr& x, const ExpressionPtr&,
       const ExpressionPtr& parent_adjoint) const override {
     return parent_adjoint * slp::detail::exp(x);
@@ -1275,6 +1542,42 @@ struct HypotExpression final : Expression {
       const ExpressionPtr& parent_adjoint) const override {
     return parent_adjoint * y / slp::detail::hypot(x, y);
   }
+
+  double hess_ll(double x, double y, double parent_adjoint) const override {
+    auto h = std::hypot(x, y);
+    return parent_adjoint * y * y / (h * h * h);
+  }
+
+  double hess_lr(double x, double y, double parent_adjoint) const override {
+    auto h = std::hypot(x, y);
+    return parent_adjoint * -x * y / (h * h * h);
+  }
+
+  double hess_rr(double x, double y, double parent_adjoint) const override {
+    auto h = std::hypot(x, y);
+    return parent_adjoint * x * x / (h * h * h);
+  }
+
+  ExpressionPtr hess_expr_ll(
+      const ExpressionPtr& x, const ExpressionPtr& y,
+      const ExpressionPtr& parent_adjoint) const override {
+    auto h = slp::detail::hypot(x, y);
+    return parent_adjoint * y * y / (h * h * h);
+  }
+
+  ExpressionPtr hess_expr_lr(
+      const ExpressionPtr& x, const ExpressionPtr& y,
+      const ExpressionPtr& parent_adjoint) const override {
+    auto h = slp::detail::hypot(x, y);
+    return parent_adjoint * -x * y / (h * h * h);
+  }
+
+  ExpressionPtr hess_expr_rr(
+      const ExpressionPtr& x, const ExpressionPtr& y,
+      const ExpressionPtr& parent_adjoint) const override {
+    auto h = slp::detail::hypot(x, y);
+    return parent_adjoint * x * x / (h * h * h);
+  }
 };
 
 /**
@@ -1326,6 +1629,16 @@ struct LogExpression final : Expression {
       const ExpressionPtr& parent_adjoint) const override {
     return parent_adjoint / x;
   }
+
+  double hess_ll(double x, double, double parent_adjoint) const override {
+    return -parent_adjoint / (x * x);
+  }
+
+  ExpressionPtr hess_expr_ll(
+      const ExpressionPtr& x, const ExpressionPtr&,
+      const ExpressionPtr& parent_adjoint) const override {
+    return -parent_adjoint / (x * x);
+  }
 };
 
 /**
@@ -1375,6 +1688,17 @@ struct Log10Expression final : Expression {
       const ExpressionPtr& parent_adjoint) const override {
     return parent_adjoint /
            (make_expression_ptr<ConstExpression>(std::numbers::ln10) * x);
+  }
+
+  double hess_ll(double x, double, double parent_adjoint) const override {
+    return -parent_adjoint / (std::numbers::ln10 * x * x);
+  }
+
+  ExpressionPtr hess_expr_ll(
+      const ExpressionPtr& x, const ExpressionPtr&,
+      const ExpressionPtr& parent_adjoint) const override {
+    return -parent_adjoint /
+           (make_expression_ptr<ConstExpression>(std::numbers::ln10) * x * x);
   }
 };
 
@@ -1435,7 +1759,7 @@ struct PowExpression final : Expression {
     if (base == 0.0) {
       return 0.0;
     } else {
-      return parent_adjoint * std::pow(base, power - 1) * base * std::log(base);
+      return parent_adjoint * std::pow(base, power) * std::log(base);
     }
   }
 
@@ -1456,11 +1780,61 @@ struct PowExpression final : Expression {
       // Return zero
       return base;
     } else {
-      return parent_adjoint *
-             slp::detail::pow(
-                 base, power - make_expression_ptr<ConstExpression>(1.0)) *
-             base * slp::detail::log(base);
+      return parent_adjoint * slp::detail::pow(base, power) *
+             slp::detail::log(base);
     }
+  }
+
+  double hess_ll(double base, double power,
+                 double parent_adjoint) const override {
+    return parent_adjoint * std::pow(base, power - 2) * (power - 1) * power;
+  }
+
+  double hess_lr(double base, double power,
+                 double parent_adjoint) const override {
+    // Since x * std::log(x) -> 0 as x -> 0
+    if (base == 0.0) {
+      return std::pow(base, power - 1);
+    } else {
+      return parent_adjoint * std::pow(base, power - 1) *
+             (power * std::log(base) + 1);
+    }
+  }
+
+  double hess_rr(double base, double power,
+                 double parent_adjoint) const override {
+    auto l = std::log(base);
+    return parent_adjoint * std::pow(base, power) * l * l;
+  }
+
+  ExpressionPtr hess_expr_ll(
+      const ExpressionPtr& base, const ExpressionPtr& power,
+      const ExpressionPtr& parent_adjoint) const override {
+    return parent_adjoint *
+           slp::detail::pow(base,
+                            power - make_expression_ptr<ConstExpression>(1.0)) *
+           (power - make_expression_ptr<ConstExpression>(2.0)) * power;
+  }
+
+  ExpressionPtr hess_expr_lr(
+      const ExpressionPtr& base, const ExpressionPtr& power,
+      const ExpressionPtr& parent_adjoint) const override {
+    auto one = make_expression_ptr<ConstExpression>(1.0);
+
+    // Since x * std::log(x) -> 0 as x -> 0
+    if (base->val == 0.0) {
+      return slp::detail::pow(base, power - one);
+    } else {
+      return parent_adjoint * slp::detail::pow(base, power - one) *
+             (power * slp::detail::log(base) + one);
+    }
+  }
+
+  ExpressionPtr hess_expr_rr(
+      const ExpressionPtr& base, const ExpressionPtr& power,
+      const ExpressionPtr& parent_adjoint) const override {
+    auto l = slp::detail::log(base);
+    return parent_adjoint * slp::detail::pow(base, power) * l * l;
   }
 };
 
@@ -1586,6 +1960,16 @@ struct SinExpression final : Expression {
       const ExpressionPtr& parent_adjoint) const override {
     return parent_adjoint * slp::detail::cos(x);
   }
+
+  double hess_ll(double x, double, double parent_adjoint) const override {
+    return parent_adjoint * -std::sin(x);
+  }
+
+  ExpressionPtr hess_expr_ll(
+      const ExpressionPtr& x, const ExpressionPtr&,
+      const ExpressionPtr& parent_adjoint) const override {
+    return parent_adjoint * -slp::detail::sin(x);
+  }
 };
 
 /**
@@ -1634,6 +2018,16 @@ struct SinhExpression final : Expression {
       const ExpressionPtr& x, const ExpressionPtr&,
       const ExpressionPtr& parent_adjoint) const override {
     return parent_adjoint * slp::detail::cosh(x);
+  }
+
+  double hess_ll(double x, double, double parent_adjoint) const override {
+    return parent_adjoint * std::sinh(x);
+  }
+
+  ExpressionPtr hess_expr_ll(
+      const ExpressionPtr& x, const ExpressionPtr&,
+      const ExpressionPtr& parent_adjoint) const override {
+    return parent_adjoint * slp::detail::sinh(x);
   }
 };
 
@@ -1685,6 +2079,19 @@ struct SqrtExpression final : Expression {
     return parent_adjoint /
            (make_expression_ptr<ConstExpression>(2.0) * slp::detail::sqrt(x));
   }
+
+  double hess_ll(double x, double, double parent_adjoint) const override {
+    auto s = std::sqrt(x);
+    return -parent_adjoint / (4.0 * s * s * s);
+  }
+
+  ExpressionPtr hess_expr_ll(
+      const ExpressionPtr& x, const ExpressionPtr&,
+      const ExpressionPtr& parent_adjoint) const override {
+    auto s = slp::detail::sqrt(x);
+    return -parent_adjoint /
+           (make_expression_ptr<ConstExpression>(4.0) * s * s * s);
+  }
 };
 
 /**
@@ -1727,13 +2134,28 @@ struct TanExpression final : Expression {
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   double grad_l(double x, double, double parent_adjoint) const override {
-    return parent_adjoint / (std::cos(x) * std::cos(x));
+    auto c = std::cos(x);
+    return parent_adjoint / (c * c);
   }
 
   ExpressionPtr grad_expr_l(
       const ExpressionPtr& x, const ExpressionPtr&,
       const ExpressionPtr& parent_adjoint) const override {
-    return parent_adjoint / (slp::detail::cos(x) * slp::detail::cos(x));
+    auto c = slp::detail::cos(x);
+    return parent_adjoint / (c * c);
+  }
+
+  double hess_ll(double x, double, double parent_adjoint) const override {
+    auto c = std::cos(x);
+    return parent_adjoint * 2.0 * std::tan(x) / (c * c);
+  }
+
+  ExpressionPtr hess_expr_ll(
+      const ExpressionPtr& x, const ExpressionPtr&,
+      const ExpressionPtr& parent_adjoint) const override {
+    auto c = slp::detail::cos(x);
+    return parent_adjoint * make_expression_ptr<ConstExpression>(2.0) *
+           slp::detail::tan(x) / (c * c);
   }
 };
 
@@ -1776,13 +2198,28 @@ struct TanhExpression final : Expression {
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   double grad_l(double x, double, double parent_adjoint) const override {
-    return parent_adjoint / (std::cosh(x) * std::cosh(x));
+    auto c = std::cosh(x);
+    return parent_adjoint / (c * c);
   }
 
   ExpressionPtr grad_expr_l(
       const ExpressionPtr& x, const ExpressionPtr&,
       const ExpressionPtr& parent_adjoint) const override {
-    return parent_adjoint / (slp::detail::cosh(x) * slp::detail::cosh(x));
+    auto c = slp::detail::cosh(x);
+    return parent_adjoint / (c * c);
+  }
+
+  double hess_ll(double x, double, double parent_adjoint) const override {
+    auto c = std::cosh(x);
+    return parent_adjoint * -2.0 * std::tanh(x) / (c * c);
+  }
+
+  ExpressionPtr hess_expr_ll(
+      const ExpressionPtr& x, const ExpressionPtr&,
+      const ExpressionPtr& parent_adjoint) const override {
+    auto c = slp::detail::cosh(x);
+    return parent_adjoint * make_expression_ptr<ConstExpression>(-2.0) *
+           slp::detail::tanh(x) / (c * c);
   }
 };
 
