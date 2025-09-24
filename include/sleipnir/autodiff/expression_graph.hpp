@@ -2,14 +2,13 @@
 
 #pragma once
 
-#include <ranges>
 #include <span>
-#include <utility>
 
 #include <Eigen/SparseCore>
 #include <gch/small_vector.hpp>
 
 #include "sleipnir/autodiff/expression.hpp"
+#include "sleipnir/autodiff/expression_eval.hpp"
 #include "sleipnir/autodiff/expression_type.hpp"
 
 namespace slp::detail {
@@ -58,8 +57,6 @@ ExpressionGraph<Scalar> topological_sort(const ExpressionPtr<Scalar>& root) {
   //
   // A node is only added to the stack after all its incoming edges have been
   // traversed. Expression::scratch is a decrementing counter for tracking this.
-  //
-  // https://en.wikipedia.org/wiki/Topological_sorting
   stack.emplace_back(root.get());
   while (!stack.empty()) {
     auto node = stack.back();
@@ -76,6 +73,40 @@ ExpressionGraph<Scalar> topological_sort(const ExpressionPtr<Scalar>& root) {
   }
 
   return list;
+}
+
+/// Returns true if the partial derivatives of an expression graph's operators
+/// up to a given type depend on parameters.
+///
+/// @tparam Scalar Scalar type.
+/// @param list Topological sort of graph from parent to child.
+/// @param max_type The largest operator type to check.
+/// @return True if the partial derivatives of an operator with a type of at
+///     most max_type depend on parameters.
+template <typename Scalar>
+bool has_parameter_partials(const ExpressionGraph<Scalar>& list,
+                            ExpressionType max_type) {
+  using enum ExpressionType;
+
+  for (const auto& node : list) {
+    // Operators on only constants and parameters (e.g., p₁ * p₂ in
+    // x + p₁ * p₂) are skipped because their partial derivatives are with
+    // respect to parameters, which aren't decision variables.
+    if (!node->is_leaf && node->type() >= LINEAR && node->type() <= max_type &&
+        !constant_partials(*node)) {
+      bool has_parameter_arg = false;
+      node->visit_args([&](const auto& arg) {
+        has_parameter_arg |= arg->type() == PARAMETER;
+      });
+
+      // A parameter's value can change between solves
+      if (has_parameter_arg) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 /// Returns true if the gradient of an expression graph is constant.
@@ -97,30 +128,38 @@ bool has_constant_gradient(const ExpressionGraph<Scalar>& list) {
     return false;
   }
 
-  for (const auto& node : list) {
-    // The gradient of a linear expression is composed of the partial
-    // derivatives of its linear operators, so only the ones that vary with
-    // their operator's arguments can change it. Operators on only constants
-    // and parameters (e.g., p₁ * p₂ in x + p₁ * p₂) are skipped because their
-    // partial derivatives are with respect to parameters, which aren't in the
-    // gradient.
-    if (node->type() == LINEAR && !node->has_constant_partials()) {
-      // A linear operator's partial derivatives can't depend on decision
-      // variables, or the operator wouldn't be linear, so they depend only on
-      // its constant and parameter arguments
-      bool has_parameter_arg = false;
-      node->visit_args([&](const auto& arg) {
-        has_parameter_arg |= arg->type() == PARAMETER;
-      });
+  // The gradient of a linear expression is composed of the partial derivatives
+  // of its linear operators. A linear operator's partial derivatives can't
+  // depend on decision variables, or the operator wouldn't be linear, so they
+  // can only vary with parameters.
+  return !has_parameter_partials(list, LINEAR);
+}
 
-      // A parameter's value can change between solves
-      if (has_parameter_arg) {
-        return false;
-      }
-    }
+/// Returns true if the Hessian of an expression graph is constant.
+///
+/// @tparam Scalar Scalar type.
+/// @param list Topological sort of graph from parent to child.
+/// @return True if the Hessian of the expression graph is constant.
+template <typename Scalar>
+bool has_constant_hessian(const ExpressionGraph<Scalar>& list) {
+  using enum ExpressionType;
+
+  // The Hessian of a constant, parameter, or linear expression is zero
+  if (list.empty() || list[0]->type() < QUADRATIC) {
+    return true;
   }
 
-  return true;
+  // The Hessian of a nonlinear expression is never constant
+  if (list[0]->type() > QUADRATIC) {
+    return false;
+  }
+
+  // The Hessian of a quadratic expression is composed of the partial
+  // derivatives of its linear and quadratic operators (a quadratic operator's
+  // partial derivatives that vary with decision variables are only multiplied
+  // by its constant second partial derivatives), so only parameters can change
+  // it.
+  return !has_parameter_partials(list, QUADRATIC);
 }
 
 /// Generates a topological sort of the union of several expression graphs from
@@ -192,70 +231,6 @@ ExpressionGraph<Scalar> topological_sort(
   }
 
   return list;
-}
-
-/// Updates the values of all nodes in this graph based on the values of
-/// their dependent nodes.
-///
-/// @tparam Scalar Scalar type.
-/// @param list Topological sort of graph from parent to child.
-template <typename Scalar>
-void update_values(const ExpressionGraph<Scalar>& list) {
-  // Traverse graph from child to parent and update values
-  for (auto& node : list | std::views::reverse) {
-    // Leaf nodes don't need updating
-    if (!node->is_leaf) {
-      node->val = node->value();
-    }
-  }
-}
-
-/// Updates the adjoints in the expression graph (computes the gradient) then
-/// appends the adjoints of wrt to the sparse matrix triplets.
-///
-/// @tparam Scalar Scalar type.
-/// @param top_list Topologically sorted graph from parent to child.
-/// @param output_list Output row as column-node pairs.
-/// @param triplets The sparse matrix triplets.
-/// @param row The row of wrt.
-template <typename Scalar>
-void append_triplets(
-    const ExpressionGraph<Scalar>& top_list,
-    const gch::small_vector<std::pair<int, detail::Expression<Scalar>*>>&
-        output_list,
-    gch::small_vector<Eigen::Triplet<Scalar>>& triplets, int row) {
-  // Read docs/algorithms.md#Reverse_accumulation_automatic_differentiation
-  // for background on reverse accumulation automatic differentiation.
-
-  if (top_list.empty()) {
-    return;
-  }
-
-  // Set root node's adjoint to 1 since df/df is 1
-  top_list[0]->adj = Scalar(1);
-
-  // Zero the rest of the adjoints
-  for (auto& node : top_list | std::views::drop(1)) {
-    node->adj = Scalar(0);
-  }
-
-  // df/dx = (df/dy)(dy/dx). The adjoint of x is equal to the adjoint of y
-  // multiplied by dy/dx. If there are multiple "paths" from the root node to
-  // variable; the variable's adjoint is the sum of each path's adjoint
-  // contribution.
-  for (const auto& node : top_list) {
-    // Leaf nodes have no children to propagate adjoints to
-    if (!node->is_leaf) {
-      node->accumulate_adjoints();
-    }
-  }
-
-  // Exploit the row's sparsity pattern by only appending wrt adjoints that
-  // appear in the expression graph
-  for (const auto& [col, node] : output_list) {
-    // Append adjoints of wrt to sparse matrix triplets
-    triplets.emplace_back(row, col, node->adj);
-  }
 }
 
 }  // namespace slp::detail

@@ -19,7 +19,6 @@
 
 #include "sleipnir/autodiff/expression.hpp"
 #include "sleipnir/autodiff/expression_functions.hpp"
-#include "sleipnir/autodiff/expression_graph.hpp"
 #include "sleipnir/autodiff/expression_tape.hpp"
 #include "sleipnir/autodiff/expression_type.hpp"
 #include "sleipnir/autodiff/sleipnir_base.hpp"
@@ -35,25 +34,10 @@ namespace slp {
 // Forward declarations for friend declarations in Variable
 
 template <typename Scalar>
-class VariableMatrix;
-
-template <typename Scalar>
 struct EqualityConstraints;
 
 template <typename Scalar>
 struct InequalityConstraints;
-
-namespace detail {
-
-template <typename Scalar>
-VariableMatrix<Scalar> gradient_tree(
-    const detail::ExpressionGraph<Scalar>& top_list,
-    const VariableMatrix<Scalar>& wrt);
-
-template <typename Scalar>
-class ValueTape;
-
-}  // namespace detail
 
 template <typename Scalar, int UpLo = Eigen::Lower | Eigen::Upper>
   requires(UpLo == Eigen::Lower) || (UpLo == (Eigen::Lower | Eigen::Upper))
@@ -61,6 +45,13 @@ class Hessian;
 
 template <typename Scalar>
 class Jacobian;
+
+namespace detail {
+
+template <typename Scalar>
+class ValueTape;
+
+}  // namespace detail
 
 /// An autodiff variable pointing to an expression node.
 ///
@@ -389,10 +380,6 @@ class Variable : public SleipnirBase {
                                 const Variable<Scalar>& y,
                                 const Variable<Scalar>& z);
 
-  template <typename Scalar>
-  friend VariableMatrix<Scalar> detail::gradient_tree(
-      const detail::ExpressionGraph<Scalar>& top_list,
-      const VariableMatrix<Scalar>& wrt);
   template <typename Scalar, int UpLo>
     requires(UpLo == Eigen::Lower) || (UpLo == (Eigen::Lower | Eigen::Upper))
   friend class Hessian;

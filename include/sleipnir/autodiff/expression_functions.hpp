@@ -81,6 +81,15 @@ struct AcosExpression final
     using std::sqrt;
     g[0] = lit<Value>(Scalar(-1)) / sqrt(lit<Value>(Scalar(1)) - x * x);
   }
+
+  template <typename Partial, typename Value>
+  static void eval_hess(std::array<std::array<Partial, 1>, 1>& H,
+                        [[maybe_unused]] const Value& val, const Value& x) {
+    using std::sqrt;
+
+    Value s = sqrt(lit<Value>(Scalar(1)) - x * x);
+    H[0][0] = -x / (s * s * s);
+  }
 };
 
 /// acos() for Expressions.
@@ -115,6 +124,15 @@ struct AsinExpression final
     using std::sqrt;
     g[0] = lit<Value>(Scalar(1)) / sqrt(lit<Value>(Scalar(1)) - x * x);
   }
+
+  template <typename Partial, typename Value>
+  static void eval_hess(std::array<std::array<Partial, 1>, 1>& H,
+                        [[maybe_unused]] const Value& val, const Value& x) {
+    using std::sqrt;
+
+    Value s = sqrt(lit<Value>(Scalar(1)) - x * x);
+    H[0][0] = x / (s * s * s);
+  }
 };
 
 /// asin() for Expressions.
@@ -147,6 +165,13 @@ struct AtanExpression final
   static void eval_grad(std::array<Partial, 1>& g,
                         [[maybe_unused]] const Value& val, const Value& x) {
     g[0] = lit<Value>(Scalar(1)) / (lit<Value>(Scalar(1)) + x * x);
+  }
+
+  template <typename Partial, typename Value>
+  static void eval_hess(std::array<std::array<Partial, 1>, 1>& H,
+                        [[maybe_unused]] const Value& val, const Value& x) {
+    Value t = lit<Value>(Scalar(1)) + x * x;
+    H[0][0] = lit<Value>(Scalar(-2)) * x / (t * t);
   }
 };
 
@@ -184,6 +209,19 @@ struct Atan2Expression final
     g[0] = x / d;
     g[1] = -y / d;
   }
+
+  template <typename Partial, typename Value>
+  static void eval_hess(std::array<std::array<Partial, 2>, 2>& H,
+                        [[maybe_unused]] const Value& val, const Value& y,
+                        const Value& x) {
+    Value y2 = y * y;
+    Value x2 = x * x;
+    Value d = y2 + x2;
+    Value d2 = d * d;
+    H[0][0] = lit<Value>(Scalar(-2)) * x * y / d2;
+    H[1][0] = (y2 - x2) / d2;
+    H[1][1] = lit<Value>(Scalar(2)) * x * y / d2;
+  }
 };
 
 /// atan2() for Expressions.
@@ -219,6 +257,12 @@ struct CbrtExpression final
                         [[maybe_unused]] const Value& x) {
     g[0] = lit<Value>(Scalar(1)) / (lit<Value>(Scalar(3)) * val * val);
   }
+
+  template <typename Partial, typename Value>
+  static void eval_hess(std::array<std::array<Partial, 1>, 1>& H,
+                        const Value& val, const Value& x) {
+    H[0][0] = lit<Value>(Scalar(-2)) / (lit<Value>(Scalar(9)) * x * val * val);
+  }
 };
 
 /// cbrt() for Expressions.
@@ -251,6 +295,12 @@ struct CosExpression final : NonLeafExpression<CosExpression, Scalar, Type, 1> {
                         [[maybe_unused]] const Value& val, const Value& x) {
     using std::sin;
     g[0] = -sin(x);
+  }
+
+  template <typename Partial, typename Value>
+  static void eval_hess(std::array<std::array<Partial, 1>, 1>& H,
+                        const Value& val, [[maybe_unused]] const Value& x) {
+    H[0][0] = -val;
   }
 };
 
@@ -286,6 +336,12 @@ struct CoshExpression final
     using std::sinh;
     g[0] = sinh(x);
   }
+
+  template <typename Partial, typename Value>
+  static void eval_hess(std::array<std::array<Partial, 1>, 1>& H,
+                        const Value& val, [[maybe_unused]] const Value& x) {
+    H[0][0] = val;
+  }
 };
 
 /// cosh() for Expressions.
@@ -319,6 +375,14 @@ struct ErfExpression final : NonLeafExpression<ErfExpression, Scalar, Type, 1> {
     using std::exp;
     g[0] = lit<Value>(Scalar(2.0 * std::numbers::inv_sqrtpi)) * exp(-x * x);
   }
+
+  template <typename Partial, typename Value>
+  static void eval_hess(std::array<std::array<Partial, 1>, 1>& H,
+                        [[maybe_unused]] const Value& val, const Value& x) {
+    using std::exp;
+    H[0][0] =
+        lit<Value>(Scalar(-4.0 * std::numbers::inv_sqrtpi)) * x * exp(-x * x);
+  }
 };
 
 /// erf() for Expressions.
@@ -350,6 +414,12 @@ struct ExpExpression final : NonLeafExpression<ExpExpression, Scalar, Type, 1> {
   static void eval_grad(std::array<Partial, 1>& g, const Value& val,
                         [[maybe_unused]] const Value& x) {
     g[0] = val;
+  }
+
+  template <typename Partial, typename Value>
+  static void eval_hess(std::array<std::array<Partial, 1>, 1>& H,
+                        const Value& val, [[maybe_unused]] const Value& x) {
+    H[0][0] = val;
   }
 };
 
@@ -388,6 +458,15 @@ struct Hypot2Expression final
                         const Value& x, const Value& y) {
     g[0] = x / val;
     g[1] = y / val;
+  }
+
+  template <typename Partial, typename Value>
+  static void eval_hess(std::array<std::array<Partial, 2>, 2>& H,
+                        const Value& val, const Value& x, const Value& y) {
+    Value norm3 = val * val * val;
+    H[0][0] = y * y / norm3;
+    H[1][0] = -x * y / norm3;
+    H[1][1] = x * x / norm3;
   }
 };
 
@@ -437,6 +516,19 @@ struct Hypot3Expression final
     g[0] = x / val;
     g[1] = y / val;
     g[2] = z / val;
+  }
+
+  template <typename Partial, typename Value>
+  static void eval_hess(std::array<std::array<Partial, 3>, 3>& H,
+                        const Value& val, const Value& x, const Value& y,
+                        const Value& z) {
+    Value norm3 = val * val * val;
+    H[0][0] = (y * y + z * z) / norm3;
+    H[1][0] = -x * y / norm3;
+    H[1][1] = (x * x + z * z) / norm3;
+    H[2][0] = -x * z / norm3;
+    H[2][1] = -y * z / norm3;
+    H[2][2] = (x * x + y * y) / norm3;
   }
 };
 
@@ -601,6 +693,12 @@ struct LogExpression final : NonLeafExpression<LogExpression, Scalar, Type, 1> {
                         [[maybe_unused]] const Value& val, const Value& x) {
     g[0] = lit<Value>(Scalar(1)) / x;
   }
+
+  template <typename Partial, typename Value>
+  static void eval_hess(std::array<std::array<Partial, 1>, 1>& H,
+                        [[maybe_unused]] const Value& val, const Value& x) {
+    H[0][0] = lit<Value>(Scalar(-1)) / (x * x);
+  }
 };
 
 /// log() for Expressions.
@@ -633,6 +731,13 @@ struct Log10Expression final
   static void eval_grad(std::array<Partial, 1>& g,
                         [[maybe_unused]] const Value& val, const Value& x) {
     g[0] = lit<Value>(Scalar(1)) / (lit<Value>(Scalar(std::numbers::ln10)) * x);
+  }
+
+  template <typename Partial, typename Value>
+  static void eval_hess(std::array<std::array<Partial, 1>, 1>& H,
+                        [[maybe_unused]] const Value& val, const Value& x) {
+    H[0][0] = lit<Value>(Scalar(-1)) /
+              (lit<Value>(Scalar(std::numbers::ln10)) * x * x);
   }
 };
 
@@ -771,6 +876,21 @@ struct PowExpression final : NonLeafExpression<PowExpression, Scalar, Type, 2> {
     g[0] = pow(base, power - lit<Value>(Scalar(1))) * power;
     g[1] = val * log(base);
   }
+
+  template <typename Partial, typename Value>
+  static void eval_hess(std::array<std::array<Partial, 2>, 2>& H,
+                        const Value& val, const Value& base,
+                        const Value& power) {
+    using std::log;
+    using std::pow;
+
+    Value l = log(base);
+    H[0][0] = pow(base, power - lit<Value>(Scalar(2))) *
+              (power - lit<Value>(Scalar(1))) * power;
+    H[1][0] = pow(base, power - lit<Value>(Scalar(1))) *
+              (power * l + lit<Value>(Scalar(1)));
+    H[1][1] = val * l * l;
+  }
 };
 
 /// pow() for Expressions.
@@ -874,6 +994,12 @@ struct SinExpression final : NonLeafExpression<SinExpression, Scalar, Type, 1> {
     using std::cos;
     g[0] = cos(x);
   }
+
+  template <typename Partial, typename Value>
+  static void eval_hess(std::array<std::array<Partial, 1>, 1>& H,
+                        const Value& val, [[maybe_unused]] const Value& x) {
+    H[0][0] = -val;
+  }
 };
 
 /// sin() for Expressions.
@@ -908,6 +1034,12 @@ struct SinhExpression final
     using std::cosh;
     g[0] = cosh(x);
   }
+
+  template <typename Partial, typename Value>
+  static void eval_hess(std::array<std::array<Partial, 1>, 1>& H,
+                        const Value& val, [[maybe_unused]] const Value& x) {
+    H[0][0] = val;
+  }
 };
 
 /// sinh() for Expressions.
@@ -940,6 +1072,13 @@ struct SqrtExpression final
   static void eval_grad(std::array<Partial, 1>& g, const Value& val,
                         [[maybe_unused]] const Value& x) {
     g[0] = lit<Value>(Scalar(1)) / (lit<Value>(Scalar(2)) * val);
+  }
+
+  template <typename Partial, typename Value>
+  static void eval_hess(std::array<std::array<Partial, 1>, 1>& H,
+                        const Value& val, [[maybe_unused]] const Value& x) {
+    H[0][0] =
+        lit<Value>(Scalar(-1)) / (lit<Value>(Scalar(4)) * val * val * val);
   }
 };
 
@@ -976,6 +1115,15 @@ struct TanExpression final : NonLeafExpression<TanExpression, Scalar, Type, 1> {
     Value c = cos(x);
     g[0] = lit<Value>(Scalar(1)) / (c * c);
   }
+
+  template <typename Partial, typename Value>
+  static void eval_hess(std::array<std::array<Partial, 1>, 1>& H,
+                        const Value& val, const Value& x) {
+    using std::cos;
+
+    Value c = cos(x);
+    H[0][0] = lit<Value>(Scalar(2)) * val / (c * c);
+  }
 };
 
 /// tan() for Expressions.
@@ -1011,6 +1159,15 @@ struct TanhExpression final
 
     Value c = cosh(x);
     g[0] = lit<Value>(Scalar(1)) / (c * c);
+  }
+
+  template <typename Partial, typename Value>
+  static void eval_hess(std::array<std::array<Partial, 1>, 1>& H,
+                        const Value& val, const Value& x) {
+    using std::cosh;
+
+    Value c = cosh(x);
+    H[0][0] = lit<Value>(Scalar(-2)) * val / (c * c);
   }
 };
 
