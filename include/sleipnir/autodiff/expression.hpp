@@ -150,7 +150,8 @@ struct UnaryMinusExpression;
 /// @tparam T Derived expression type template.
 /// @tparam Scalar Scalar type.
 /// @tparam Args Argument types.
-/// @param type The expression's type.
+/// @param type The expression's type. Types other than linear and quadratic
+///     are instantiated as nonlinear.
 /// @param args The arguments.
 template <template <typename, ExpressionType> typename T, typename Scalar,
           typename... Args>
@@ -203,20 +204,10 @@ struct Expression {
   /// The value of the expression node.
   Scalar val{0};
 
-  /// The adjoint of the expression node, used during autodiff.
-  Scalar adj{0};
-
-  /// The adjoint of the expression node, used during gradient expression tree
-  /// generation.
-  ExpressionPtr<Scalar> adj_expr;
-
   /// Scratch space for various graph algorithms.
   ///
   /// In expression_graph.hpp's topological_sort(), scratch counts incoming
   /// edges for this node, offset by -1 so -1 means no edges.
-  ///
-  /// In Hessian's constructor, scratch represents this expression's column in a
-  /// Jacobian, or -1 otherwise.
   ///
   /// In AdjointTape's constructor, scratch temporarily holds this expression's
   /// index in the topological list.
@@ -442,12 +433,6 @@ struct Expression {
   /// @return The name of this expression.
   virtual std::string_view name() const = 0;
 
-  /// Accumulates the child adjoints as Scalars.
-  virtual void accumulate_adjoints() const {}
-
-  /// Accumulates the child adjoints as Expressions.
-  virtual void accumulate_adjoints_expr() const {}
-
   /// Returns the operator of this expression.
   ///
   /// @return The operator of this expression.
@@ -457,21 +442,7 @@ struct Expression {
 /// Base of the derived expression types of non-leaf operators.
 ///
 /// Implements Expression's virtual functions from the derived expression type's
-/// eval(), eval_grad(), and NAME and the operator's properties.
-///
-/// The derived expression type computes its partial derivatives with
-/// `eval_grad<Partial, Value>(g, val, a₀, a₁, ...)`, which writes ∂/∂aₖ to
-/// g[k] given the expression's value followed by the argument values. Value is
-/// Scalar to evaluate them, or ExpressionPtr<Scalar> to build them as
-/// expressions. Partial is the type each partial derivative is written as,
-/// which is Value here. It's static unless the partial derivatives depend on
-/// the expression's state. If the derived expression type doesn't define it,
-/// all partial derivatives are structurally zero.
-///
-/// If the derived expression type sets CONSTANT_PARTIALS to true, gradient
-/// trees evaluate the partial derivatives as Scalars instead of building them
-/// as expressions, and AdjointTape can eliminate the node from its adjoint
-/// operations if they're all 1 or −1.
+/// eval() and NAME and the operator's properties.
 ///
 /// @tparam Derived Derived expression type.
 /// @tparam Scalar Scalar type.
@@ -489,9 +460,6 @@ struct NonLeafExpression : Expression<Scalar> {
 
   // Ensure ArgArray is big enough to hold one element per argument
   static_assert(NumArgs <= MAX_ARGS, "Increase MAX_ARGS");
-
-  /// Whether the partial derivatives are the same at every argument value.
-  static constexpr bool CONSTANT_PARTIALS = false;
 
   /// The arguments in visit_args() order.
   std::array<ExpressionPtr<Scalar>, NumArgs> args;
@@ -511,6 +479,8 @@ struct NonLeafExpression : Expression<Scalar> {
   /// @param func The function to run.
   void visit_args(
       function_ref<void(Expression<Scalar>* arg)> func) const final {
+    // A fold instead of a loop, since GCC doesn't unroll the loop. The loop
+    // made Hessian setup 2% slower.
     [&]<size_t... Is>(std::index_sequence<Is...>) {
       (func(args[Is].get()), ...);
     }(std::make_index_sequence<NumArgs>{});
@@ -539,83 +509,6 @@ struct NonLeafExpression : Expression<Scalar> {
   ///
   /// @return The operator of this expression.
   ExpressionOp op() const final { return OP; }
-
-  /// Accumulates the child adjoints as Scalars.
-  void accumulate_adjoints() const final {
-    [&]<size_t... Is>(std::index_sequence<Is...>) {
-      // Evaluate gradients
-      ArgArray<Scalar> g{};
-      grad(g, this->val, args[Is]->val...);
-
-      // Accumulate adjoints
-      ((args[Is]->adj += this->adj * g[Is]), ...);
-    }(std::make_index_sequence<NumArgs>{});
-  }
-
-  /// Accumulates the child adjoints as Expressions.
-  void accumulate_adjoints_expr() const final {
-    [&]<size_t... Is>(std::index_sequence<Is...>) {
-      // If the partial derivatives are constant, evaluate them as Scalars
-      // instead of building them as expressions
-      if constexpr (Derived::CONSTANT_PARTIALS) {
-        // Evaluate gradients
-        ArgArray<Scalar> g{};
-        grad(g, this->val, args[Is]->val...);
-
-        // Accumulate adjoints
-        (
-            [&] {
-              // Fold the adjoint accumulation expression if the gradient is
-              // 1, -1, or 0
-              if (g[Is] == Scalar(1)) {
-                args[Is]->adj_expr += this->adj_expr;
-              } else if (g[Is] == Scalar(-1)) {
-                args[Is]->adj_expr += -this->adj_expr;
-              } else if (g[Is] != Scalar(0)) {
-                args[Is]->adj_expr += this->adj_expr * constant_ptr(g[Is]);
-              }
-            }(),
-            ...);
-      } else {
-        // Evaluate gradients
-        ArgArray<ExpressionPtr<Scalar>> g;
-        grad(g, ExpressionPtr<Scalar>{const_cast<NonLeafExpression*>(this)},
-             args[Is]...);
-
-        // Accumulate adjoints
-        (
-            [&] {
-              // A null partial derivative is structurally zero
-              if (g[Is] != nullptr) {
-                args[Is]->adj_expr += this->adj_expr * g[Is];
-              }
-            }(),
-            ...);
-      }
-    }(std::make_index_sequence<NumArgs>{});
-  }
-
- private:
-  /// Computes the partial derivatives with the derived expression type's
-  /// eval_grad(), or leaves them unwritten if it doesn't define one.
-  ///
-  /// This is a function template instead of a generic lambda because MSVC
-  /// treats an invalid expression in a generic lambda's requires-expression as
-  /// a hard error instead of false.
-  ///
-  /// @tparam Value Scalar or ExpressionPtr<Scalar>.
-  /// @tparam Args Argument types.
-  /// @param g The partial derivatives in visit_args() order.
-  /// @param val The expression's value.
-  /// @param x The argument values in visit_args() order.
-  template <typename Value, typename... Args>
-  void grad(ArgArray<Value>& g, const Value& val, const Args&... x) const {
-    if constexpr (requires(const Derived& expr) {
-                    expr.eval_grad(g, val, x...);
-                  }) {
-      static_cast<const Derived&>(*this).eval_grad(g, val, x...);
-    }
-  }
 };
 
 /// Creates an intrusive shared pointer to a derived expression type, or to a
@@ -659,7 +552,11 @@ struct BinaryMinusExpression final
   static constexpr std::string_view NAME = "binary minus";
 
   /// Whether the partial derivatives are the same at every argument value.
-  static constexpr bool CONSTANT_PARTIALS = true;
+  ///
+  /// @return Whether the partial derivatives are constant.
+  static constexpr bool has_constant_partials(const ArgArray<bool>&) {
+    return true;
+  }
 
   static Scalar eval(Scalar lhs, Scalar rhs) { return lhs - rhs; }
 
@@ -686,7 +583,11 @@ struct BinaryPlusExpression final
   static constexpr std::string_view NAME = "binary plus";
 
   /// Whether the partial derivatives are the same at every argument value.
-  static constexpr bool CONSTANT_PARTIALS = true;
+  ///
+  /// @return Whether the partial derivatives are constant.
+  static constexpr bool has_constant_partials(const ArgArray<bool>&) {
+    return true;
+  }
 
   static Scalar eval(Scalar lhs, Scalar rhs) { return lhs + rhs; }
 
@@ -711,6 +612,16 @@ struct DivExpression final : NonLeafExpression<DivExpression<Scalar, T>, Scalar,
   /// The expression's name.
   static constexpr std::string_view NAME = "division";
 
+  /// Whether the partial derivatives are the same at every argument value.
+  ///
+  /// @param is_constant Whether each argument is constant.
+  /// @return Whether the partial derivatives are constant.
+  static constexpr bool has_constant_partials(
+      const ArgArray<bool>& is_constant) {
+    // ∂(lhs/rhs)/∂lhs = 1/rhs is constant if rhs is
+    return is_constant[1];
+  }
+
   static Scalar eval(Scalar lhs, Scalar rhs) { return lhs / rhs; }
 
   template <typename Partial, typename Value>
@@ -718,6 +629,14 @@ struct DivExpression final : NonLeafExpression<DivExpression<Scalar, T>, Scalar,
                         const Value& lhs, const Value& rhs) {
     g[0] = lit<Value>(Scalar(1)) / rhs;
     g[1] = -lhs / (rhs * rhs);
+  }
+
+  template <typename Partial, typename Value>
+  static void eval_hess(ArgArray<ArgArray<Partial>>& H,
+                        [[maybe_unused]] const Value& val, const Value& lhs,
+                        const Value& rhs) {
+    H[1][0] = lit<Value>(Scalar(-1)) / (rhs * rhs);
+    H[1][1] = lit<Value>(Scalar(2)) * lhs / (rhs * rhs * rhs);
   }
 };
 
@@ -734,6 +653,22 @@ struct MultExpression final
   /// The expression's name.
   static constexpr std::string_view NAME = "multiplication";
 
+  /// Whether the partial derivatives are the same at every argument value.
+  ///
+  /// @param is_constant Whether each argument is constant.
+  /// @return Whether the partial derivatives are constant.
+  static constexpr bool has_constant_partials(
+      const ArgArray<bool>& is_constant) {
+    // ∂(lhs⋅rhs)/∂lhs = rhs is constant if rhs is, and vice versa
+    return is_constant[0] || is_constant[1];
+  }
+
+  /// Whether the second partial derivatives are the same at every argument
+  /// value.
+  ///
+  /// ∂²(ab)/∂a∂b = 1 regardless of a and b.
+  static constexpr bool CONSTANT_SECOND_PARTIALS = true;
+
   static Scalar eval(Scalar lhs, Scalar rhs) { return lhs * rhs; }
 
   template <typename Partial, typename Value>
@@ -741,6 +676,14 @@ struct MultExpression final
                         const Value& lhs, const Value& rhs) {
     g[0] = rhs;
     g[1] = lhs;
+  }
+
+  template <typename Partial, typename Value>
+  static void eval_hess(ArgArray<ArgArray<Partial>>& H,
+                        [[maybe_unused]] const Value& val,
+                        [[maybe_unused]] const Value& lhs,
+                        [[maybe_unused]] const Value& rhs) {
+    H[1][0] = lit<Value>(Scalar(1));
   }
 };
 
@@ -758,7 +701,11 @@ struct UnaryMinusExpression final
   static constexpr std::string_view NAME = "unary minus";
 
   /// Whether the partial derivatives are the same at every argument value.
-  static constexpr bool CONSTANT_PARTIALS = true;
+  ///
+  /// @return Whether the partial derivatives are constant.
+  static constexpr bool has_constant_partials(const ArgArray<bool>&) {
+    return true;
+  }
 
   static Scalar eval(Scalar lhs) { return -lhs; }
 
@@ -804,9 +751,6 @@ void deallocate_expression(Expression<Scalar>* expr) {
     auto elem = stack.back();
     stack.pop_back();
 
-    if (elem->adj_expr != nullptr) {
-      release(elem->adj_expr.get());
-    }
     elem->visit_args(release);
 
     // Not calling the destructor here is safe because it only decrements
