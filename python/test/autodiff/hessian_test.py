@@ -610,6 +610,92 @@ def test_edge_pushing_petro_figure_1() -> None:
     assert (H.value().todense() == expected_H).all()
 
 
+def test_linear_node_elimination() -> None:
+    x = VariableMatrix(3)
+
+    # Each term exercises a different elimination case:
+    #
+    #   sin(x₀ + x₁ − x₂): chain of sums with one parent each
+    #   exp(2x₁) cos(2x₁): constant multiple with two parents
+    #   (x₀ + x₂)²: sum with two parents and two children (not eliminated)
+    #   (3x₂)²: eliminated node as both arguments of a product
+    #   exp(x₀ − x₀ + x₁): expansion terms that cancel
+    #   log(x₁ + x₀/4): quotient by a constant
+    two_x1 = 2.0 * x[1]
+    x0_plus_x2 = x[0] + x[2]
+    three_x2 = 3.0 * x[2]
+    f = (
+        autodiff.sin(x[0] + x[1] - x[2])
+        + autodiff.exp(two_x1) * autodiff.cos(two_x1)
+        + x0_plus_x2 * x0_plus_x2
+        + three_x2 * three_x2
+        + autodiff.exp(x[0] - x[0] + x[1])
+        + autodiff.log(x[1] + x[0] / 4.0)
+    )
+
+    hessian = Hessian(f, x)
+
+    for point in [(1.0, 2.0, 3.0), (-0.5, 0.25, 1.5)]:
+        x.set_value(np.array(point).reshape(3, 1))
+        x0, x1, x2 = point
+
+        v = np.array([1.0, 1.0, -1.0])
+        w = np.array([0.25, 1.0, 0.0])
+        s = x1 + x0 / 4.0
+
+        expected_H = -math.sin(x0 + x1 - x2) * np.outer(v, v) - np.outer(w, w) / (s * s)
+        expected_H[1, 1] += -8.0 * math.exp(2.0 * x1) * math.sin(2.0 * x1)
+        expected_H[1, 1] += math.exp(x1)
+        expected_H[0, 0] += 2.0
+        expected_H[0, 2] += 2.0
+        expected_H[2, 0] += 2.0
+        expected_H[2, 2] += 2.0 + 18.0
+
+        np.testing.assert_allclose(
+            hessian.value().todense(), expected_H, rtol=0.0, atol=1e-12
+        )
+        np.testing.assert_allclose(
+            hessian.get().value(), expected_H, rtol=0.0, atol=1e-12
+        )
+
+
+def test_constant_contributions() -> None:
+    x = VariableMatrix(2)
+
+    # f = x₀x₁ + 3x₁² − x₀x₀ + sin(x₀)
+    #
+    # The products have constant adjoints and second partial derivatives, so
+    # their contributions are constant and folded into the results's initial
+    # values. sin(x₀) isn't, so it's recomputed on each evaluation.
+    f = x[0] * x[1] + 3.0 * x[1] * x[1] - x[0] * x[0] + autodiff.sin(x[0])
+
+    hessian = Hessian(f, x)
+    symbolic_H = hessian.get()
+
+    for x0 in [1.0, -2.0, 0.5]:
+        x[0].set_value(x0)
+        x[1].set_value(2.0 * x0)
+
+        expected_H = np.array([[-2.0 - math.sin(x0), 1.0], [1.0, 6.0]])
+        np.testing.assert_allclose(
+            hessian.value().todense(), expected_H, rtol=0.0, atol=1e-12
+        )
+        np.testing.assert_allclose(symbolic_H.value(), expected_H, rtol=0.0, atol=1e-12)
+
+
+def test_pow_with_power_of_half() -> None:
+    x = VariableMatrix(1)
+    x[0].set_value(2.0)
+
+    # pow(x, 0.5) is rewritten as sqrt(x)
+    y = autodiff.pow(x[0], 0.5)
+    assert y.value() == pytest.approx(2.0**0.5, abs=1e-15)
+
+    # d²/dx² √x = −1/4 x^(−3/2)
+    H = Hessian(y, x)
+    assert H.value()[0, 0] == pytest.approx(-0.25 * 2.0**-1.5, abs=1e-15)
+
+
 def test_variable_reuse() -> None:
     y = Variable()
     x = VariableMatrix(1)

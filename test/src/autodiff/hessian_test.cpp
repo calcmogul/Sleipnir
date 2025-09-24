@@ -901,6 +901,189 @@ TEMPLATE_TEST_CASE("Hessian - Edge pushing (Petro) figure 1", "[Hessian]",
   CHECK(H.value().toDense() == expected_H);
 }
 
+TEMPLATE_TEST_CASE("Hessian - Linear node elimination", "[Hessian]",
+                   SCALAR_TYPES) {
+  using T = TestType;
+  using std::cos;
+  using std::exp;
+  using std::sin;
+
+  slp::scope_exit exit{
+      [] { CHECK(slp::global_pool_resource().blocks_in_use() == 0u); }};
+
+  slp::VariableMatrix<T> x{3};
+
+  // Each term exercises a different elimination case:
+  //
+  //   sin(x₀ + x₁ − x₂): chain of sums with one parent each
+  //   exp(2x₁) cos(2x₁): constant multiple with two parents
+  //   (x₀ + x₂)²: sum with two parents and two children (not eliminated)
+  //   (3x₂)²: eliminated node as both arguments of a product
+  //   exp(x₀ − x₀ + x₁): expansion terms that cancel
+  //   log(x₁ + x₀/4): quotient by a constant
+  slp::Variable two_x1 = T(2) * x[1];
+  slp::Variable sum = x[0] + x[2];
+  slp::Variable three_x2 = T(3) * x[2];
+  auto f = slp::sin(x[0] + x[1] - x[2]) + slp::exp(two_x1) * slp::cos(two_x1) +
+           sum * sum + three_x2 * three_x2 + slp::exp(x[0] - x[0] + x[1]) +
+           slp::log(x[1] + x[0] / T(4));
+
+  slp::Hessian<T, Eigen::Lower | Eigen::Upper> H{f, x};
+
+  for (const auto& point : {Eigen::Vector<T, 3>{T(1), T(2), T(3)},
+                            Eigen::Vector<T, 3>{T(-0.5), T(0.25), T(1.5)}}) {
+    x.set_value(point);
+    const T x0 = point[0];
+    const T x1 = point[1];
+    const T x2 = point[2];
+
+    Eigen::Vector<T, 3> v{T(1), T(1), T(-1)};
+    Eigen::Vector<T, 3> w{T(0.25), T(1), T(0)};
+    const T s = x1 + x0 / T(4);
+
+    Eigen::Matrix<T, 3, 3> expected_H =
+        -sin(x0 + x1 - x2) * v * v.transpose() - w * w.transpose() / (s * s);
+    expected_H(1, 1) += T(-8) * exp(T(2) * x1) * sin(T(2) * x1) + exp(x1);
+    expected_H(0, 0) += T(2);
+    expected_H(0, 2) += T(2);
+    expected_H(2, 0) += T(2);
+    expected_H(2, 2) += T(2) + T(18);
+
+    CHECK_THAT(H.value().toDense(), WithinAbs(expected_H, T(1e-12)));
+    CHECK_THAT(H.get().value(), WithinAbs(expected_H, T(1e-12)));
+  }
+}
+
+TEMPLATE_TEST_CASE("Hessian - Copy", "[Hessian]", SCALAR_TYPES) {
+  using T = TestType;
+  using std::cos;
+  using std::sin;
+
+  slp::scope_exit exit{
+      [] { CHECK(slp::global_pool_resource().blocks_in_use() == 0u); }};
+
+  slp::VariableMatrix<T> x{2};
+  x[0].set_value(T(1));
+  x[1].set_value(T(2));
+
+  // f = sin(x₀x₁) + x₀²x₁
+  //
+  // sin(x₀x₁) stores temporary Hessian entries, which a copied Hessian has its
+  // own copies of
+  auto f = slp::sin(x[0] * x[1]) + x[0] * x[0] * x[1];
+
+  auto expected_H = [&] {
+    const T x0 = x[0].value();
+    const T x1 = x[1].value();
+    const T s = sin(x0 * x1);
+    const T c = cos(x0 * x1);
+    return Eigen::Matrix<T, 2, 2>{
+        {-x1 * x1 * s + T(2) * x1, c - x0 * x1 * s + T(2) * x0},
+        {c - x0 * x1 * s + T(2) * x0, -x0 * x0 * s}};
+  };
+
+  slp::Hessian<T, Eigen::Lower | Eigen::Upper> H{f, x};
+  CHECK_THAT(H.value().toDense(), WithinAbs(expected_H(), T(1e-12)));
+
+  auto H_copy = H;
+  x[0].set_value(T(-0.5));
+  x[1].set_value(T(3));
+  CHECK_THAT(H_copy.value().toDense(), WithinAbs(expected_H(), T(1e-12)));
+  CHECK_THAT(H.value().toDense(), WithinAbs(expected_H(), T(1e-12)));
+
+  H = H_copy;
+  x[0].set_value(T(0.25));
+  CHECK_THAT(H.value().toDense(), WithinAbs(expected_H(), T(1e-12)));
+}
+
+TEMPLATE_TEST_CASE("Hessian - Constant contributions", "[Hessian]",
+                   SCALAR_TYPES) {
+  using T = TestType;
+  using std::sin;
+
+  slp::scope_exit exit{
+      [] { CHECK(slp::global_pool_resource().blocks_in_use() == 0u); }};
+
+  slp::VariableMatrix<T> x{2};
+
+  // f = x₀x₁ + 3x₁² − x₀x₀ + sin(x₀)
+  //
+  // The products have constant adjoints and second partial derivatives, so
+  // their contributions are constant and folded into the results's initial
+  // values. sin(x₀) isn't, so it's recomputed on each evaluation.
+  auto f = x[0] * x[1] + T(3) * x[1] * x[1] - x[0] * x[0] + slp::sin(x[0]);
+
+  slp::Hessian<T, Eigen::Lower | Eigen::Upper> H{f, x};
+  auto symbolic_H = H.get();
+
+  for (T x0 : {T(1), T(-2), T(0.5)}) {
+    x[0].set_value(x0);
+    x[1].set_value(T(2) * x0);
+
+    Eigen::Matrix<T, 2, 2> expected_H{{T(-2) - sin(x0), T(1)}, {T(1), T(6)}};
+    CHECK_THAT(H.value().toDense(), WithinAbs(expected_H, T(1e-12)));
+    CHECK_THAT(symbolic_H.value(), WithinAbs(expected_H, T(1e-12)));
+  }
+}
+
+TEMPLATE_TEST_CASE("Hessian - Lower triangle", "[Hessian]", SCALAR_TYPES) {
+  using T = TestType;
+
+  slp::scope_exit exit{
+      [] { CHECK(slp::global_pool_resource().blocks_in_use() == 0u); }};
+
+  slp::VariableMatrix<T> x{3};
+
+  // f = x₀²x₁ + (x₀ − 2x₁)², with x₂ in none of the terms
+  //
+  //     [2x₁ + 2     2x₀ − 4  0]
+  // H = [2x₀ − 4        8     0]
+  //     [   0           0     0]
+  auto d = x[0] - T(2) * x[1];
+  auto f = x[0] * x[0] * x[1] + d * d;
+
+  slp::Hessian<T, Eigen::Lower> H{f, x};
+  auto symbolic_H = H.get();
+
+  for (auto [x0, x1] : {std::pair{T(1), T(2)}, std::pair{T(3), T(-1)}}) {
+    x[0].set_value(x0);
+    x[1].set_value(x1);
+
+    Eigen::Matrix<T, 3, 3> expected_H{{T(2) * x1 + T(2), T(0), T(0)},
+                                      {T(2) * x0 - T(4), T(8), T(0)},
+                                      {T(0), T(0), T(0)}};
+    CHECK(Eigen::Matrix<T, 3, 3>{H.value()} == expected_H);
+
+    // get() only sets the lower triangle
+    for (int row = 0; row < 3; ++row) {
+      for (int col = 0; col <= row; ++col) {
+        CHECK(symbolic_H[row, col].value() == expected_H(row, col));
+      }
+    }
+  }
+}
+
+TEMPLATE_TEST_CASE("Hessian - pow() with power of 0.5", "[Hessian]",
+                   SCALAR_TYPES) {
+  using T = TestType;
+  using std::pow;
+
+  slp::scope_exit exit{
+      [] { CHECK(slp::global_pool_resource().blocks_in_use() == 0u); }};
+
+  slp::VariableMatrix<T> x{1};
+  x[0].set_value(T(2));
+
+  // pow(x, 0.5) is rewritten as sqrt(x)
+  auto y = slp::pow(x[0], T(0.5));
+  CHECK_THAT(y.value(), WithinAbs(pow(T(2), T(0.5)), T(1e-15)));
+
+  // d²/dx² √x = −1/4 x^(−3/2)
+  auto H = slp::Hessian(y, x);
+  CHECK_THAT(H.value().coeff(0, 0),
+             WithinAbs(T(-0.25) * pow(T(2), T(-1.5)), T(1e-15)));
+}
+
 TEMPLATE_TEST_CASE("Hessian - Variable reuse", "[Hessian]", SCALAR_TYPES) {
   using T = TestType;
 

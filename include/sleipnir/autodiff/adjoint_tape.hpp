@@ -135,6 +135,12 @@ class AdjointTape {
     /// argument. ∂ϕᵢ/∂aₖ is at index first_partial + k.
     uint32_t first_partial;
 
+    /// The index of ∂²ϕᵢ/∂a₀∂a₀ in second_partials(). ∂²ϕᵢ/∂aⱼ∂aₖ with j ≥ k
+    /// is at index first_second_partial + j(j + 1)/2 + k. Only meaningful if
+    /// the node's second partial derivatives aren't constant (see
+    /// HAS_CONSTANT_SECOND_PARTIALS).
+    uint32_t first_second_partial;
+
     /// The number of arguments. children() returns this many children.
     uint32_t num_args;
 
@@ -236,7 +242,7 @@ class AdjointTape {
   std::span<const Scalar> adjoints() const { return m_adjoints; }
 
   /// Returns the non-leaf nodes's partial derivatives from the last
-  /// update_values<1>() call. Node::first_partial says where a
+  /// update_values() call with ORDER ≥ 1. Node::first_partial says where a
   /// node's are. Structurally zero partial derivatives are zero. They're
   /// followed by the negations of the ones that adjoint operations through
   /// eliminated nodes need (see nodes()).
@@ -244,17 +250,30 @@ class AdjointTape {
   /// @return The non-leaf nodes's partial derivatives.
   std::span<const Scalar> partials() const { return m_partials; }
 
-  /// Evaluates each node's value and, if ORDER is 1, each non-leaf node's
-  /// partial derivatives from the leaves's current values.
+  /// Returns the non-leaf nodes's second partial derivatives from the last
+  /// update_values<2>() call. Node::first_second_partial says where a
+  /// node's are. Structurally zero second partial derivatives are zero.
+  /// Constant ones (see HAS_CONSTANT_SECOND_PARTIALS) aren't stored.
+  ///
+  /// @return The non-leaf nodes's second partial derivatives.
+  std::span<const Scalar> second_partials() const { return m_second_partials; }
+
+  /// Evaluates each node's value and each non-leaf node's partial derivatives
+  /// up to the given order from the leaves's current values.
   ///
   /// The values are stored in the tape instead of the expression graph's
   /// nodes, which are left unmodified.
   ///
   /// @tparam ORDER The highest order of partial derivatives to evaluate: 0 for
-  ///     only values, or 1 for partial derivatives (needed by replay()).
+  ///     only values, 1 for partial derivatives (needed by replay()), or 2 for
+  ///     second partial derivatives too.
   template <int ORDER = 1>
-    requires(ORDER == 0 || ORDER == 1)
+    requires(ORDER >= 0 && ORDER <= 2)
   void update_values() {
+    if constexpr (ORDER >= 2) {
+      m_second_partials.resize(m_num_second_partials);
+    }
+
     // Read the leaves's values
     for (size_t i = m_num_non_leaves; i < m_top_list.size(); ++i) {
       m_values[i] = m_top_list[i]->val;
@@ -283,6 +302,17 @@ class AdjointTape {
           op_grad<T>(expr, x, val, g);
           for (size_t k = 0; k < T::NUM_ARGS; ++k) {
             m_partials[first_partial + k] = g[k];
+          }
+        }
+
+        if constexpr (ORDER >= 2 && NUM_VARYING_SECOND_PARTIALS<T> > 0) {
+          ArgArray<ArgArray<Scalar>> H{};
+          op_hess<T>(expr, x, val, H);
+          Scalar* h = &m_second_partials[m_first_second_partials[i]];
+          for (size_t j = 0; j < T::NUM_ARGS; ++j) {
+            for (size_t k = 0; k <= j; ++k) {
+              *h++ = H[j][k];
+            }
           }
         }
       });
@@ -343,6 +373,33 @@ class AdjointTape {
       partials[m_args.size() + idx] = -partials[m_negated_partials[idx]];
     }
     return partials;
+  }
+
+  /// Returns the second partial derivatives of the nodes that propagate
+  /// adjoints as expressions, laid out like second_partials().
+  ///
+  /// Structurally zero second partial derivatives are null. Constant ones
+  /// aren't stored, like second_partials().
+  ///
+  /// @return The second partial derivatives as expressions.
+  gch::small_vector<ExpressionPtr<Scalar>> symbolic_second_partials() const {
+    gch::small_vector<ExpressionPtr<Scalar>> second_partials(
+        m_num_second_partials);
+    for (const auto& node : m_nodes) {
+      visit_op<Scalar>(node.expr->op(), [&]<typename T>() {
+        if constexpr (NUM_VARYING_SECOND_PARTIALS<T> > 0) {
+          ArgArray<ArgArray<ExpressionPtr<Scalar>>> H;
+          hess_expr(node.expr, H);
+          auto h = second_partials.begin() + node.first_second_partial;
+          for (size_t j = 0; j < T::NUM_ARGS; ++j) {
+            for (size_t k = 0; k <= j; ++k) {
+              *h++ = std::move(H[j][k]);
+            }
+          }
+        }
+      });
+    }
+    return second_partials;
   }
 
   /// Computes the adjoints as expressions, like replay() does with values.
@@ -442,6 +499,13 @@ class AdjointTape {
   /// indexed by topological list index, followed by m_args's size.
   gch::small_vector<uint32_t> m_first_partials;
 
+  /// Each non-leaf node's first second partial derivative's index in
+  /// m_second_partials, indexed by topological list index.
+  gch::small_vector<uint32_t> m_first_second_partials;
+
+  /// The total number of second partial derivatives.
+  uint32_t m_num_second_partials = 0;
+
   /// Each node's value, indexed by topological list index.
   gch::small_vector<Scalar> m_values;
 
@@ -449,6 +513,11 @@ class AdjointTape {
   /// laid out like m_args, followed by the negations listed in
   /// m_negated_partials.
   gch::small_vector<Scalar> m_partials;
+
+  /// Each non-leaf node's second partial derivatives with respect to its
+  /// arguments (lower triangle, row-major), except constant ones. Only
+  /// allocated once update_values<2>() is called.
+  gch::small_vector<Scalar> m_second_partials;
 
   /// Each node's column in wrt, indexed by topological list index, or -1 if
   /// the node isn't an element of wrt.
@@ -509,7 +578,7 @@ class AdjointTape {
 
     // Sort dependent variables before independent ones while maintaining
     // relative order. Leaves have no children, so this is still a topological
-    // sort. update_values() relies on it to read the leaves's values.
+    // sort. Edge pushing requires it.
     m_num_non_leaves =
         std::ranges::stable_partition(
             m_top_list, [](const auto& elem) { return !elem->is_leaf; })
@@ -529,16 +598,20 @@ class AdjointTape {
                                    : NOT_IN_TAPE);
     }
 
-    // Record each non-leaf node's operator and arguments. Each argument has one
-    // first partial derivative, so those are stored at the argument's index in
-    // m_args.
+    // Record each non-leaf node's operator and arguments, and where its
+    // partial derivatives are stored. Each argument has one first partial
+    // derivative, so those are stored at the argument's index in m_args.
     //
     // The arguments are visited through visit_op() instead of a virtual call.
     // The branch predictor learns its conditional branches from the recent
     // operator sequence, and that history also lets it predict the virtual
     // op() calls. Without it, they mispredict about three times per node.
+    uint32_t num_second_partials = 0;
     m_ops.reserve(m_num_non_leaves);
     m_first_partials.reserve(m_num_non_leaves + 1);
+    if (!values_only) {
+      m_first_second_partials.reserve(m_num_non_leaves);
+    }
     m_args.reserve(2 * m_num_non_leaves);
     for (size_t i = 0; i < m_num_non_leaves; ++i) {
       auto op = m_top_list[i]->op();
@@ -548,12 +621,17 @@ class AdjointTape {
         for (const auto& arg : static_cast<const T&>(*m_top_list[i]).args) {
           m_args.emplace_back(arg->scratch);
         }
+        if (!values_only) {
+          m_first_second_partials.emplace_back(num_second_partials);
+          num_second_partials += NUM_VARYING_SECOND_PARTIALS<T>;
+        }
       });
     }
     m_first_partials.emplace_back(static_cast<uint32_t>(m_args.size()));
     m_values.resize(m_top_list.size());
     if (!values_only) {
       m_partials.resize(m_args.size());
+      m_num_second_partials = num_second_partials;
     }
 
     // Without wrt, there are no adjoints to record
@@ -792,6 +870,7 @@ class AdjointTape {
       const uint32_t num_instructions = m_instructions.size();
       slp_assert(state == NodeState::RECORDED || num_instructions > 0);
       m_nodes.push_back({v_i, static_cast<uint32_t>(i), m_first_partials[i],
+                         m_first_second_partials[i],
                          static_cast<uint32_t>(children.size()),
                          state == NodeState::ELIMINATED ? num_instructions - 1
                                                         : num_instructions});
@@ -970,8 +1049,8 @@ class AdjointTape {
   /// Returns the signs of an expression's partial derivatives if they're 1 or
   /// −1 at every argument value (e.g., for a + b and a − b).
   ///
-  /// These are the operators whose partial derivatives are constant (see
-  /// NonLeafExpression's CONSTANT_PARTIALS), so they're found from the
+  /// These are the operators whose partial derivatives are constant even if
+  /// no argument is (see HAS_CONSTANT_PARTIALS), so they're found from the
   /// operator alone, without reading the arguments.
   ///
   /// @param expr The expression. Must not be a leaf.
@@ -981,21 +1060,23 @@ class AdjointTape {
       const Expression<Scalar>& expr) {
     return visit_op<Scalar>(
         expr.op(), [&]<typename T>() -> std::optional<ArgArray<int>> {
-          if constexpr (T::CONSTANT_PARTIALS) {
-            ArgArray<Scalar> g{};
-            op_grad<T>(expr, ArgArray<Scalar>{}, Scalar(0), g);
+          if constexpr (HAS_CONSTANT_PARTIALS<T>) {
+            if constexpr (T::has_constant_partials(ArgArray<bool>{})) {
+              ArgArray<Scalar> g{};
+              op_grad<T>(expr, ArgArray<Scalar>{}, Scalar(0), g);
 
-            ArgArray<int> signs{};
-            for (size_t k = 0; k < T::NUM_ARGS; ++k) {
-              if (g[k] == Scalar(1)) {
-                signs[k] = 1;
-              } else if (g[k] == Scalar(-1)) {
-                signs[k] = -1;
-              } else {
-                return std::nullopt;
+              ArgArray<int> signs{};
+              for (size_t k = 0; k < T::NUM_ARGS; ++k) {
+                if (g[k] == Scalar(1)) {
+                  signs[k] = 1;
+                } else if (g[k] == Scalar(-1)) {
+                  signs[k] = -1;
+                } else {
+                  return std::nullopt;
+                }
               }
+              return signs;
             }
-            return signs;
           }
           return std::nullopt;
         });

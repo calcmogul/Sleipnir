@@ -2,9 +2,7 @@
 
 #pragma once
 
-#include <ranges>
 #include <span>
-#include <utility>
 
 #include <Eigen/SparseCore>
 #include <gch/small_vector.hpp>
@@ -58,8 +56,6 @@ ExpressionGraph<Scalar> topological_sort(const ExpressionPtr<Scalar>& root) {
   //
   // A node is only added to the stack after all its incoming edges have been
   // traversed. Expression::scratch is a decrementing counter for tracking this.
-  //
-  // https://en.wikipedia.org/wiki/Topological_sorting
   stack.emplace_back(root.get());
   while (!stack.empty()) {
     auto node = stack.back();
@@ -147,70 +143,6 @@ ExpressionGraph<Scalar> topological_sort(
   }
 
   return list;
-}
-
-/// Updates the values of all nodes in this graph based on the values of
-/// their dependent nodes.
-///
-/// @tparam Scalar Scalar type.
-/// @param list Topological sort of graph from parent to child.
-template <typename Scalar>
-void update_values(const ExpressionGraph<Scalar>& list) {
-  // Traverse graph from child to parent and update values
-  for (auto& node : list | std::views::reverse) {
-    // Leaf nodes don't need updating
-    if (!node->is_leaf) {
-      node->val = node->value();
-    }
-  }
-}
-
-/// Updates the adjoints in the expression graph (computes the gradient) then
-/// appends the adjoints of wrt to the sparse matrix triplets.
-///
-/// @tparam Scalar Scalar type.
-/// @param top_list Topologically sorted graph from parent to child.
-/// @param output_list Output row as column-node pairs.
-/// @param triplets The sparse matrix triplets.
-/// @param row The row of wrt.
-template <typename Scalar>
-void append_triplets(
-    const ExpressionGraph<Scalar>& top_list,
-    const gch::small_vector<std::pair<int, detail::Expression<Scalar>*>>&
-        output_list,
-    gch::small_vector<Eigen::Triplet<Scalar>>& triplets, int row) {
-  // Read docs/algorithms.md#Reverse_accumulation_automatic_differentiation
-  // for background on reverse accumulation automatic differentiation.
-
-  if (top_list.empty()) {
-    return;
-  }
-
-  // Set root node's adjoint to 1 since df/df is 1
-  top_list[0]->adj = Scalar(1);
-
-  // Zero the rest of the adjoints
-  for (auto& node : top_list | std::views::drop(1)) {
-    node->adj = Scalar(0);
-  }
-
-  // df/dx = (df/dy)(dy/dx). The adjoint of x is equal to the adjoint of y
-  // multiplied by dy/dx. If there are multiple "paths" from the root node to
-  // variable; the variable's adjoint is the sum of each path's adjoint
-  // contribution.
-  for (const auto& node : top_list) {
-    // Leaf nodes have no children to propagate adjoints to
-    if (!node->is_leaf) {
-      node->accumulate_adjoints();
-    }
-  }
-
-  // Exploit the row's sparsity pattern by only appending wrt adjoints that
-  // appear in the expression graph
-  for (const auto& [col, node] : output_list) {
-    // Append adjoints of wrt to sparse matrix triplets
-    triplets.emplace_back(row, col, node->adj);
-  }
 }
 
 }  // namespace slp::detail
