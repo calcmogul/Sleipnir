@@ -30,6 +30,8 @@ namespace detail {
 
 template <typename Scalar>
 class GradientExpressionGraph;
+template <typename Scalar>
+class HessianExpressionGraph;
 
 }  // namespace detail
 
@@ -355,6 +357,7 @@ class Variable : public SleipnirBase {
                                 const Variable<Scalar>& z);
 
   friend class detail::GradientExpressionGraph<Scalar>;
+  friend class detail::HessianExpressionGraph<Scalar>;
   template <typename Scalar, int UpLo>
     requires(UpLo == Eigen::Lower) || (UpLo == (Eigen::Lower | Eigen::Upper))
   friend class Hessian;
