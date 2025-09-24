@@ -59,6 +59,10 @@ if(Threads_FOUND)
     target_link_libraries(Sleipnir PUBLIC Threads::Threads)
 endif()
 
+if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
+    target_link_libraries(Sleipnir PUBLIC -lstdc++exp)
+endif()
+
 if(DISABLE_DIAGNOSTICS)
     target_compile_definitions(Sleipnir PUBLIC SLEIPNIR_DISABLE_DIAGNOSTICS)
 endif()
