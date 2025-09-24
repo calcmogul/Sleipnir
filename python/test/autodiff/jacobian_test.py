@@ -1,5 +1,5 @@
 import numpy as np
-from sleipnir.autodiff import Jacobian, VariableMatrix
+from sleipnir.autodiff import Jacobian, Variable, VariableMatrix
 
 
 def test_y_eq_x() -> None:
@@ -153,6 +153,45 @@ def test_non_square() -> None:
     J_value = J.get().value()
     assert J_value.shape == (1, 3)
     assert (J_value == expected_J).all()
+
+
+def test_mixed_rows() -> None:
+    x = VariableMatrix(3)
+    for i in range(3):
+        x[i].set_value(i + 1)
+
+    # Nonlinear, constant, leaf, and linear rows, with x₃ in none of them
+    #
+    #     [ x₁x₂  ]
+    # y = [   5   ]
+    #     [  x₁   ]
+    #     [x₁ + 3x₂]
+    #
+    #         [x₂  x₁  0]
+    # dy/dx = [0   0   0]
+    #         [1   0   0]
+    #         [1   3   0]
+    y = VariableMatrix(4)
+    y[0] = x[0] * x[1]
+    y[1] = Variable(5.0)
+    y[2] = x[0]
+    y[3] = x[0] + 3.0 * x[1]
+    J = Jacobian(y, x)
+    J_get = J.get()
+
+    expected_J = np.array(
+        [[2.0, 1.0, 0.0], [0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 3.0, 0.0]]
+    )
+    assert (J_get.value() == expected_J).all()
+    assert (J.value().todense() == expected_J).all()
+
+    # The symbolic Jacobian follows wrt's values
+    x[0].set_value(3.0)
+    x[1].set_value(4.0)
+    expected_J[0, 0] = 4.0
+    expected_J[0, 1] = 3.0
+    assert (J_get.value() == expected_J).all()
+    assert (J.value().todense() == expected_J).all()
 
 
 def test_variable_reuse() -> None:

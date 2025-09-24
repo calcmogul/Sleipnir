@@ -2,8 +2,7 @@
 
 #pragma once
 
-#include <ranges>
-#include <utility>
+#include <span>
 
 #include <Eigen/SparseCore>
 #include <gch/small_vector.hpp>
@@ -57,8 +56,6 @@ ExpressionGraph<Scalar> topological_sort(const ExpressionPtr<Scalar>& root) {
   //
   // A node is only added to the stack after all its incoming edges have been
   // traversed. Expression::scratch is a decrementing counter for tracking this.
-  //
-  // https://en.wikipedia.org/wiki/Topological_sorting
   stack.emplace_back(root.get());
   while (!stack.empty()) {
     auto node = stack.back();
@@ -77,68 +74,75 @@ ExpressionGraph<Scalar> topological_sort(const ExpressionPtr<Scalar>& root) {
   return list;
 }
 
-/// Updates the values of all nodes in this graph based on the values of
-/// their dependent nodes.
+/// Generates a topological sort of the union of several expression graphs from
+/// parent to child.
+///
+/// Each node appears once, even if it's reachable from multiple roots. Null and
+/// constant roots are skipped.
+///
+/// https://en.wikipedia.org/wiki/Topological_sorting
 ///
 /// @tparam Scalar Scalar type.
-/// @param list Topological sort of graph from parent to child.
+/// @param roots The root nodes of the expressions.
 template <typename Scalar>
-void update_values(const ExpressionGraph<Scalar>& list) {
-  // Traverse graph from child to parent and update values
-  for (auto& node : list | std::views::reverse) {
-    // Leaf nodes don't need updating
-    if (!node->is_leaf) {
-      node->val = node->value();
+ExpressionGraph<Scalar> topological_sort(
+    std::span<Expression<Scalar>* const> roots) {
+  ExpressionGraph<Scalar> list;
+
+  auto is_root = [](const Expression<Scalar>* root) {
+    return root != nullptr && root->type() != ExpressionType::CONSTANT;
+  };
+
+  // Stack of nodes to explore
+  gch::small_vector<Expression<Scalar>*> stack;
+
+  // Enumerate incoming edges for each node via depth-first search. The roots
+  // are treated as children of a virtual root node, so a root that's also a
+  // descendant of another root is only listed after all its parents.
+  //
+  // NOTE: scratch counts incoming edges, offset by -1 so -1 means no edges.
+  for (auto root : roots) {
+    if (is_root(root) && ++root->scratch == 0) {
+      stack.emplace_back(root);
     }
   }
-}
+  while (!stack.empty()) {
+    auto node = stack.back();
+    stack.pop_back();
 
-/// Updates the adjoints in the expression graph (computes the gradient) then
-/// appends the adjoints of wrt to the sparse matrix triplets.
-///
-/// @tparam Scalar Scalar type.
-/// @param top_list Topologically sorted graph from parent to child.
-/// @param output_list Output row as column-node pairs.
-/// @param triplets The sparse matrix triplets.
-/// @param row The row of wrt.
-template <typename Scalar>
-void append_triplets(
-    const ExpressionGraph<Scalar>& top_list,
-    const gch::small_vector<std::pair<int, detail::Expression<Scalar>*>>&
-        output_list,
-    gch::small_vector<Eigen::Triplet<Scalar>>& triplets, int row) {
-  // Read docs/algorithms.md#Reverse_accumulation_automatic_differentiation
-  // for background on reverse accumulation automatic differentiation.
-
-  if (top_list.empty()) {
-    return;
+    node->visit_args([&stack](const auto& arg) {
+      // If the node hasn't been explored yet, add it to the stack
+      if (++arg->scratch == 0) {
+        stack.push_back(arg);
+      }
+    });
   }
 
-  // Set root node's adjoint to 1 since df/df is 1
-  top_list[0]->adj = Scalar(1);
-
-  // Zero the rest of the adjoints
-  for (auto& node : top_list | std::views::drop(1)) {
-    node->adj = Scalar(0);
-  }
-
-  // df/dx = (df/dy)(dy/dx). The adjoint of x is equal to the adjoint of y
-  // multiplied by dy/dx. If there are multiple "paths" from the root node to
-  // variable; the variable's adjoint is the sum of each path's adjoint
-  // contribution.
-  for (const auto& node : top_list) {
-    // Leaf nodes have no children to propagate adjoints to
-    if (!node->is_leaf) {
-      node->accumulate_adjoints();
+  // Generate topological sort of graph from parent to child, starting with the
+  // virtual root node's edges.
+  //
+  // A node is only added to the stack after all its incoming edges have been
+  // traversed. Expression::scratch is a decrementing counter for tracking this.
+  for (auto root : roots) {
+    if (is_root(root) && --root->scratch == -1) {
+      stack.emplace_back(root);
     }
   }
+  while (!stack.empty()) {
+    auto node = stack.back();
+    stack.pop_back();
 
-  // Exploit the row's sparsity pattern by only appending wrt adjoints that
-  // appear in the expression graph
-  for (const auto& [col, node] : output_list) {
-    // Append adjoints of wrt to sparse matrix triplets
-    triplets.emplace_back(row, col, node->adj);
+    list.emplace_back(node);
+
+    node->visit_args([&stack](const auto& arg) {
+      // If we traversed all this node's incoming edges, add it to the stack
+      if (--arg->scratch == -1) {
+        stack.push_back(arg);
+      }
+    });
   }
+
+  return list;
 }
 
 }  // namespace slp::detail

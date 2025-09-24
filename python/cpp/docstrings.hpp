@@ -259,9 +259,9 @@ constexpr char mkd_doc_slp_Hessian[] =
 R"doc(This class calculates the Hessian of a variable with respect to a
 vector of variables.
 
-The gradient tree is cached so subsequent Hessian calculations are
-faster, and the Hessian is only recomputed if the variable expression
-is nonlinear.
+The Hessian is computed with edge pushing. The pushes are recorded
+once on construction, then replayed with new values on each call to
+value() (see detail::EdgePushingProgram).
 
 Template Args:
     Scalar: Scalar type.
@@ -302,19 +302,11 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_Hessian_m_H[] = R"doc()doc";
+constexpr char mkd_doc_slp_Hessian_m_program[] = R"doc()doc";
 
-constexpr char mkd_doc_slp_Hessian_m_cached_triplets[] = R"doc()doc";
+constexpr char mkd_doc_slp_Hessian_m_tape[] = R"doc()doc";
 
-constexpr char mkd_doc_slp_Hessian_m_nonlinear_rows[] = R"doc()doc";
-
-constexpr char mkd_doc_slp_Hessian_m_output_lists[] = R"doc(List of output rows as column-node pairs)doc";
-
-constexpr char mkd_doc_slp_Hessian_m_top_lists[] =
-R"doc(List of topologically sorted graphs from parent to child, one for each
-row)doc";
-
-constexpr char mkd_doc_slp_Hessian_m_variables[] = R"doc()doc";
+constexpr char mkd_doc_slp_Hessian_m_variable[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Hessian_m_wrt[] = R"doc()doc";
 
@@ -449,17 +441,21 @@ Returns:
 
 constexpr char mkd_doc_slp_Jacobian_m_J[] = R"doc()doc";
 
-constexpr char mkd_doc_slp_Jacobian_m_cached_triplets[] = R"doc(Cached triplets for gradients of linear rows)doc";
+constexpr char mkd_doc_slp_Jacobian_m_linear_rows[] =
+R"doc(Row indices of linear rows, whose gradients are computed once on
+construction)doc";
+
+constexpr char mkd_doc_slp_Jacobian_m_linear_slot_map[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Jacobian_m_linear_tape[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Jacobian_m_nonlinear_rows[] =
-R"doc(List of row indices for nonlinear rows whose graients will be computed
-in value())doc";
+R"doc(Row indices of quadratic or nonlinear rows, whose gradients are
+computed in value())doc";
 
-constexpr char mkd_doc_slp_Jacobian_m_output_lists[] = R"doc(List of output rows as column-node pairs)doc";
+constexpr char mkd_doc_slp_Jacobian_m_nonlinear_slot_map[] = R"doc()doc";
 
-constexpr char mkd_doc_slp_Jacobian_m_top_lists[] =
-R"doc(List of topologically sorted graphs from parent to child, one for each
-row)doc";
+constexpr char mkd_doc_slp_Jacobian_m_nonlinear_tape[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Jacobian_m_variables[] = R"doc()doc";
 
@@ -1683,15 +1679,13 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_VariableMatrix[] = R"doc()doc";
-
-constexpr char mkd_doc_slp_VariableMatrix_2[] =
+constexpr char mkd_doc_slp_VariableMatrix[] =
 R"doc(A matrix of autodiff variables.
 
 Template Args:
     Scalar_: Scalar type.)doc";
 
-constexpr char mkd_doc_slp_VariableMatrix_3[] = R"doc()doc";
+constexpr char mkd_doc_slp_VariableMatrix_2[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_VariableMatrix_T[] =
 R"doc(Returns the transpose of the variable matrix.
@@ -2462,11 +2456,11 @@ Args:
 
 constexpr char mkd_doc_slp_Variable_expr[] = R"doc(The expression node)doc";
 
-constexpr char mkd_doc_slp_Variable_m_graph[] =
+constexpr char mkd_doc_slp_Variable_m_tape[] =
 R"doc(Used to update the value of this variable based on the values of its
-dependent variables)doc";
-
-constexpr char mkd_doc_slp_Variable_m_graph_initialized[] = R"doc(Used for lazy initialization of m_graph)doc";
+dependent variables. It's created on the first value() call, and
+copies of this variable share it since they share the expression
+graph.)doc";
 
 constexpr char mkd_doc_slp_Variable_operator_assign[] =
 R"doc(Assignment operator for scalar.
@@ -2718,27 +2712,7 @@ Template Args:
 
 )doc";
 
-constexpr char mkd_doc_slp_detail_gradient_tree[] = R"doc()doc";
-
-constexpr char mkd_doc_slp_detail_gradient_tree_2[] =
-R"doc(Returns the variable's gradient tree.
-
-This function lazily allocates variables, so elements of the returned
-VariableMatrix will be empty if the corresponding element of wrt had
-no adjoint. Ensure Variable::expr isn't nullptr before calling member
-functions.
-
-Args:
-    top_list: Topologically sorted graph from parent to child.
-    wrt: Variables with respect to which to compute the gradient.
-
-Template Args:
-    Scalar: Scalar type.
-
-Returns:
-    The variable's gradient tree.
-
-)doc";
+constexpr char mkd_doc_slp_detail_ValueTape[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_erf[] =
 R"doc(erf() for Variables.
