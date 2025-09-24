@@ -8,6 +8,7 @@
 #include <Eigen/SparseCore>
 #include <gch/small_vector.hpp>
 
+#include "sleipnir/autodiff/adjoint_tape.hpp"
 #include "sleipnir/autodiff/expression.hpp"
 #include "sleipnir/autodiff/expression_graph.hpp"
 #include "sleipnir/autodiff/expression_type.hpp"
@@ -57,51 +58,57 @@ class Jacobian {
     slp_assert(m_variables.cols() == 1);
     slp_assert(m_wrt.cols() == 1);
 
-    for (auto& variable : m_variables) {
-      m_top_lists.emplace_back(detail::topological_sort(variable.expr));
+    gch::small_vector<detail::Expression<Scalar>*> wrt_exprs;
+    for (auto& elem : m_wrt) {
+      wrt_exprs.emplace_back(elem.expr.get());
     }
 
-    // Initialize column each expression's adjoint occupies in the Jacobian
-    for (size_t col = 0; col < m_wrt.size(); ++col) {
-      m_wrt[col].expr->scratch = col;
-    }
-
-    // Make list of output rows as column-node pairs
-    for (auto& top_list : m_top_lists) {
-      m_output_lists.emplace_back();
-      for (const auto& node : top_list) {
-        if (node->scratch != -1) {
-          m_output_lists.back().emplace_back(node->scratch, node);
-        }
-      }
-    }
-
-    // Reset col to -1
-    for (auto& node : m_wrt) {
-      node.expr->scratch = -1;
-    }
-
+    // Split rows into linear and nonlinear rows. Constant rows are ignored
+    // because their gradients have no nonzero entries.
+    gch::small_vector<detail::Expression<Scalar>*> linear_roots;
+    gch::small_vector<detail::Expression<Scalar>*> nonlinear_roots;
     for (int row = 0; row < m_variables.rows(); ++row) {
       if (m_variables[row].expr == nullptr) {
         continue;
       }
 
       if (m_variables[row].type() == ExpressionType::LINEAR) {
-        // If the row is linear, compute its gradient once here and cache its
-        // triplets. Constant rows are ignored because their gradients have no
-        // nonzero triplets.
-        detail::append_triplets(m_top_lists[row], m_output_lists[row],
-                                m_cached_triplets, row);
+        linear_roots.emplace_back(m_variables[row].expr.get());
+        m_linear_rows.emplace_back(row);
       } else if (m_variables[row].type() > ExpressionType::LINEAR) {
-        // If the row is quadratic or nonlinear, add it to the list of nonlinear
-        // rows to be recomputed in value().
+        nonlinear_roots.emplace_back(m_variables[row].expr.get());
         m_nonlinear_rows.emplace_back(row);
       }
     }
 
-    if (m_nonlinear_rows.empty()) {
-      m_J.setFromTriplets(m_cached_triplets.begin(), m_cached_triplets.end());
+    m_linear_tape = detail::AdjointTape<Scalar>{linear_roots, wrt_exprs};
+    m_nonlinear_tape = detail::AdjointTape<Scalar>{nonlinear_roots, wrt_exprs};
+
+    // Map the tapes's adjoints of wrt to m_J's nonzeros. A tape's entry rows
+    // are indices into its list of roots.
+    //
+    // Both tapes's entries go through one make_slot_map() call because
+    // setFromTriplets() replaces m_J's entire sparsity pattern.
+    gch::small_vector<detail::TapeEntry> entries;
+    for (auto entry : m_linear_tape.entries()) {
+      entry.row = m_linear_rows[entry.row];
+      entries.push_back(entry);
     }
+    for (auto entry : m_nonlinear_tape.entries()) {
+      entry.row = m_nonlinear_rows[entry.row];
+      entries.push_back(entry);
+    }
+    auto slot_map = detail::make_slot_map(m_J, entries);
+
+    // Split slot map into linear and nonlinear slots
+    size_t num_linear = m_linear_tape.entries().size();
+    m_linear_slot_map.assign(slot_map.begin(), slot_map.begin() + num_linear);
+    m_nonlinear_slot_map.assign(slot_map.begin() + num_linear, slot_map.end());
+
+    // Linear rows have constant gradients, so compute them once here
+    m_linear_tape.update_values();
+    m_linear_tape.replay();
+    detail::copy_slots(m_J, m_linear_slot_map, m_linear_tape.adjoints());
   }
 
   /// Returns the Jacobian as a VariableMatrix.
@@ -115,7 +122,8 @@ class Jacobian {
                                   m_wrt.rows()};
 
     for (int row = 0; row < m_variables.rows(); ++row) {
-      auto grad = detail::gradient_tree(m_top_lists[row], m_wrt);
+      auto grad =
+          gradient_tree(detail::topological_sort(m_variables[row].expr));
       for (int col = 0; col < m_wrt.rows(); ++col) {
         if (grad[col].expr != nullptr) {
           result[row, col] = std::move(grad[col]);
@@ -136,21 +144,9 @@ class Jacobian {
       return m_J;
     }
 
-    for (auto& top_list : m_top_lists) {
-      detail::update_values(top_list);
-    }
-
-    // Copy the cached triplets so triplets added for the nonlinear rows are
-    // thrown away at the end of the function
-    auto triplets = m_cached_triplets;
-
-    // Compute each nonlinear row of the Jacobian
-    for (int row : m_nonlinear_rows) {
-      detail::append_triplets(m_top_lists[row], m_output_lists[row], triplets,
-                              row);
-    }
-
-    m_J.setFromTriplets(triplets.begin(), triplets.end());
+    m_nonlinear_tape.update_values();
+    m_nonlinear_tape.replay();
+    detail::copy_slots(m_J, m_nonlinear_slot_map, m_nonlinear_tape.adjoints());
 
     return m_J;
   }
@@ -159,22 +155,94 @@ class Jacobian {
   VariableMatrix<Scalar> m_variables;
   VariableMatrix<Scalar> m_wrt;
 
-  /// List of topologically sorted graphs from parent to child, one for each row
-  gch::small_vector<detail::ExpressionGraph<Scalar>> m_top_lists;
+  /// Row indices of linear rows, whose gradients are computed once on
+  /// construction
+  gch::small_vector<int> m_linear_rows;
 
-  /// List of output rows as column-node pairs
-  gch::small_vector<
-      gch::small_vector<std::pair<int, detail::Expression<Scalar>*>>>
-      m_output_lists;
+  /// Row indices of quadratic or nonlinear rows, whose gradients are computed
+  /// in value()
+  gch::small_vector<int> m_nonlinear_rows;
+
+  detail::AdjointTape<Scalar> m_linear_tape;
+  detail::AdjointTape<Scalar> m_nonlinear_tape;
+
+  gch::small_vector<detail::SlotMapEntry> m_linear_slot_map;
+  gch::small_vector<detail::SlotMapEntry> m_nonlinear_slot_map;
 
   Eigen::SparseMatrix<Scalar> m_J{m_variables.rows(), m_wrt.rows()};
 
-  /// Cached triplets for gradients of linear rows
-  gch::small_vector<Eigen::Triplet<Scalar>> m_cached_triplets;
+  /// Returns the variable's gradient tree.
+  ///
+  /// This function lazily allocates variables, so elements of the returned
+  /// VariableMatrix will be empty if the corresponding element of wrt had no
+  /// adjoint. Ensure Variable::expr isn't nullptr before calling member
+  /// functions.
+  ///
+  /// @param top_list Topologically sorted graph from parent to child.
+  /// @return The variable's gradient tree.
+  VariableMatrix<Scalar> gradient_tree(
+      const detail::ExpressionGraph<Scalar>& top_list) const {
+    slp_assert(m_wrt.cols() == 1);
 
-  /// List of row indices for nonlinear rows whose graients will be computed in
-  /// value()
-  gch::small_vector<int> m_nonlinear_rows;
+    // Read docs/algorithms.md#Reverse_accumulation_automatic_differentiation
+    // for background on reverse accumulation automatic differentiation.
+
+    if (top_list.empty()) {
+      return VariableMatrix<Scalar>{detail::empty, m_wrt.rows(), 1};
+    }
+
+    // Temporarily store each node's index in top_list in scratch
+    for (size_t i = 0; i < top_list.size(); ++i) {
+      top_list[i]->scratch = i;
+    }
+
+    // Adjoint of each node in top_list
+    gch::small_vector<detail::ExpressionPtr<Scalar>> adjoints(top_list.size());
+
+    // Set root node's adjoint to 1 since df/df is 1
+    adjoints[0] = detail::constant_ptr(Scalar(1));
+
+    // df/dx = (df/dy)(dy/dx). The adjoint of x is equal to the adjoint of y
+    // multiplied by dy/dx. If there are multiple "paths" from the root node to
+    // variable; the variable's adjoint is the sum of each path's adjoint
+    // contribution.
+    for (size_t i = 0; i < top_list.size(); ++i) {
+      const auto& node = top_list[i];
+
+      // Leaf nodes have no children to propagate adjoints to, and a null (zero)
+      // adjoint has nothing to contribute
+      if (node->is_leaf || adjoints[i] == nullptr) {
+        continue;
+      }
+
+      detail::ArgArray<detail::ExpressionPtr<Scalar>> g;
+      node->grad_expr(g);
+
+      // Constant arguments are skipped since their adjoints are never used
+      size_t k = 0;
+      node->visit_args([&](auto* arg) {
+        if (g[k] != nullptr && arg->type() != ExpressionType::CONSTANT) {
+          adjoints[arg->scratch] += g[k] * adjoints[i];
+        }
+        ++k;
+      });
+    }
+
+    // Move gradient tree to return value. Elements of wrt that aren't in the
+    // graph have no adjoint.
+    VariableMatrix<Scalar> grad{detail::empty, m_wrt.rows(), 1};
+    for (int row = 0; row < grad.rows(); ++row) {
+      if (int idx = m_wrt[row].expr->scratch; idx != -1) {
+        grad[row] = Variable{std::move(adjoints[idx])};
+      }
+    }
+
+    for (auto& node : top_list) {
+      node->scratch = -1;
+    }
+
+    return grad;
+  }
 };
 
 extern template class EXPORT_TEMPLATE_DECLARE(SLEIPNIR_DLLEXPORT)
