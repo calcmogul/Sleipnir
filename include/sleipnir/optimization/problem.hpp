@@ -22,6 +22,7 @@
 #include "sleipnir/autodiff/gradient.hpp"
 #include "sleipnir/autodiff/hessian.hpp"
 #include "sleipnir/autodiff/jacobian.hpp"
+#include "sleipnir/autodiff/value_tape.hpp"
 #include "sleipnir/autodiff/variable.hpp"
 #include "sleipnir/autodiff/variable_matrix.hpp"
 #include "sleipnir/optimization/solver/exit_status.hpp"
@@ -419,6 +420,9 @@ class Problem {
     // Set up cost function
     Variable f = m_f.value_or(Scalar(0));
 
+    // Evaluates the cost without traversing its expression graph
+    detail::ValueTape<Scalar> f_tape{std::array{f}};
+
     int num_decision_variables = m_decision_variables.size();
 
     gch::small_vector<std::function<bool(const IterationInfo<Scalar>& info)>>
@@ -478,7 +482,7 @@ class Problem {
         num_decision_variables,
         [&](const DenseVector& x) -> Scalar {
           x_ad.set_value(x);
-          return scaling.f * f.value();
+          return scaling.f * f_tape.value()[0];
         },
         [&](const DenseVector& x) -> SparseVector {
           x_ad.set_value(x);
@@ -504,6 +508,9 @@ class Problem {
     // Set up cost function
     Variable f = m_f.value_or(Scalar(0));
 
+    // Evaluates the cost without traversing its expression graph
+    detail::ValueTape<Scalar> f_tape{std::array{f}};
+
     int num_decision_variables = m_decision_variables.size();
     int num_equality_constraints = m_equality_constraints.size();
 
@@ -517,6 +524,11 @@ class Problem {
     }
 
     VariableMatrix<Scalar> c_e_ad{m_equality_constraints};
+
+    // Evaluates the equality constraints without traversing their expression
+    // graphs
+    detail::ValueTape<Scalar> c_e_tape{c_e_ad};
+
     VariableMatrix<Scalar> y_ad(num_equality_constraints);
 
     gch::small_vector<SetupProfiler> ad_setup_profilers;
@@ -592,7 +604,7 @@ class Problem {
         num_equality_constraints,
         [&](const DenseVector& x) -> Scalar {
           x_ad.set_value(x);
-          return scaling.f * f.value();
+          return scaling.f * f_tape.value()[0];
         },
         [&](const DenseVector& x) -> SparseVector {
           x_ad.set_value(x);
@@ -610,7 +622,7 @@ class Problem {
         },
         [&](const DenseVector& x) -> DenseVector {
           x_ad.set_value(x);
-          return scaling.c_e.cwiseProduct(c_e_ad.value());
+          return scaling.c_e.cwiseProduct(c_e_tape.value());
         },
         [&](const DenseVector& x) -> SparseMatrix {
           x_ad.set_value(x);
@@ -632,6 +644,9 @@ class Problem {
     // Set up cost function
     Variable f = m_f.value_or(Scalar(0));
 
+    // Evaluates the cost without traversing its expression graph
+    detail::ValueTape<Scalar> f_tape{std::array{f}};
+
     int num_decision_variables = m_decision_variables.size();
     int num_equality_constraints = m_equality_constraints.size();
     int num_inequality_constraints = m_inequality_constraints.size();
@@ -647,6 +662,11 @@ class Problem {
 
     VariableMatrix<Scalar> c_e_ad{m_equality_constraints};
     VariableMatrix<Scalar> c_i_ad{m_inequality_constraints};
+
+    // Evaluates the constraints without traversing their expression graphs
+    detail::ValueTape<Scalar> c_e_tape{c_e_ad};
+    detail::ValueTape<Scalar> c_i_tape{c_i_ad};
+
     VariableMatrix<Scalar> y_ad(num_equality_constraints);
     VariableMatrix<Scalar> z_ad(num_inequality_constraints);
 
@@ -752,7 +772,7 @@ class Problem {
         num_inequality_constraints,
         [&](const DenseVector& x) -> Scalar {
           x_ad.set_value(x);
-          return scaling.f * f.value();
+          return scaling.f * f_tape.value()[0];
         },
         [&](const DenseVector& x) -> SparseVector {
           x_ad.set_value(x);
@@ -774,7 +794,7 @@ class Problem {
         },
         [&](const DenseVector& x) -> DenseVector {
           x_ad.set_value(x);
-          return scaling.c_e.cwiseProduct(c_e_ad.value());
+          return scaling.c_e.cwiseProduct(c_e_tape.value());
         },
         [&](const DenseVector& x) -> SparseMatrix {
           x_ad.set_value(x);
@@ -782,7 +802,7 @@ class Problem {
         },
         [&](const DenseVector& x) -> DenseVector {
           x_ad.set_value(x);
-          return scaling.c_i.cwiseProduct(c_i_ad.value());
+          return scaling.c_i.cwiseProduct(c_i_tape.value());
         },
         [&](const DenseVector& x) -> SparseMatrix {
           x_ad.set_value(x);

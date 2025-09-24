@@ -94,11 +94,21 @@ Autodiff benchmarks are named `<CasADi|Sleipnir>/<Setup|Evaluation>/<num_variabl
 
 During problem setup, equality and inequality constraints are encoded as different types, so the appropriate setup behavior can be selected at compile time via operator overloads.
 
+During autodiff evaluation, each expression node's operator is dispatched with a compile-time binary search of conditional branches instead of a virtual call, so the operator's value and derivative formulas can be inlined into the evaluation loop.
+
 ### Reuse autodiff computation results that are still valid (aka caching)
 
-The autodiff library automatically records the linearity of every node in the computational graph. Linear functions have constant first derivatives, and quadratic functions have constant second derivatives. The constant derivatives are computed in the initialization phase and reused for all solver iterations. Only nonlinear parts of the computational graph are recomputed during each solver iteration.
+The autodiff library automatically records the linearity of every node in the computational graph. Linear functions have constant first derivatives, and quadratic functions have constant second derivatives. Linear constraint Jacobian rows and quadratic Hessians are computed in the initialization phase and reused for all solver iterations. Only quadratic and nonlinear Jacobian rows and nonlinear Hessians are recomputed during each solver iteration.
 
 For quadratic problems, we compute the Lagrangian Hessian and constraint Jacobians once with no problem structure hints from the user.
+
+### Record derivative computations once, then replay them
+
+Which adjoints and Hessian entries can be nonzero only depends on the computational graph's structure, not its values. During initialization, we topologically sort the graph, drop nodes that don't depend on the decision variables and partial derivatives that are structurally zero, and record the remaining work into a tape of flat arrays. Each solver iteration replays the tape with linear memory access, no graph traversal, and no virtual calls.
+
+The Hessian is computed with the edge pushing algorithm from Wang et al., "Capitalizing on live variables: new algorithms for efficient Hessian computation via automatic differentiation" (2016), which computes the Hessian's lower triangle in a single reverse sweep over the original computational graph. Adjoint and Hessian accumulator storage is reused once a node's contributions are propagated, so it stays cache-resident.
+
+Since the sparsity patterns of the Jacobians and Hessian are fixed, they're set once during initialization, and each evaluation writes directly into the sparse matrices' value arrays.
 
 ### Use a performant linear algebra library with fast sparse solvers
 
@@ -106,6 +116,4 @@ For quadratic problems, we compute the Lagrangian Hessian and constraint Jacobia
 
 ### Use a pool allocator for autodiff expression nodes
 
-This promotes fast allocation/deallocation and good memory locality.
-
-We could mitigate the solver's high last-level-cache miss rate (~42% on the machine above) further by breaking apart the expression nodes into fields that are commonly iterated together. We used to use a tape, which gave computational graph updates linear access patterns, but tapes are monotonic buffers with no way to reclaim storage.
+This promotes fast allocation/deallocation and good memory locality during problem setup.

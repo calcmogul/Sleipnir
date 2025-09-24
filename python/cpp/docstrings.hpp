@@ -259,9 +259,10 @@ constexpr char mkd_doc_slp_Hessian[] =
 R"doc(This class calculates the Hessian of a variable with respect to a
 vector of variables.
 
-The gradient tree is cached so subsequent Hessian calculations are
-faster, and the Hessian is only recomputed if the variable expression
-is nonlinear.
+The Hessian is computed with edge pushing. Which Hessian entries each
+node pushes to only depends on the expression graph's structure, so
+the pushes are recorded once on construction, then replayed with new
+values on each call to value().
 
 Template Args:
     Scalar: Scalar type.
@@ -271,6 +272,43 @@ Template Args:
 constexpr char mkd_doc_slp_Hessian_2[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Hessian_3[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Hessian_CreateOp[] =
+R"doc(Adds coeff ∂²ϕᵢ/∂vⱼ∂vₖ a(vᵢ) to h(vⱼ, vₖ), where vⱼ and vₖ are
+arguments of node vᵢ's expression.
+
+Creating adds the second-order contribution of node vᵢ's own
+expression, weighted by its adjoint, to its arguments's Hessian
+entries. These are only recorded for nonlinear expressions and stored
+in m_create_ops.)doc";
+
+constexpr char mkd_doc_slp_Hessian_CreateOp_coeff[] =
+R"doc(Multiplicity of the contribution (1 or 2). It's 2 if the arguments
+differ but j = k (e.g., x * x), since the (j, k) and (k, j) terms land
+on the same entry.)doc";
+
+constexpr char mkd_doc_slp_Hessian_CreateOp_dest[] = R"doc(Slot in m_slots of the entry h(vⱼ, vₖ) to add to.)doc";
+
+constexpr char mkd_doc_slp_Hessian_CreateOp_second_partial[] = R"doc(Index of ∂²ϕᵢ/∂vⱼ∂vₖ in the tape's second partial derivatives.)doc";
+
+constexpr char mkd_doc_slp_Hessian_DiagPushOp[] =
+R"doc(Adds coeff ∂ϕᵢ/∂vₖ₁ ∂ϕᵢ/∂vₖ₂ h(vᵢ, vᵢ) to h(vₖ₁, vₖ₂), where vₖ₁ and
+vₖ₂ are arguments of node vᵢ's expression.
+
+This pushes node vᵢ's diagonal entry.)doc";
+
+constexpr char mkd_doc_slp_Hessian_DiagPushOp_coeff[] =
+R"doc(Multiplicity of the contribution (1 or 2). It's 2 if the arguments
+differ but k1 = k2 (e.g., x * x), since the (k1, k2) and (k2, k1)
+terms land on the same entry.)doc";
+
+constexpr char mkd_doc_slp_Hessian_DiagPushOp_dest[] = R"doc(Slot in m_slots of the entry h(vₖ₁, vₖ₂) to add to.)doc";
+
+constexpr char mkd_doc_slp_Hessian_DiagPushOp_partial1[] = R"doc(Index of ∂ϕᵢ/∂vₖ₁ in the tape's partial derivatives.)doc";
+
+constexpr char mkd_doc_slp_Hessian_DiagPushOp_partial2[] = R"doc(Index of ∂ϕᵢ/∂vₖ₂ in the tape's partial derivatives.)doc";
+
+constexpr char mkd_doc_slp_Hessian_DiagPushOp_src[] = R"doc(Slot in m_slots of the entry h(vᵢ, vᵢ) being pushed.)doc";
 
 constexpr char mkd_doc_slp_Hessian_Hessian[] =
 R"doc(Constructs a Hessian object.
@@ -291,6 +329,52 @@ Args:
 
 )doc";
 
+constexpr char mkd_doc_slp_Hessian_OpEnds[] =
+R"doc(The ends of a tape node's operations.
+
+Each tape node's operations are stored contiguously in m_push_ops,
+m_push_diag_ops, m_create_ops, and m_dead_slots, in tape order. Like
+the row pointers of a CSR matrix, each member is the exclusive end
+index of the node's operations in the corresponding array, and the
+node's operations begin at the previous node's ends (or zero for the
+first node). For example, node n's pushes are m_push_ops[m_op_ends[n -
+1].push, m_op_ends[n].push).
+
+Grouping the operations by node lets compute() replay them while the
+node's adjoint is available.)doc";
+
+constexpr char mkd_doc_slp_Hessian_OpEnds_create[] = R"doc(End index in m_create_ops.)doc";
+
+constexpr char mkd_doc_slp_Hessian_OpEnds_dead[] = R"doc(End index in m_dead_slots.)doc";
+
+constexpr char mkd_doc_slp_Hessian_OpEnds_push[] = R"doc(End index in m_push_ops.)doc";
+
+constexpr char mkd_doc_slp_Hessian_OpEnds_push_diag[] = R"doc(End index in m_push_diag_ops.)doc";
+
+constexpr char mkd_doc_slp_Hessian_PushOp[] =
+R"doc(Adds coeff ∂ϕᵢ/∂vₖ h(vᵢ, vⱼ) to h(vⱼ, vₖ), where vₖ is an argument of
+node vᵢ's expression.
+
+Pushing moves node vᵢ's Hessian entries onto its arguments, since vᵢ
+is eliminated from the expression graph once its contributions are
+pushed. This pushes an off-diagonal entry (j ≠ i).)doc";
+
+constexpr char mkd_doc_slp_Hessian_PushOp_coeff[] =
+R"doc(Multiplicity of the contribution (1 or 2). It's 2 if j = k because
+h(vⱼ, vₖ) and h(vₖ, vⱼ) are the same symmetric entry.)doc";
+
+constexpr char mkd_doc_slp_Hessian_PushOp_dest[] = R"doc(Slot in m_slots of the entry h(vⱼ, vₖ) to add to.)doc";
+
+constexpr char mkd_doc_slp_Hessian_PushOp_partial[] = R"doc(Index of ∂ϕᵢ/∂vₖ in the tape's partial derivatives.)doc";
+
+constexpr char mkd_doc_slp_Hessian_PushOp_src[] = R"doc(Slot in m_slots of the entry h(vᵢ, vⱼ) being pushed.)doc";
+
+constexpr char mkd_doc_slp_Hessian_compute[] =
+R"doc(Replays the recorded adjoint and edge pushing operations with the
+expression graph's current values, then writes the result to m_H.
+
+)doc";
+
 constexpr char mkd_doc_slp_Hessian_get[] =
 R"doc(Returns the Hessian as a VariableMatrix.
 
@@ -302,21 +386,61 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_Hessian_hessian_tree[] =
+R"doc(Returns the variable's Hessian tree.
+
+This function lazily allocates variables, so elements of the returned
+VariableMatrix will be empty if the corresponding element of wrt had
+no adjoint. Ensure Variable::expr isn't nullptr before calling member
+functions.
+
+Returns:
+    The variable's Hessian tree.
+
+)doc";
+
 constexpr char mkd_doc_slp_Hessian_m_H[] = R"doc()doc";
 
-constexpr char mkd_doc_slp_Hessian_m_cached_triplets[] = R"doc()doc";
+constexpr char mkd_doc_slp_Hessian_m_create_ops[] = R"doc()doc";
 
-constexpr char mkd_doc_slp_Hessian_m_nonlinear_rows[] = R"doc()doc";
+constexpr char mkd_doc_slp_Hessian_m_dead_slots[] =
+R"doc(Slots in m_slots that are dead after each tape node's operations, in
+tape order. compute() zeroes them so they start at zero when reused.)doc";
 
-constexpr char mkd_doc_slp_Hessian_m_output_lists[] = R"doc(List of output rows as column-node pairs)doc";
+constexpr char mkd_doc_slp_Hessian_m_op_ends[] = R"doc(The ends of each tape node's operations)doc";
 
-constexpr char mkd_doc_slp_Hessian_m_top_lists[] =
-R"doc(List of topologically sorted graphs from parent to child, one for each
-row)doc";
+constexpr char mkd_doc_slp_Hessian_m_push_diag_ops[] = R"doc()doc";
 
-constexpr char mkd_doc_slp_Hessian_m_variables[] = R"doc()doc";
+constexpr char mkd_doc_slp_Hessian_m_push_ops[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Hessian_m_slot_map[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Hessian_m_slots[] =
+R"doc(Value of each structurally nonzero entry h(vⱼ, vₖ) of the expression
+graph's Hessian.
+
+Entries between elements of wrt are the results, so their slots are
+never reused. Other entries are dead once the node they're stored at
+has pushed them, so their slots are reused. All slots are zero outside
+of compute().)doc";
+
+constexpr char mkd_doc_slp_Hessian_m_tape[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Hessian_m_variable[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Hessian_m_wrt[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Hessian_record_pushes[] =
+R"doc(Runs edge pushing structurally and records the operations it performs.
+
+Implements edge pushing as described by figure 4 on p. 14 of [1].
+
+[1] Wang, M., et al. "Capitalizing on live variables: new algorithms
+for
+    efficient Hessian computation via automatic differentiation",
+    2016. https://sci-hub.st/10.1007/s12532-016-0100-3
+
+)doc";
 
 constexpr char mkd_doc_slp_Hessian_value[] =
 R"doc(Evaluates the Hessian at wrt's value.
@@ -447,19 +571,39 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_Jacobian_gradient_tree[] =
+R"doc(Returns the variable's gradient tree.
+
+This function lazily allocates variables, so elements of the returned
+VariableMatrix will be empty if the corresponding element of wrt had
+no adjoint. Ensure Variable::expr isn't nullptr before calling member
+functions.
+
+Args:
+    top_list: Topologically sorted graph from parent to child.
+
+Returns:
+    The variable's gradient tree.
+
+)doc";
+
 constexpr char mkd_doc_slp_Jacobian_m_J[] = R"doc()doc";
 
-constexpr char mkd_doc_slp_Jacobian_m_cached_triplets[] = R"doc(Cached triplets for gradients of linear rows)doc";
+constexpr char mkd_doc_slp_Jacobian_m_linear_rows[] =
+R"doc(Row indices of linear rows, whose gradients are computed once on
+construction)doc";
+
+constexpr char mkd_doc_slp_Jacobian_m_linear_slot_map[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Jacobian_m_linear_tape[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Jacobian_m_nonlinear_rows[] =
-R"doc(List of row indices for nonlinear rows whose graients will be computed
-in value())doc";
+R"doc(Row indices of quadratic or nonlinear rows, whose gradients are
+computed in value())doc";
 
-constexpr char mkd_doc_slp_Jacobian_m_output_lists[] = R"doc(List of output rows as column-node pairs)doc";
+constexpr char mkd_doc_slp_Jacobian_m_nonlinear_slot_map[] = R"doc()doc";
 
-constexpr char mkd_doc_slp_Jacobian_m_top_lists[] =
-R"doc(List of topologically sorted graphs from parent to child, one for each
-row)doc";
+constexpr char mkd_doc_slp_Jacobian_m_nonlinear_tape[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Jacobian_m_variables[] = R"doc()doc";
 
@@ -1683,15 +1827,13 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_VariableMatrix[] = R"doc()doc";
-
-constexpr char mkd_doc_slp_VariableMatrix_2[] =
+constexpr char mkd_doc_slp_VariableMatrix[] =
 R"doc(A matrix of autodiff variables.
 
 Template Args:
     Scalar_: Scalar type.)doc";
 
-constexpr char mkd_doc_slp_VariableMatrix_3[] = R"doc()doc";
+constexpr char mkd_doc_slp_VariableMatrix_2[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_VariableMatrix_T[] =
 R"doc(Returns the transpose of the variable matrix.
@@ -2718,27 +2860,7 @@ Template Args:
 
 )doc";
 
-constexpr char mkd_doc_slp_detail_gradient_tree[] = R"doc()doc";
-
-constexpr char mkd_doc_slp_detail_gradient_tree_2[] =
-R"doc(Returns the variable's gradient tree.
-
-This function lazily allocates variables, so elements of the returned
-VariableMatrix will be empty if the corresponding element of wrt had
-no adjoint. Ensure Variable::expr isn't nullptr before calling member
-functions.
-
-Args:
-    top_list: Topologically sorted graph from parent to child.
-    wrt: Variables with respect to which to compute the gradient.
-
-Template Args:
-    Scalar: Scalar type.
-
-Returns:
-    The variable's gradient tree.
-
-)doc";
+constexpr char mkd_doc_slp_detail_ValueTape[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_erf[] =
 R"doc(erf() for Variables.

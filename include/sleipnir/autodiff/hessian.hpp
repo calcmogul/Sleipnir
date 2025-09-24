@@ -2,13 +2,18 @@
 
 #pragma once
 
+#include <stdint.h>
+
+#include <algorithm>
 #include <cstddef>
+#include <iterator>
 #include <utility>
 
 #include <Eigen/Core>
 #include <Eigen/SparseCore>
 #include <gch/small_vector.hpp>
 
+#include "sleipnir/autodiff/adjoint_tape.hpp"
 #include "sleipnir/autodiff/expression.hpp"
 #include "sleipnir/autodiff/expression_graph.hpp"
 #include "sleipnir/autodiff/expression_type.hpp"
@@ -17,6 +22,7 @@
 #include "sleipnir/util/assert.hpp"
 #include "sleipnir/util/concepts.hpp"
 #include "sleipnir/util/empty.hpp"
+#include "sleipnir/util/flat_map.hpp"
 #include "sleipnir/util/symbol_exports.hpp"
 
 namespace slp {
@@ -24,8 +30,10 @@ namespace slp {
 /// This class calculates the Hessian of a variable with respect to a vector of
 /// variables.
 ///
-/// The gradient tree is cached so subsequent Hessian calculations are faster,
-/// and the Hessian is only recomputed if the variable expression is nonlinear.
+/// The Hessian is computed with edge pushing. Which Hessian entries each node
+/// pushes to only depends on the expression graph's structure, so the pushes
+/// are recorded once on construction, then replayed with new values on each
+/// call to value().
 ///
 /// @tparam Scalar Scalar type.
 /// @tparam UpLo Which part of the Hessian to compute (Lower or Lower | Upper).
@@ -47,58 +55,21 @@ class Hessian {
   /// @param wrt Vector of variables with respect to which to compute the
   ///     Hessian.
   Hessian(Variable<Scalar> variable, SleipnirMatrixLike<Scalar> auto wrt)
-      : m_variables{detail::gradient_tree(
-            detail::topological_sort(variable.expr), wrt)},
-        m_wrt{std::move(wrt)} {
+      : m_variable{std::move(variable)}, m_wrt{std::move(wrt)} {
     slp_assert(m_wrt.cols() == 1);
 
-    for (auto& variable : m_variables) {
-      m_top_lists.emplace_back(detail::topological_sort(variable.expr));
+    gch::small_vector<detail::Expression<Scalar>*> roots{m_variable.expr.get()};
+    gch::small_vector<detail::Expression<Scalar>*> wrt_exprs;
+    for (auto& elem : m_wrt) {
+      wrt_exprs.emplace_back(elem.expr.get());
     }
+    m_tape = detail::AdjointTape<Scalar>{roots, wrt_exprs};
 
-    // Initialize column each expression's adjoint occupies in the Jacobian
-    for (size_t col = 0; col < m_wrt.size(); ++col) {
-      m_wrt[col].expr->scratch = col;
-    }
+    record_pushes();
 
-    // Make list of only nodes in output row, and their output columns
-    for (auto& top_list : m_top_lists) {
-      m_output_lists.emplace_back();
-      for (const auto& node : top_list) {
-        if (node->scratch != -1) {
-          m_output_lists.back().emplace_back(node->scratch, node);
-        }
-      }
-    }
-
-    // Reset col to -1
-    for (auto& node : m_wrt) {
-      node.expr->scratch = -1;
-    }
-
-    for (int row = 0; row < m_variables.rows(); ++row) {
-      if (m_variables[row].expr == nullptr) {
-        continue;
-      }
-
-      if (m_variables[row].type() == ExpressionType::LINEAR) {
-        // If the row is linear, compute its gradient once here and cache its
-        // triplets. Constant rows are ignored because their gradients have no
-        // nonzero triplets.
-        detail::append_triplets(m_top_lists[row], m_output_lists[row],
-                                m_cached_triplets, row);
-      } else if (m_variables[row].type() > ExpressionType::LINEAR) {
-        // If the row is quadratic or nonlinear, add it to the list of nonlinear
-        // rows to be recomputed in value().
-        m_nonlinear_rows.emplace_back(row);
-      }
-    }
-
-    if (m_nonlinear_rows.empty()) {
-      m_H.setFromTriplets(m_cached_triplets.begin(), m_cached_triplets.end());
-      if constexpr (UpLo == Eigen::Lower) {
-        m_H = m_H.template triangularView<Eigen::Lower>();
-      }
+    if (m_variable.type() <= ExpressionType::QUADRATIC) {
+      m_tape.template update_values<2>();
+      compute();
     }
   }
 
@@ -109,16 +80,26 @@ class Hessian {
   ///
   /// @return The Hessian as a VariableMatrix.
   VariableMatrix<Scalar> get() const {
-    VariableMatrix<Scalar> result{detail::empty, m_variables.rows(),
-                                  m_wrt.rows()};
+    VariableMatrix<Scalar> result{detail::empty, m_wrt.rows(), m_wrt.rows()};
 
-    for (int row = 0; row < m_variables.rows(); ++row) {
-      auto grad = detail::gradient_tree(m_top_lists[row], m_wrt);
-      for (int col = 0; col < m_wrt.rows(); ++col) {
-        if (grad[col].expr != nullptr) {
-          result[row, col] = std::move(grad[col]);
-        } else {
-          result[row, col] = Variable{Scalar(0)};
+    auto H = hessian_tree();
+
+    for (int row = 0; row < m_wrt.rows(); ++row) {
+      if constexpr (UpLo == Eigen::Lower) {
+        for (int col = 0; col <= row; ++col) {
+          if (H[row, col].expr != nullptr) {
+            result[row, col] = std::move(H[row, col]);
+          } else {
+            result[row, col] = Variable{Scalar(0)};
+          }
+        }
+      } else {
+        for (int col = 0; col < m_wrt.rows(); ++col) {
+          if (H[row, col].expr != nullptr) {
+            result[row, col] = std::move(H[row, col]);
+          } else {
+            result[row, col] = Variable{Scalar(0)};
+          }
         }
       }
     }
@@ -130,52 +111,569 @@ class Hessian {
   ///
   /// @return The Hessian at wrt's value.
   const Eigen::SparseMatrix<Scalar>& value() {
-    if (m_nonlinear_rows.empty()) {
-      return m_H;
-    }
-
-    for (auto& top_list : m_top_lists) {
-      detail::update_values(top_list);
-    }
-
-    // Copy the cached triplets so triplets added for the nonlinear rows are
-    // thrown away at the end of the function
-    auto triplets = m_cached_triplets;
-
-    // Compute each nonlinear row of the Hessian
-    for (int row : m_nonlinear_rows) {
-      detail::append_triplets(m_top_lists[row], m_output_lists[row], triplets,
-                              row);
-    }
-
-    m_H.setFromTriplets(triplets.begin(), triplets.end());
-    if constexpr (UpLo == Eigen::Lower) {
-      m_H = m_H.template triangularView<Eigen::Lower>();
+    if (m_variable.type() > ExpressionType::QUADRATIC) {
+      m_tape.template update_values<2>();
+      compute();
     }
 
     return m_H;
   }
 
  private:
-  VariableMatrix<Scalar> m_variables;
+  /// Adds coeff ∂ϕᵢ/∂vₖ h(vᵢ, vⱼ) to h(vⱼ, vₖ), where vₖ is an argument of node
+  /// vᵢ's expression.
+  ///
+  /// Pushing moves node vᵢ's Hessian entries onto its arguments, since vᵢ is
+  /// eliminated from the expression graph once its contributions are pushed.
+  /// This pushes an off-diagonal entry (j ≠ i).
+  struct PushOp {
+    /// Slot in m_slots of the entry h(vⱼ, vₖ) to add to.
+    uint32_t dest;
+
+    /// Slot in m_slots of the entry h(vᵢ, vⱼ) being pushed.
+    uint32_t src;
+
+    /// Index of ∂ϕᵢ/∂vₖ in the tape's partial derivatives.
+    uint32_t partial;
+
+    /// Multiplicity of the contribution (1 or 2). It's 2 if j = k because
+    /// h(vⱼ, vₖ) and h(vₖ, vⱼ) are the same symmetric entry.
+    uint8_t coeff;
+  };
+
+  /// Adds coeff ∂ϕᵢ/∂vₖ₁ ∂ϕᵢ/∂vₖ₂ h(vᵢ, vᵢ) to h(vₖ₁, vₖ₂), where vₖ₁ and vₖ₂
+  /// are arguments of node vᵢ's expression.
+  ///
+  /// This pushes node vᵢ's diagonal entry.
+  struct DiagPushOp {
+    /// Slot in m_slots of the entry h(vₖ₁, vₖ₂) to add to.
+    uint32_t dest;
+
+    /// Slot in m_slots of the entry h(vᵢ, vᵢ) being pushed.
+    uint32_t src;
+
+    /// Index of ∂ϕᵢ/∂vₖ₁ in the tape's partial derivatives.
+    uint32_t partial1;
+
+    /// Index of ∂ϕᵢ/∂vₖ₂ in the tape's partial derivatives.
+    uint32_t partial2;
+
+    /// Multiplicity of the contribution (1 or 2). It's 2 if the arguments
+    /// differ but k1 = k2 (e.g., x * x), since the (k1, k2) and (k2, k1) terms
+    /// land on the same entry.
+    uint8_t coeff;
+  };
+
+  /// Adds coeff ∂²ϕᵢ/∂vⱼ∂vₖ a(vᵢ) to h(vⱼ, vₖ), where vⱼ and vₖ are arguments
+  /// of node vᵢ's expression.
+  ///
+  /// Creating adds the second-order contribution of node vᵢ's own expression,
+  /// weighted by its adjoint, to its arguments's Hessian entries. These are
+  /// only recorded for nonlinear expressions and stored in m_create_ops.
+  struct CreateOp {
+    /// Slot in m_slots of the entry h(vⱼ, vₖ) to add to.
+    uint32_t dest;
+
+    /// Index of ∂²ϕᵢ/∂vⱼ∂vₖ in the tape's second partial derivatives.
+    uint32_t second_partial;
+
+    /// Multiplicity of the contribution (1 or 2). It's 2 if the arguments
+    /// differ but j = k (e.g., x * x), since the (j, k) and (k, j) terms land
+    /// on the same entry.
+    uint8_t coeff;
+  };
+
+  /// The ends of a tape node's operations.
+  ///
+  /// Each tape node's operations are stored contiguously in m_push_ops,
+  /// m_push_diag_ops, m_create_ops, and m_dead_slots, in tape order. Like the
+  /// row pointers of a CSR matrix, each member is the exclusive end index of
+  /// the node's operations in the corresponding array, and the node's
+  /// operations begin at the previous node's ends (or zero for the first node).
+  /// For example, node n's pushes are
+  /// m_push_ops[m_op_ends[n - 1].push, m_op_ends[n].push).
+  ///
+  /// Grouping the operations by node lets compute() replay them while the
+  /// node's adjoint is available.
+  struct OpEnds {
+    /// End index in m_push_ops.
+    uint32_t push;
+
+    /// End index in m_push_diag_ops.
+    uint32_t push_diag;
+
+    /// End index in m_create_ops.
+    uint32_t create;
+
+    /// End index in m_dead_slots.
+    uint32_t dead;
+  };
+
+  Variable<Scalar> m_variable;
   VariableMatrix<Scalar> m_wrt;
 
-  /// List of topologically sorted graphs from parent to child, one for each row
-  gch::small_vector<detail::ExpressionGraph<Scalar>> m_top_lists;
+  detail::AdjointTape<Scalar> m_tape;
 
-  /// List of output rows as column-node pairs
-  gch::small_vector<
-      gch::small_vector<std::pair<int, detail::Expression<Scalar>*>>>
-      m_output_lists;
+  /// The ends of each tape node's operations
+  gch::small_vector<OpEnds> m_op_ends;
 
-  Eigen::SparseMatrix<Scalar> m_H{m_variables.rows(), m_wrt.rows()};
+  gch::small_vector<PushOp> m_push_ops;
+  gch::small_vector<DiagPushOp> m_push_diag_ops;
+  gch::small_vector<CreateOp> m_create_ops;
 
-  // Cached triplets for gradients of linear rows
-  gch::small_vector<Eigen::Triplet<Scalar>> m_cached_triplets;
+  /// Slots in m_slots that are dead after each tape node's operations, in tape
+  /// order. compute() zeroes them so they start at zero when reused.
+  gch::small_vector<uint32_t> m_dead_slots;
 
-  // List of row indices for nonlinear rows whose graients will be computed in
-  // value()
-  gch::small_vector<int> m_nonlinear_rows;
+  /// Value of each structurally nonzero entry h(vⱼ, vₖ) of the expression
+  /// graph's Hessian.
+  ///
+  /// Entries between elements of wrt are the results, so their slots are
+  /// never reused. Other entries are dead once the node they're stored at has
+  /// pushed them, so their slots are reused. All slots are zero outside of
+  /// compute().
+  gch::small_vector<Scalar> m_slots;
+
+  gch::small_vector<detail::SlotMapEntry> m_slot_map;
+
+  Eigen::SparseMatrix<Scalar> m_H{m_wrt.rows(), m_wrt.rows()};
+
+  /// Runs edge pushing structurally and records the operations it performs.
+  ///
+  /// Implements edge pushing as described by figure 4 on p. 14 of [1].
+  ///
+  /// [1] Wang, M., et al. "Capitalizing on live variables: new algorithms for
+  ///     efficient Hessian computation via automatic differentiation", 2016.
+  ///     https://sci-hub.st/10.1007/s12532-016-0100-3
+  void record_pushes() {
+    using enum ExpressionType;
+    constexpr auto SKIPPED_CHILD = detail::AdjointTape<Scalar>::SKIPPED_CHILD;
+
+    // Maps h(vⱼ, vₖ) with j ≤ k to its slot. Stored at index j.
+    //
+    // Entries are allocated slots when they're first written. An entry stored
+    // at index j is only written before node vⱼ pushes it (pushes and creates
+    // only write to entries of node vᵢ's children, which come after vᵢ), so
+    // unless it's a result, its slot is freed once node vⱼ's operations are
+    // recorded. Freed slots are reused most recently freed first, which keeps
+    // the slots in use few and cache-resident.
+    gch::small_vector<flat_map<uint32_t, uint32_t>> h(m_tape.top_list().size());
+    gch::small_vector<uint32_t> free_slots;
+    uint32_t num_slots = 0;
+    auto get_slot = [&](uint32_t j, uint32_t k) -> uint32_t {
+      auto [it, inserted] = h[std::min(j, k)].try_emplace(std::max(j, k), 0);
+      if (inserted) {
+        if (!free_slots.empty()) {
+          it->second = free_slots.back();
+          free_slots.pop_back();
+        } else {
+          it->second = num_slots++;
+        }
+      }
+      return it->second;
+    };
+
+    // The tape's nodes are the dependent variables vᵢ in topological order,
+    // with structurally zero partial derivatives ∂ϕᵢ/∂vₖ marked as
+    // SKIPPED_CHILD. Each loop iteration records the pushing and creating steps
+    // for vᵢ. The adjoint step a(vₖ) += ∂ϕᵢ/∂vₖ a(vᵢ) is recorded by the
+    // AdjointTape.
+    for (const auto& node : m_tape.nodes()) {
+      const uint32_t i = node.idx;
+      const auto& children = node.children;
+
+      // Pushing
+      //
+      // for all vᵢ, vⱼ such that h(vᵢ, vⱼ) ≠ 0
+      //   for all vₖ such that ∂ϕᵢ/∂vₖ ≠ 0
+      //     if i ≠ j
+      //       for all unordered pairs (vⱼ, vₖ) such that vⱼ < vᵢ or vₖ < vᵢ
+      //         if j = k
+      //           h(vⱼ, vₖ) += 2 ∂ϕᵢ/∂vₖ h(vᵢ, vⱼ)
+      //         else
+      //           h(vⱼ, vₖ) += ∂ϕᵢ/∂vₖ h(vᵢ, vⱼ)
+      //     else
+      //       for all unordered pairs (vₖ₁, vₖ₂) such that vₖ₁ < vᵢ or vₖ₂ < vᵢ
+      //         if k1 = k2
+      //           h(vₖ₁, vₖ₂) += 2 ∂ϕᵢ/∂vₖ₁ ∂ϕᵢ/∂vₖ₂ h(vᵢ, vⱼ)
+      //         else
+      //           h(vₖ₁, vₖ₂) += ∂ϕᵢ/∂vₖ₁ ∂ϕᵢ/∂vₖ₂ h(vᵢ, vⱼ)
+      //
+      // Pushed entries are always stored at nodes after vᵢ, so h[i] isn't
+      // modified while it's iterated over.
+      for (const auto& [j, src] : h[i]) {
+        if (i != j) {
+          // h(vⱼ, vₖ) += ∂ϕᵢ/∂vₖ h(vᵢ, vⱼ)
+          for (size_t arg = 0; arg < children.size(); ++arg) {
+            const uint32_t k = children[arg];
+            if (k != SKIPPED_CHILD) {
+              m_push_ops.push_back(
+                  {get_slot(j, k), src,
+                   static_cast<uint32_t>(node.first_partial + arg),
+                   static_cast<uint8_t>(j == k ? 2 : 1)});
+            }
+          }
+        } else {
+          // h(vₖ₁, vₖ₂) += ∂ϕᵢ/∂vₖ₁ ∂ϕᵢ/∂vₖ₂ h(vᵢ, vᵢ)
+          for (size_t arg1 = 0; arg1 < children.size(); ++arg1) {
+            for (size_t arg2 = 0; arg2 <= arg1; ++arg2) {
+              const uint32_t k1 = children[arg1];
+              const uint32_t k2 = children[arg2];
+              if (k1 != SKIPPED_CHILD && k2 != SKIPPED_CHILD) {
+                m_push_diag_ops.push_back(
+                    {get_slot(k1, k2), src,
+                     static_cast<uint32_t>(node.first_partial + arg1),
+                     static_cast<uint32_t>(node.first_partial + arg2),
+                     static_cast<uint8_t>(arg1 != arg2 && k1 == k2 ? 2 : 1)});
+              }
+            }
+          }
+        }
+      }
+
+      // Creating
+      //
+      // if a(vᵢ) ≠ 0
+      //   for all unordered pairs (vⱼ, vₖ) such that ∂²ϕᵢ/∂vⱼ∂vₖ ≠ 0
+      //     if j = k
+      //       h(vⱼ, vₖ) += 2 ∂²ϕᵢ/∂vⱼ∂vₖ a(vᵢ)
+      //     else
+      //       h(vⱼ, vₖ) += ∂²ϕᵢ/∂vⱼ∂vₖ a(vᵢ)
+      //
+      // The tape only contains nodes that a(vᵢ) can be nonzero for.
+      if (node.expr->type() > LINEAR) {
+        auto nonzero = detail::hess_structure(*node.expr);
+
+        // h(vⱼ, vₖ) += ∂²ϕᵢ/∂vⱼ∂vₖ a(vᵢ)
+        //
+        // Second derivatives are structurally zero if either first derivative
+        // is.
+        for (size_t arg1 = 0; arg1 < children.size(); ++arg1) {
+          for (size_t arg2 = 0; arg2 <= arg1; ++arg2) {
+            const uint32_t j = children[arg1];
+            const uint32_t k = children[arg2];
+            if (j != SKIPPED_CHILD && k != SKIPPED_CHILD &&
+                nonzero[arg1][arg2]) {
+              m_create_ops.push_back(
+                  {get_slot(j, k),
+                   static_cast<uint32_t>(node.first_second_partial +
+                                         arg1 * (arg1 + 1) / 2 + arg2),
+                   static_cast<uint8_t>(arg1 != arg2 && j == k ? 2 : 1)});
+            }
+          }
+        }
+      }
+
+      // Entries stored at vᵢ are dead once vᵢ has pushed them, unless they're
+      // results
+      for (const auto& [j, slot] : h[i]) {
+        if (m_tape.col(i) == -1 || m_tape.col(j) == -1) {
+          m_dead_slots.push_back(slot);
+          free_slots.push_back(slot);
+        }
+      }
+
+      m_op_ends.push_back({static_cast<uint32_t>(m_push_ops.size()),
+                           static_cast<uint32_t>(m_push_diag_ops.size()),
+                           static_cast<uint32_t>(m_create_ops.size()),
+                           static_cast<uint32_t>(m_dead_slots.size())});
+    }
+
+    m_slots.resize(num_slots);
+
+    // Map Hessian entries between elements of wrt to m_H's nonzeros
+    gch::small_vector<detail::TapeEntry> entries;
+    for (size_t j = 0; j < h.size(); ++j) {
+      int row = m_tape.col(j);
+      if (row == -1) {
+        continue;
+      }
+
+      for (const auto& [k, slot] : h[j]) {
+        int col = m_tape.col(k);
+
+        // If indices don't refer to element in wrt, skip this value
+        if (col == -1) {
+          continue;
+        }
+
+        if constexpr (UpLo == Eigen::Lower) {
+          // In lower triangle, row index ≥ column index
+          entries.push_back({slot, std::max(row, col), std::min(row, col)});
+        } else {
+          entries.push_back({slot, row, col});
+          if (row != col) {
+            entries.push_back({slot, col, row});
+          }
+        }
+      }
+    }
+
+    m_slot_map = detail::make_slot_map(m_H, entries);
+  }
+
+  /// Replays the recorded adjoint and edge pushing operations with the
+  /// expression graph's current values, then writes the result to m_H.
+  void compute() {
+    using S = Scalar;
+
+    auto g = m_tape.partials();
+    auto H = m_tape.second_partials();
+    m_tape.replay([&](size_t node_idx, std::span<const S> adjoints) {
+      const auto& ends = m_op_ends[node_idx];
+      OpEnds begins =
+          node_idx == 0 ? OpEnds{0, 0, 0, 0} : m_op_ends[node_idx - 1];
+
+      for (uint32_t op_idx = begins.push; op_idx < ends.push; ++op_idx) {
+        const auto& op = m_push_ops[op_idx];
+        m_slots[op.dest] += S(op.coeff) * g[op.partial] * m_slots[op.src];
+      }
+
+      for (uint32_t op_idx = begins.push_diag; op_idx < ends.push_diag;
+           ++op_idx) {
+        const auto& op = m_push_diag_ops[op_idx];
+        m_slots[op.dest] +=
+            S(op.coeff) * g[op.partial1] * g[op.partial2] * m_slots[op.src];
+      }
+
+      // The Hessian has one root, so each node has one adjoint
+      for (uint32_t op_idx = begins.create; op_idx < ends.create; ++op_idx) {
+        const auto& op = m_create_ops[op_idx];
+        m_slots[op.dest] += S(op.coeff) * H[op.second_partial] * adjoints[0];
+      }
+
+      for (uint32_t dead_idx = begins.dead; dead_idx < ends.dead; ++dead_idx) {
+        m_slots[m_dead_slots[dead_idx]] = S(0);
+      }
+    });
+
+    detail::copy_slots(m_H, m_slot_map, m_slots);
+
+    // Zero the result slots for the next call. They're zeroed after all of
+    // them are copied because off-diagonal entries of a full Hessian share a
+    // slot.
+    for (const auto& entry : m_slot_map) {
+      m_slots[entry.slot_idx] = S(0);
+    }
+  }
+
+  /// Returns the variable's Hessian tree.
+  ///
+  /// This function lazily allocates variables, so elements of the returned
+  /// VariableMatrix will be empty if the corresponding element of wrt had no
+  /// adjoint. Ensure Variable::expr isn't nullptr before calling member
+  /// functions.
+  ///
+  /// @return The variable's Hessian tree.
+  VariableMatrix<Scalar> hessian_tree() const {
+    using enum ExpressionType;
+
+    slp_assert(m_wrt.cols() == 1);
+
+    // Read docs/algorithms.md#Reverse_accumulation_automatic_differentiation
+    // for background on reverse accumulation automatic differentiation.
+
+    // Implements edge pushing as described by figure 4 on p. 14 of [1].
+    //
+    // [1] Wang, M., et al. "Capitalizing on live variables: new algorithms for
+    //     efficient Hessian computation via automatic differentiation", 2016.
+    //     https://sci-hub.st/10.1007/s12532-016-0100-3
+
+    auto top_list = detail::topological_sort(m_variable.expr);
+
+    if (top_list.empty()) {
+      return VariableMatrix<Scalar>{detail::empty, m_wrt.rows(), m_wrt.rows()};
+    }
+
+    // Sort dependent variables before independent ones while maintaining
+    // relative order (precondition of edge pushing)
+    size_t top_list_end = std::distance(
+        top_list.begin(),
+        std::stable_partition(top_list.begin(), top_list.end(),
+                              [](const auto& elem) { return !elem->is_leaf; }));
+
+    // Initialize column each expression's adjoint occupies in the Hessian
+    for (size_t col = 0; col < m_wrt.size(); ++col) {
+      m_wrt[col].expr->scratch = col;
+    }
+
+    gch::small_vector<int> col_list;
+    for (auto& node : top_list) {
+      col_list.emplace_back(node->scratch);
+    }
+
+    // Reset col to -1
+    for (auto& node : m_wrt) {
+      node.expr->scratch = -1;
+    }
+
+    // Maps h(vⱼ, vₖ) with j ≤ k to its expression. Stored at index j.
+    gch::small_vector<flat_map<size_t, detail::ExpressionPtr<Scalar>>>
+        hessian_expr(top_list.size());
+
+    // Append value to Hessian mapping
+    auto push_edge = [&](size_t j, size_t k,
+                         detail::ExpressionPtr<Scalar> value) {
+      // Sort parent index before child index
+      hessian_expr[std::min(j, k)][std::max(j, k)] += std::move(value);
+    };
+
+    auto ptr_1 = detail::constant_ptr(Scalar(1));
+    auto ptr_2 = detail::constant_ptr(Scalar(2));
+
+    // Temporarily store each node's index in top_list in scratch
+    for (size_t i = 0; i < top_list.size(); ++i) {
+      top_list[i]->scratch = i;
+    }
+
+    // Adjoint of each node in top_list
+    gch::small_vector<detail::ExpressionPtr<Scalar>> adjoints(top_list.size());
+
+    // Set root node's adjoint to 1 since df/df is 1
+    adjoints[0] = ptr_1;
+
+    for (size_t i = 0; i < top_list_end; ++i) {
+      const auto& v_i = top_list[i];
+
+      // Get node arguments
+      detail::ArgArray<detail::Expression<Scalar>*> args;
+      size_t num_args = 0;
+      v_i->visit_args([&](auto* arg) { args[num_args++] = arg; });
+
+      // Compute node gradients. Constant arguments are skipped since their
+      // derivatives are never used.
+      detail::ArgArray<detail::ExpressionPtr<Scalar>> g;
+      v_i->grad_expr(g);
+      for (size_t arg = 0; arg < num_args; ++arg) {
+        if (args[arg]->type() == CONSTANT) {
+          g[arg] = nullptr;
+        }
+      }
+
+      // Adjoints (a null adjoint is zero, so it has nothing to contribute)
+      if (adjoints[i] != nullptr) {
+        for (size_t arg = 0; arg < num_args; ++arg) {
+          if (g[arg] != nullptr) {
+            adjoints[args[arg]->scratch] += g[arg] * adjoints[i];
+          }
+        }
+      }
+
+      // Pushing
+      //
+      // for all vᵢ, vⱼ such that h(vᵢ, vⱼ) ≠ 0
+      //   for all vₖ such that ∂ϕᵢ/∂vₖ ≠ 0
+      //     if i ≠ j
+      //       for all unordered pairs (vⱼ, vₖ) such that vⱼ < vᵢ or vₖ < vᵢ
+      //         if j = k
+      //           h(vⱼ, vₖ) += 2 ∂ϕᵢ/∂vₖ h(vᵢ, vⱼ)
+      //         else
+      //           h(vⱼ, vₖ) += ∂ϕᵢ/∂vₖ h(vᵢ, vⱼ)
+      //     else
+      //       for all unordered pairs (vₖ₁, vₖ₂) such that vₖ₁ < vᵢ or vₖ₂ < vᵢ
+      //         if k1 = k2
+      //           h(vₖ₁, vₖ₂) += 2 ∂ϕᵢ/∂vₖ₁ ∂ϕᵢ/∂vₖ₂ h(vᵢ, vⱼ)
+      //         else
+      //           h(vₖ₁, vₖ₂) += ∂ϕᵢ/∂vₖ₁ ∂ϕᵢ/∂vₖ₂ h(vᵢ, vⱼ)
+      for (const auto& [j, h_i_j] : hessian_expr[i]) {
+        if (i != j) {
+          // h(vⱼ, vₖ) += ∂ϕᵢ/∂vₖ h(vᵢ, vⱼ)
+          for (size_t arg = 0; arg < num_args; ++arg) {
+            if (g[arg] != nullptr) {
+              size_t k = args[arg]->scratch;
+              push_edge(j, k, (j == k ? ptr_2 : ptr_1) * g[arg] * h_i_j);
+            }
+          }
+        } else {
+          // h(vₖ₁, vₖ₂) += ∂ϕᵢ/∂vₖ₁ ∂ϕᵢ/∂vₖ₂ h(vᵢ, vᵢ)
+          for (size_t arg1 = 0; arg1 < num_args; ++arg1) {
+            for (size_t arg2 = 0; arg2 <= arg1; ++arg2) {
+              if (g[arg1] != nullptr && g[arg2] != nullptr) {
+                size_t k1 = args[arg1]->scratch;
+                size_t k2 = args[arg2]->scratch;
+                push_edge(k1, k2,
+                          (arg1 != arg2 && k1 == k2 ? ptr_2 : ptr_1) * g[arg1] *
+                              g[arg2] * h_i_j);
+              }
+            }
+          }
+        }
+      }
+
+      // Creating
+      //
+      // if a(vᵢ) ≠ 0
+      //   for all unordered pairs (vⱼ, vₖ) such that ∂²ϕᵢ/∂vⱼ∂vₖ ≠ 0
+      //     if j = k
+      //       h(vⱼ, vₖ) += 2 ∂²ϕᵢ/∂vⱼ∂vₖ a(vᵢ)
+      //     else
+      //       h(vⱼ, vₖ) += ∂²ϕᵢ/∂vⱼ∂vₖ a(vᵢ)
+      if (adjoints[i] != nullptr && v_i->type() > LINEAR) {
+        detail::ArgArray<detail::ArgArray<detail::ExpressionPtr<Scalar>>> H;
+        v_i->hess_expr(H);
+
+        // h(vⱼ, vₖ) += ∂²ϕᵢ/∂vⱼ∂vₖ a(vᵢ)
+        //
+        // Second derivatives are structurally zero if either first derivative
+        // is.
+        for (size_t arg1 = 0; arg1 < num_args; ++arg1) {
+          for (size_t arg2 = 0; arg2 <= arg1; ++arg2) {
+            if (g[arg1] != nullptr && g[arg2] != nullptr &&
+                H[arg1][arg2] != nullptr) {
+              size_t j = args[arg1]->scratch;
+              size_t k = args[arg2]->scratch;
+              push_edge(j, k,
+                        (arg1 != arg2 && j == k ? ptr_2 : ptr_1) *
+                            H[arg1][arg2] * adjoints[i]);
+            }
+          }
+        }
+      }
+    }
+
+    // Move Hessian tree to return value
+    VariableMatrix<Scalar> H{detail::empty, m_wrt.rows(), m_wrt.rows()};
+    for (int row = 0; row < static_cast<int>(m_wrt.rows()); ++row) {
+      int row_idx = m_wrt[row].expr->scratch;
+
+      // If wrt element isn't in the graph, its Hessian row is zero
+      if (row_idx == -1) {
+        continue;
+      }
+
+      for (const auto& node : hessian_expr[row_idx]) {
+        const auto& col_idx = node.first;
+        Variable value{node.second};
+
+        int col = col_list[col_idx];
+
+        // If indices don't refer to element in wrt, skip this value
+        if (col == -1) {
+          continue;
+        }
+
+        if constexpr (UpLo == Eigen::Lower) {
+          // In lower triangle, row index ≥ column index
+          if (row > col) {
+            H[row, col] = value;
+          } else {
+            H[col, row] = value;
+          }
+        } else {
+          H[row, col] = value;
+          if (row != col) {
+            H[col, row] = value;
+          }
+        }
+      }
+    }
+
+    for (auto& node : top_list) {
+      node->scratch = -1;
+    }
+
+    return H;
+  }
 };
 
 // @cond Suppress Doxygen

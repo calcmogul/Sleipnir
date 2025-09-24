@@ -5,16 +5,21 @@
 #include <stdint.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <memory>
 #include <numbers>
+#include <optional>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 
 #include <gch/small_vector.hpp>
 
 #include "sleipnir/autodiff/expression_type.hpp"
+#include "sleipnir/util/force_inline.hpp"
 #include "sleipnir/util/function_ref.hpp"
 #include "sleipnir/util/intrusive_shared_ptr.hpp"
 #include "sleipnir/util/pool.hpp"
@@ -27,8 +32,83 @@ inline constexpr bool USE_POOL_ALLOCATOR = false;
 inline constexpr bool USE_POOL_ALLOCATOR = true;
 #endif
 
+/// Expression operators, one per derived expression type.
+enum class ExpressionOp : uint8_t {
+  /// abs().
+  ABS,
+  /// acos().
+  ACOS,
+  /// asin().
+  ASIN,
+  /// atan().
+  ATAN,
+  /// atan2().
+  ATAN2,
+  /// Binary minus operator.
+  BINARY_MINUS,
+  /// Binary plus operator.
+  BINARY_PLUS,
+  /// cbrt().
+  CBRT,
+  /// cos().
+  COS,
+  /// cosh().
+  COSH,
+  /// Binary division operator.
+  DIV,
+  /// erf().
+  ERF,
+  /// exp().
+  EXP,
+  /// Two-argument hypot().
+  HYPOT2,
+  /// Three-argument hypot().
+  HYPOT3,
+  /// if_else().
+  IF_ELSE,
+  /// log().
+  LOG,
+  /// log10().
+  LOG10,
+  /// max().
+  MAX,
+  /// min().
+  MIN,
+  /// Binary multiplication operator.
+  MULT,
+  /// pow().
+  POW,
+  /// sign().
+  SIGN,
+  /// sin().
+  SIN,
+  /// sinh().
+  SINH,
+  /// sqrt().
+  SQRT,
+  /// tan().
+  TAN,
+  /// tanh().
+  TANH,
+  /// Unary minus operator.
+  UNARY_MINUS,
+  /// Constant.
+  CONSTANT,
+  /// Decision variable.
+  DECISION_VARIABLE,
+};
+
 template <typename Scalar>
 struct Expression;
+
+/// The maximum number of arguments an expression can have.
+inline constexpr size_t MAX_ARGS = 4;
+
+/// Array with one element per expression argument in visit_args() order.
+///
+/// @tparam T Element type.
+template <typename T>
+using ArgArray = std::array<T, MAX_ARGS>;
 
 /// Typedef for intrusive shared pointer to Expression.
 ///
@@ -84,13 +164,6 @@ struct Expression {
   /// The value of the expression node.
   Scalar val{0};
 
-  /// The adjoint of the expression node, used during autodiff.
-  Scalar adj{0};
-
-  /// The adjoint of the expression node, used during gradient expression tree
-  /// generation.
-  ExpressionPtr<Scalar> adj_expr;
-
   /// True if the expression is a leaf node (a nullary expression).
   ///
   /// Graph traversals check this to avoid virtual calls on leaves. The check
@@ -103,10 +176,13 @@ struct Expression {
   /// In expression_graph.hpp's topological_sort(), scratch counts incoming
   /// edges for this node, offset by -1 so -1 means no edges.
   ///
-  /// In Hessian and Jacobian constructors, scratch represents this expression's
-  /// column in a Jacobian, or -1 otherwise.
+  /// In AdjointTape's constructor, Jacobian::gradient_tree(), and
+  /// Hessian::hessian_tree(), scratch temporarily holds this expression's index
+  /// in the topological list. Hessian::hessian_tree() also briefly uses it
+  /// beforehand to hold this expression's column in wrt.
   ///
-  /// They share a default state of -1 to avoid extra assignments.
+  /// All users restore it to -1 afterward, a shared default that avoids extra
+  /// assignments.
   int32_t scratch = -1;
 
   /// Reference count for intrusive shared pointer.
@@ -361,11 +437,29 @@ struct Expression {
   /// @return The name of this expression.
   virtual std::string_view name() const = 0;
 
-  /// Accumulates the child adjoints as Scalars.
-  virtual void accumulate_adjoints() const {}
+  /// Returns the operator of this expression.
+  ///
+  /// @return The operator of this expression.
+  virtual ExpressionOp op() const = 0;
 
-  /// Accumulates the child adjoints as Expressions.
-  virtual void accumulate_adjoints_expr() const {}
+  /// Returns ∂/∂aₖ as an Expression for each argument aₖ.
+  ///
+  /// The partial derivatives aren't scaled by the adjoint.
+  ///
+  /// @param g The partial derivatives in visit_args() order. Elements left as
+  ///     nullptr are structurally zero.
+  virtual void grad_expr(
+      [[maybe_unused]] ArgArray<ExpressionPtr<Scalar>>& g) const {}
+
+  /// Returns ∂²/∂aⱼ∂aₖ as an Expression for each pair of arguments aⱼ and aₖ.
+  ///
+  /// The partial derivatives aren't scaled by the adjoint.
+  ///
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left as nullptr are
+  ///     structurally zero.
+  virtual void hess_expr(
+      [[maybe_unused]] ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const {}
 };
 
 /// Derived expression type for binary minus operator.
@@ -394,30 +488,46 @@ struct BinaryMinusExpression final : Expression<Scalar> {
     func(rhs.get());
   }
 
-  Scalar value() const override { return lhs->val - rhs->val; }
+  Scalar value() const override { return eval(lhs->val, rhs->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param lhs The value of lhs.
+  /// @param rhs The value of rhs.
+  /// @return The expression's value.
+  static Scalar eval(Scalar lhs, Scalar rhs) { return lhs - rhs; }
 
   ExpressionType type() const override { return T; }
 
   std::string_view name() const override { return "binary minus"; }
 
-  void accumulate_adjoints() const override {
-    lhs->adj += grad_l();
-    rhs->adj += grad_r();
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::BINARY_MINUS;
+
+  ExpressionOp op() const override { return OP; }
+
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param lhs The value of lhs.
+  /// @param rhs The value of rhs.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, [[maybe_unused]] Scalar val,
+                        [[maybe_unused]] Scalar lhs,
+                        [[maybe_unused]] Scalar rhs) {
+    g[0] = Scalar(1);
+    g[1] = Scalar(-1);
   }
 
-  void accumulate_adjoints_expr() const override {
-    lhs->adj_expr += grad_expr_l();
-    rhs->adj_expr += grad_expr_r();
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = constant_ptr(Scalar(1));
+    g[1] = constant_ptr(Scalar(-1));
   }
-
- private:
-  Scalar grad_l() const { return this->adj; }
-
-  Scalar grad_r() const { return -this->adj; }
-
-  ExpressionPtr<Scalar> grad_expr_l() const { return this->adj_expr; }
-
-  ExpressionPtr<Scalar> grad_expr_r() const { return -this->adj_expr; }
 };
 
 /// Derived expression type for binary plus operator.
@@ -446,30 +556,46 @@ struct BinaryPlusExpression final : Expression<Scalar> {
     func(rhs.get());
   }
 
-  Scalar value() const override { return lhs->val + rhs->val; }
+  Scalar value() const override { return eval(lhs->val, rhs->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param lhs The value of lhs.
+  /// @param rhs The value of rhs.
+  /// @return The expression's value.
+  static Scalar eval(Scalar lhs, Scalar rhs) { return lhs + rhs; }
 
   ExpressionType type() const override { return T; }
 
   std::string_view name() const override { return "binary plus"; }
 
-  void accumulate_adjoints() const override {
-    lhs->adj += grad_l();
-    rhs->adj += grad_r();
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::BINARY_PLUS;
+
+  ExpressionOp op() const override { return OP; }
+
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param lhs The value of lhs.
+  /// @param rhs The value of rhs.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, [[maybe_unused]] Scalar val,
+                        [[maybe_unused]] Scalar lhs,
+                        [[maybe_unused]] Scalar rhs) {
+    g[0] = Scalar(1);
+    g[1] = Scalar(1);
   }
 
-  void accumulate_adjoints_expr() const override {
-    lhs->adj_expr += grad_expr_l();
-    rhs->adj_expr += grad_expr_r();
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = constant_ptr(Scalar(1));
+    g[1] = constant_ptr(Scalar(1));
   }
-
- private:
-  Scalar grad_l() const { return this->adj; }
-
-  Scalar grad_r() const { return this->adj; }
-
-  ExpressionPtr<Scalar> grad_expr_l() const { return this->adj_expr; }
-
-  ExpressionPtr<Scalar> grad_expr_r() const { return this->adj_expr; }
 };
 
 /// Derived expression type for cbrt().
@@ -491,32 +617,64 @@ struct CbrtExpression final : Expression<Scalar> {
     func(x.get());
   }
 
-  Scalar value() const override {
+  Scalar value() const override { return eval(x->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param x The value of x.
+  /// @return The expression's value.
+  static Scalar eval(Scalar x) {
     using std::cbrt;
-    return cbrt(x->val);
+    return cbrt(x);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "cbrt"; }
 
-  void accumulate_adjoints() const override { x->adj += grad_l(); }
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::CBRT;
 
-  void accumulate_adjoints_expr() const override {
-    x->adj_expr += grad_expr_l();
+  ExpressionOp op() const override { return OP; }
+
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, Scalar val, [[maybe_unused]] Scalar x) {
+    g[0] = Scalar(1) / (Scalar(3) * val * val);
   }
 
- private:
-  Scalar grad_l() const {
-    using std::cbrt;
-
-    Scalar c = cbrt(x->val);
-    return this->adj / (Scalar(3) * c * c);
-  }
-
-  ExpressionPtr<Scalar> grad_expr_l() const {
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
     auto c = cbrt(x);
-    return this->adj_expr / (constant_ptr(Scalar(3)) * c * c);
+    g[0] = constant_ptr(Scalar(1)) / (constant_ptr(Scalar(3)) * c * c);
+  }
+
+  /// Returns ∂²/∂aⱼ∂aₖ for each pair of arguments aⱼ and aₖ at the given
+  /// argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left unwritten are
+  ///     structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_hess(ArgArray<ArgArray<G>>& H, Scalar val, Scalar x) {
+    H[0][0] = Scalar(-2) / (Scalar(9) * x * val * val);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    auto c = cbrt(x);
+    H[0][0] = constant_ptr(Scalar(-2)) / (constant_ptr(Scalar(9)) * x * c * c);
   }
 };
 
@@ -560,6 +718,11 @@ struct ConstantExpression final : Expression<Scalar> {
   ExpressionType type() const override { return ExpressionType::CONSTANT; }
 
   std::string_view name() const override { return "constant"; }
+
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::CONSTANT;
+
+  ExpressionOp op() const override { return OP; }
 };
 
 template <typename Scalar>
@@ -586,6 +749,11 @@ struct DecisionVariableExpression final : Expression<Scalar> {
   ExpressionType type() const override { return ExpressionType::LINEAR; }
 
   std::string_view name() const override { return "decision variable"; }
+
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::DECISION_VARIABLE;
+
+  ExpressionOp op() const override { return OP; }
 };
 
 /// Derived expression type for binary division operator.
@@ -613,33 +781,68 @@ struct DivExpression final : Expression<Scalar> {
     func(rhs.get());
   }
 
-  Scalar value() const override { return lhs->val / rhs->val; }
+  Scalar value() const override { return eval(lhs->val, rhs->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param lhs The value of lhs.
+  /// @param rhs The value of rhs.
+  /// @return The expression's value.
+  static Scalar eval(Scalar lhs, Scalar rhs) { return lhs / rhs; }
 
   ExpressionType type() const override { return T; }
 
   std::string_view name() const override { return "division"; }
 
-  void accumulate_adjoints() const override {
-    lhs->adj += grad_l();
-    rhs->adj += grad_r();
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::DIV;
+
+  ExpressionOp op() const override { return OP; }
+
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param lhs The value of lhs.
+  /// @param rhs The value of rhs.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, [[maybe_unused]] Scalar val, Scalar lhs,
+                        Scalar rhs) {
+    g[0] = Scalar(1) / rhs;
+    g[1] = -lhs / (rhs * rhs);
   }
 
-  void accumulate_adjoints_expr() const override {
-    lhs->adj_expr += grad_expr_l();
-    rhs->adj_expr += grad_expr_r();
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = constant_ptr(Scalar(1)) / rhs;
+    g[1] = -lhs / (rhs * rhs);
   }
 
- private:
-  Scalar grad_l() const { return this->adj / rhs->val; };
-
-  Scalar grad_r() const {
-    return this->adj * -lhs->val / (rhs->val * rhs->val);
+  /// Returns ∂²/∂aⱼ∂aₖ for each pair of arguments aⱼ and aₖ at the given
+  /// argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left unwritten are
+  ///     structurally zero.
+  /// @param val The expression's value.
+  /// @param lhs The value of lhs.
+  /// @param rhs The value of rhs.
+  template <typename G>
+  static void eval_hess(ArgArray<ArgArray<G>>& H, [[maybe_unused]] Scalar val,
+                        Scalar lhs, Scalar rhs) {
+    H[1][0] = Scalar(-1) / (rhs * rhs);
+    H[1][1] = Scalar(2) * lhs / (rhs * rhs * rhs);
   }
 
-  ExpressionPtr<Scalar> grad_expr_l() const { return this->adj_expr / rhs; }
-
-  ExpressionPtr<Scalar> grad_expr_r() const {
-    return this->adj_expr * -lhs / (rhs * rhs);
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    H[1][0] = constant_ptr(Scalar(-1)) / (rhs * rhs);
+    H[1][1] = constant_ptr(Scalar(2)) * lhs / (rhs * rhs * rhs);
   }
 };
 
@@ -668,30 +871,68 @@ struct MultExpression final : Expression<Scalar> {
     func(rhs.get());
   }
 
-  Scalar value() const override { return lhs->val * rhs->val; }
+  Scalar value() const override { return eval(lhs->val, rhs->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param lhs The value of lhs.
+  /// @param rhs The value of rhs.
+  /// @return The expression's value.
+  static Scalar eval(Scalar lhs, Scalar rhs) { return lhs * rhs; }
 
   ExpressionType type() const override { return T; }
 
   std::string_view name() const override { return "multiplication"; }
 
-  void accumulate_adjoints() const override {
-    lhs->adj += grad_l();
-    rhs->adj += grad_r();
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::MULT;
+
+  ExpressionOp op() const override { return OP; }
+
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param lhs The value of lhs.
+  /// @param rhs The value of rhs.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, [[maybe_unused]] Scalar val, Scalar lhs,
+                        Scalar rhs) {
+    g[0] = rhs;
+    g[1] = lhs;
   }
 
-  void accumulate_adjoints_expr() const override {
-    lhs->adj_expr += grad_expr_l();
-    rhs->adj_expr += grad_expr_r();
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = rhs;
+    g[1] = lhs;
   }
 
- private:
-  Scalar grad_l() const { return this->adj * rhs->val; }
+  /// Returns ∂²/∂aⱼ∂aₖ for each pair of arguments aⱼ and aₖ at the given
+  /// argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left unwritten are
+  ///     structurally zero.
+  /// @param val The expression's value.
+  /// @param lhs The value of lhs.
+  /// @param rhs The value of rhs.
+  template <typename G>
+  static void eval_hess(ArgArray<ArgArray<G>>& H, [[maybe_unused]] Scalar val,
+                        [[maybe_unused]] Scalar lhs,
+                        [[maybe_unused]] Scalar rhs) {
+    H[1][0] = Scalar(1);
+  }
 
-  Scalar grad_r() const { return this->adj * lhs->val; }
-
-  ExpressionPtr<Scalar> grad_expr_l() const { return this->adj_expr * rhs; }
-
-  ExpressionPtr<Scalar> grad_expr_r() const { return this->adj_expr * lhs; }
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    H[1][0] = constant_ptr(Scalar(1));
+  }
 };
 
 /// Derived expression type for unary minus operator.
@@ -714,22 +955,41 @@ struct UnaryMinusExpression final : Expression<Scalar> {
     func(lhs.get());
   }
 
-  Scalar value() const override { return -lhs->val; }
+  Scalar value() const override { return eval(lhs->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param lhs The value of lhs.
+  /// @return The expression's value.
+  static Scalar eval(Scalar lhs) { return -lhs; }
 
   ExpressionType type() const override { return T; }
 
   std::string_view name() const override { return "unary minus"; }
 
-  void accumulate_adjoints() const override { lhs->adj += grad_l(); }
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::UNARY_MINUS;
 
-  void accumulate_adjoints_expr() const override {
-    lhs->adj_expr += grad_expr_l();
+  ExpressionOp op() const override { return OP; }
+
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param lhs The value of lhs.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, [[maybe_unused]] Scalar val,
+                        [[maybe_unused]] Scalar lhs) {
+    g[0] = Scalar(-1);
   }
 
- private:
-  Scalar grad_l() const { return -this->adj; }
-
-  ExpressionPtr<Scalar> grad_expr_l() const { return -this->adj_expr; }
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = constant_ptr(Scalar(-1));
+  }
 };
 
 /// Refcount increment for intrusive shared pointer.
@@ -761,9 +1021,6 @@ constexpr void dec_ref_count(Expression<Scalar>* expr) {
     // Decrement the current node's refcount. If it reaches zero, deallocate the
     // node and enqueue its children so their refcounts are decremented too.
     if (--elem->ref_count == 0) {
-      if (elem->adj_expr != nullptr) {
-        stack.emplace_back(elem->adj_expr.get());
-      }
       elem->visit_args([&stack](const auto& arg) { stack.emplace_back(arg); });
 
       // Not calling the destructor here is safe because it only decrements
@@ -796,33 +1053,49 @@ struct AbsExpression final : Expression<Scalar> {
     func(x.get());
   }
 
-  Scalar value() const override {
+  Scalar value() const override { return eval(x->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param x The value of x.
+  /// @return The expression's value.
+  static Scalar eval(Scalar x) {
     using std::abs;
-    return abs(x->val);
+    return abs(x);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "abs"; }
 
-  void accumulate_adjoints() const override { x->adj += grad_l(); }
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::ABS;
 
-  void accumulate_adjoints_expr() const override {
-    x->adj_expr += grad_expr_l();
-  }
+  ExpressionOp op() const override { return OP; }
 
- private:
-  Scalar grad_l() const {
-    if (x->val < Scalar(0)) {
-      return -this->adj;
-    } else if (x->val > Scalar(0)) {
-      return this->adj;
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, [[maybe_unused]] Scalar val, Scalar x) {
+    if (x < Scalar(0)) {
+      g[0] = Scalar(-1);
+    } else if (x > Scalar(0)) {
+      g[0] = Scalar(1);
     } else {
-      return Scalar(0);
+      g[0] = Scalar(0);
     }
   }
 
-  ExpressionPtr<Scalar> grad_expr_l() const { return this->adj_expr * sign(x); }
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = sign(x);
+  }
 };
 
 /// abs() for Expressions.
@@ -867,29 +1140,68 @@ struct AcosExpression final : Expression<Scalar> {
     func(x.get());
   }
 
-  Scalar value() const override {
+  Scalar value() const override { return eval(x->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param x The value of x.
+  /// @return The expression's value.
+  static Scalar eval(Scalar x) {
     using std::acos;
-    return acos(x->val);
+    return acos(x);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "acos"; }
 
-  void accumulate_adjoints() const override { x->adj += grad_l(); }
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::ACOS;
 
-  void accumulate_adjoints_expr() const override {
-    x->adj_expr += grad_expr_l();
-  }
+  ExpressionOp op() const override { return OP; }
 
- private:
-  Scalar grad_l() const {
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, [[maybe_unused]] Scalar val, Scalar x) {
     using std::sqrt;
-    return -this->adj / sqrt(Scalar(1) - x->val * x->val);
+    g[0] = Scalar(-1) / sqrt(Scalar(1) - x * x);
   }
 
-  ExpressionPtr<Scalar> grad_expr_l() const {
-    return -this->adj_expr / sqrt(constant_ptr(Scalar(1)) - x * x);
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = constant_ptr(Scalar(-1)) / sqrt(constant_ptr(Scalar(1)) - x * x);
+  }
+
+  /// Returns ∂²/∂aⱼ∂aₖ for each pair of arguments aⱼ and aₖ at the given
+  /// argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left unwritten are
+  ///     structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_hess(ArgArray<ArgArray<G>>& H, [[maybe_unused]] Scalar val,
+                        Scalar x) {
+    using std::sqrt;
+
+    Scalar s = sqrt(Scalar(1) - x * x);
+    H[0][0] = -x / (s * s * s);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    auto s = sqrt(constant_ptr(Scalar(1)) - x * x);
+    H[0][0] = -x / (s * s * s);
   }
 };
 
@@ -934,29 +1246,68 @@ struct AsinExpression final : Expression<Scalar> {
     func(x.get());
   }
 
-  Scalar value() const override {
+  Scalar value() const override { return eval(x->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param x The value of x.
+  /// @return The expression's value.
+  static Scalar eval(Scalar x) {
     using std::asin;
-    return asin(x->val);
+    return asin(x);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "asin"; }
 
-  void accumulate_adjoints() const override { x->adj += grad_l(); }
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::ASIN;
 
-  void accumulate_adjoints_expr() const override {
-    x->adj_expr += grad_expr_l();
-  }
+  ExpressionOp op() const override { return OP; }
 
- private:
-  Scalar grad_l() const {
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, [[maybe_unused]] Scalar val, Scalar x) {
     using std::sqrt;
-    return this->adj / sqrt(Scalar(1) - x->val * x->val);
+    g[0] = Scalar(1) / sqrt(Scalar(1) - x * x);
   }
 
-  ExpressionPtr<Scalar> grad_expr_l() const {
-    return this->adj_expr / sqrt(constant_ptr(Scalar(1)) - x * x);
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = constant_ptr(Scalar(1)) / sqrt(constant_ptr(Scalar(1)) - x * x);
+  }
+
+  /// Returns ∂²/∂aⱼ∂aₖ for each pair of arguments aⱼ and aₖ at the given
+  /// argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left unwritten are
+  ///     structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_hess(ArgArray<ArgArray<G>>& H, [[maybe_unused]] Scalar val,
+                        Scalar x) {
+    using std::sqrt;
+
+    Scalar s = sqrt(Scalar(1) - x * x);
+    H[0][0] = x / (s * s * s);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    auto s = sqrt(constant_ptr(Scalar(1)) - x * x);
+    H[0][0] = x / (s * s * s);
   }
 };
 
@@ -1002,26 +1353,65 @@ struct AtanExpression final : Expression<Scalar> {
     func(x.get());
   }
 
-  Scalar value() const override {
+  Scalar value() const override { return eval(x->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param x The value of x.
+  /// @return The expression's value.
+  static Scalar eval(Scalar x) {
     using std::atan;
-    return atan(x->val);
+    return atan(x);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "atan"; }
 
-  void accumulate_adjoints() const override { x->adj += grad_l(); }
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::ATAN;
 
-  void accumulate_adjoints_expr() const override {
-    x->adj_expr += grad_expr_l();
+  ExpressionOp op() const override { return OP; }
+
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, [[maybe_unused]] Scalar val, Scalar x) {
+    g[0] = Scalar(1) / (Scalar(1) + x * x);
   }
 
- private:
-  Scalar grad_l() const { return this->adj / (Scalar(1) + x->val * x->val); }
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = constant_ptr(Scalar(1)) / (constant_ptr(Scalar(1)) + x * x);
+  }
 
-  ExpressionPtr<Scalar> grad_expr_l() const {
-    return this->adj_expr / (constant_ptr(Scalar(1)) + x * x);
+  /// Returns ∂²/∂aⱼ∂aₖ for each pair of arguments aⱼ and aₖ at the given
+  /// argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left unwritten are
+  ///     structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_hess(ArgArray<ArgArray<G>>& H, [[maybe_unused]] Scalar val,
+                        Scalar x) {
+    Scalar t = Scalar(1) + x * x;
+    H[0][0] = Scalar(-2) * x / (t * t);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    auto t = constant_ptr(Scalar(1)) + x * x;
+    H[0][0] = constant_ptr(Scalar(-2)) * x / (t * t);
   }
 };
 
@@ -1072,40 +1462,83 @@ struct Atan2Expression final : Expression<Scalar> {
     func(x.get());
   }
 
-  Scalar value() const override {
+  Scalar value() const override { return eval(y->val, x->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param y The value of y.
+  /// @param x The value of x.
+  /// @return The expression's value.
+  static Scalar eval(Scalar y, Scalar x) {
     using std::atan2;
-    return atan2(y->val, x->val);
+    return atan2(y, x);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "atan2"; }
 
-  void accumulate_adjoints() const override {
-    y->adj += grad_l();
-    x->adj += grad_r();
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::ATAN2;
+
+  ExpressionOp op() const override { return OP; }
+
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param y The value of y.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, [[maybe_unused]] Scalar val, Scalar y,
+                        Scalar x) {
+    Scalar d = y * y + x * x;
+    g[0] = x / d;
+    g[1] = -y / d;
   }
 
-  void accumulate_adjoints_expr() const override {
-    y->adj_expr += grad_expr_l();
-    x->adj_expr += grad_expr_r();
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    auto d = y * y + x * x;
+    g[0] = x / d;
+    g[1] = -y / d;
   }
 
- private:
-  Scalar grad_l() const {
-    return this->adj * x->val / (y->val * y->val + x->val * x->val);
+  /// Returns ∂²/∂aⱼ∂aₖ for each pair of arguments aⱼ and aₖ at the given
+  /// argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left unwritten are
+  ///     structurally zero.
+  /// @param val The expression's value.
+  /// @param y The value of y.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_hess(ArgArray<ArgArray<G>>& H, [[maybe_unused]] Scalar val,
+                        Scalar y, Scalar x) {
+    Scalar y2 = y * y;
+    Scalar x2 = x * x;
+    Scalar d = y2 + x2;
+    Scalar d2 = d * d;
+    H[0][0] = Scalar(-2) * x * y / d2;
+    H[1][0] = (y2 - x2) / d2;
+    H[1][1] = Scalar(2) * x * y / d2;
   }
 
-  Scalar grad_r() const {
-    return this->adj * -y->val / (y->val * y->val + x->val * x->val);
-  }
-
-  ExpressionPtr<Scalar> grad_expr_l() const {
-    return this->adj_expr * x / (y * y + x * x);
-  }
-
-  ExpressionPtr<Scalar> grad_expr_r() const {
-    return this->adj_expr * -y / (y * y + x * x);
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    auto y2 = y * y;
+    auto x2 = x * x;
+    auto d = y2 + x2;
+    auto d2 = d * d;
+    H[0][0] = constant_ptr(Scalar(-2)) * x * y / d2;
+    H[1][0] = (y2 - x2) / d2;
+    H[1][1] = constant_ptr(Scalar(2)) * x * y / d2;
   }
 };
 
@@ -1146,28 +1579,65 @@ struct CosExpression final : Expression<Scalar> {
     func(x.get());
   }
 
-  Scalar value() const override {
+  Scalar value() const override { return eval(x->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param x The value of x.
+  /// @return The expression's value.
+  static Scalar eval(Scalar x) {
     using std::cos;
-    return cos(x->val);
+    return cos(x);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "cos"; }
 
-  void accumulate_adjoints() const override { x->adj += grad_l(); }
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::COS;
 
-  void accumulate_adjoints_expr() const override {
-    x->adj_expr += grad_expr_l();
-  }
+  ExpressionOp op() const override { return OP; }
 
- private:
-  Scalar grad_l() const {
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, [[maybe_unused]] Scalar val, Scalar x) {
     using std::sin;
-    return this->adj * -sin(x->val);
+    g[0] = -sin(x);
   }
 
-  ExpressionPtr<Scalar> grad_expr_l() const { return this->adj_expr * -sin(x); }
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = -sin(x);
+  }
+
+  /// Returns ∂²/∂aⱼ∂aₖ for each pair of arguments aⱼ and aₖ at the given
+  /// argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left unwritten are
+  ///     structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_hess(ArgArray<ArgArray<G>>& H, Scalar val,
+                        [[maybe_unused]] Scalar x) {
+    H[0][0] = -val;
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    H[0][0] = -cos(x);
+  }
 };
 
 /// cos() for Expressions.
@@ -1211,28 +1681,65 @@ struct CoshExpression final : Expression<Scalar> {
     func(x.get());
   }
 
-  Scalar value() const override {
+  Scalar value() const override { return eval(x->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param x The value of x.
+  /// @return The expression's value.
+  static Scalar eval(Scalar x) {
     using std::cosh;
-    return cosh(x->val);
+    return cosh(x);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "cosh"; }
 
-  void accumulate_adjoints() const override { x->adj += grad_l(); }
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::COSH;
 
-  void accumulate_adjoints_expr() const override {
-    x->adj_expr += grad_expr_l();
-  }
+  ExpressionOp op() const override { return OP; }
 
- private:
-  Scalar grad_l() const {
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, [[maybe_unused]] Scalar val, Scalar x) {
     using std::sinh;
-    return this->adj * sinh(x->val);
+    g[0] = sinh(x);
   }
 
-  ExpressionPtr<Scalar> grad_expr_l() const { return this->adj_expr * sinh(x); }
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = sinh(x);
+  }
+
+  /// Returns ∂²/∂aⱼ∂aₖ for each pair of arguments aⱼ and aₖ at the given
+  /// argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left unwritten are
+  ///     structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_hess(ArgArray<ArgArray<G>>& H, Scalar val,
+                        [[maybe_unused]] Scalar x) {
+    H[0][0] = val;
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    H[0][0] = cosh(x);
+  }
 };
 
 /// cosh() for Expressions.
@@ -1275,31 +1782,66 @@ struct ErfExpression final : Expression<Scalar> {
     func(x.get());
   }
 
-  Scalar value() const override {
+  Scalar value() const override { return eval(x->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param x The value of x.
+  /// @return The expression's value.
+  static Scalar eval(Scalar x) {
     using std::erf;
-    return erf(x->val);
+    return erf(x);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "erf"; }
 
-  void accumulate_adjoints() const override { x->adj += grad_l(); }
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::ERF;
 
-  void accumulate_adjoints_expr() const override {
-    x->adj_expr += grad_expr_l();
-  }
+  ExpressionOp op() const override { return OP; }
 
- private:
-  Scalar grad_l() const {
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, [[maybe_unused]] Scalar val, Scalar x) {
     using std::exp;
-    return this->adj * Scalar(2.0 * std::numbers::inv_sqrtpi) *
-           exp(-x->val * x->val);
+    g[0] = Scalar(2.0 * std::numbers::inv_sqrtpi) * exp(-x * x);
   }
 
-  ExpressionPtr<Scalar> grad_expr_l() const {
-    return this->adj_expr *
-           constant_ptr(Scalar(2.0 * std::numbers::inv_sqrtpi)) * exp(-x * x);
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = constant_ptr(Scalar(2.0 * std::numbers::inv_sqrtpi)) * exp(-x * x);
+  }
+
+  /// Returns ∂²/∂aⱼ∂aₖ for each pair of arguments aⱼ and aₖ at the given
+  /// argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left unwritten are
+  ///     structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_hess(ArgArray<ArgArray<G>>& H, [[maybe_unused]] Scalar val,
+                        Scalar x) {
+    using std::exp;
+    H[0][0] = Scalar(-4.0 * std::numbers::inv_sqrtpi) * x * exp(-x * x);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    H[0][0] =
+        constant_ptr(Scalar(-4.0 * std::numbers::inv_sqrtpi)) * x * exp(-x * x);
   }
 };
 
@@ -1344,28 +1886,64 @@ struct ExpExpression final : Expression<Scalar> {
     func(x.get());
   }
 
-  Scalar value() const override {
+  Scalar value() const override { return eval(x->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param x The value of x.
+  /// @return The expression's value.
+  static Scalar eval(Scalar x) {
     using std::exp;
-    return exp(x->val);
+    return exp(x);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "exp"; }
 
-  void accumulate_adjoints() const override { x->adj += grad_l(); }
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::EXP;
 
-  void accumulate_adjoints_expr() const override {
-    x->adj_expr += grad_expr_l();
+  ExpressionOp op() const override { return OP; }
+
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, Scalar val, [[maybe_unused]] Scalar x) {
+    g[0] = val;
   }
 
- private:
-  Scalar grad_l() const {
-    using std::exp;
-    return this->adj * exp(x->val);
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = exp(x);
   }
 
-  ExpressionPtr<Scalar> grad_expr_l() const { return this->adj_expr * exp(x); }
+  /// Returns ∂²/∂aⱼ∂aₖ for each pair of arguments aⱼ and aₖ at the given
+  /// argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left unwritten are
+  ///     structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_hess(ArgArray<ArgArray<G>>& H, Scalar val,
+                        [[maybe_unused]] Scalar x) {
+    H[0][0] = val;
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    H[0][0] = exp(x);
+  }
 };
 
 /// exp() for Expressions.
@@ -1418,26 +1996,76 @@ struct Hypot2Expression final : Expression<Scalar> {
     func(y.get());
   }
 
-  Scalar value() const override {
+  Scalar value() const override { return eval(x->val, y->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param x The value of x.
+  /// @param y The value of y.
+  /// @return The expression's value.
+  static Scalar eval(Scalar x, Scalar y) {
     using std::hypot;
-    return hypot(x->val, y->val);
+    return hypot(x, y);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "hypot"; }
 
-  void accumulate_adjoints() const override {
-    using std::hypot;
-    Scalar norm = hypot(x->val, y->val);
-    x->adj += this->adj * x->val / norm;
-    y->adj += this->adj * y->val / norm;
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::HYPOT2;
+
+  ExpressionOp op() const override { return OP; }
+
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  /// @param y The value of y.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, Scalar val, Scalar x, Scalar y) {
+    g[0] = x / val;
+    g[1] = y / val;
   }
 
-  void accumulate_adjoints_expr() const override {
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
     auto norm = hypot(x, y);
-    x->adj_expr += this->adj_expr * x / norm;
-    y->adj_expr += this->adj_expr * y / norm;
+    g[0] = x / norm;
+    g[1] = y / norm;
+  }
+
+  /// Returns ∂²/∂aⱼ∂aₖ for each pair of arguments aⱼ and aₖ at the given
+  /// argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left unwritten are
+  ///     structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  /// @param y The value of y.
+  template <typename G>
+  static void eval_hess(ArgArray<ArgArray<G>>& H, Scalar val, Scalar x,
+                        Scalar y) {
+    Scalar norm3 = val * val * val;
+    H[0][0] = y * y / norm3;
+    H[1][0] = -x * y / norm3;
+    H[1][1] = x * x / norm3;
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    auto norm = hypot(x, y);
+    auto norm3 = norm * norm * norm;
+    H[0][0] = y * y / norm3;
+    H[1][0] = -x * y / norm3;
+    H[1][1] = x * x / norm3;
   }
 };
 
@@ -1502,28 +2130,88 @@ struct Hypot3Expression final : Expression<Scalar> {
     func(z.get());
   }
 
-  Scalar value() const override {
+  Scalar value() const override { return eval(x->val, y->val, z->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param x The value of x.
+  /// @param y The value of y.
+  /// @param z The value of z.
+  /// @return The expression's value.
+  static Scalar eval(Scalar x, Scalar y, Scalar z) {
     using std::hypot;
-    return hypot(x->val, y->val, z->val);
+    return hypot(x, y, z);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "hypot"; }
 
-  void accumulate_adjoints() const override {
-    using std::hypot;
-    Scalar norm = hypot(x->val, y->val, z->val);
-    x->adj += this->adj * x->val / norm;
-    y->adj += this->adj * y->val / norm;
-    z->adj += this->adj * z->val / norm;
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::HYPOT3;
+
+  ExpressionOp op() const override { return OP; }
+
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  /// @param y The value of y.
+  /// @param z The value of z.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, Scalar val, Scalar x, Scalar y,
+                        Scalar z) {
+    g[0] = x / val;
+    g[1] = y / val;
+    g[2] = z / val;
   }
 
-  void accumulate_adjoints_expr() const override {
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
     auto norm = hypot(x, y, z);
-    x->adj_expr += this->adj_expr * x / norm;
-    y->adj_expr += this->adj_expr * y / norm;
-    z->adj_expr += this->adj_expr * z / norm;
+    g[0] = x / norm;
+    g[1] = y / norm;
+    g[2] = z / norm;
+  }
+
+  /// Returns ∂²/∂aⱼ∂aₖ for each pair of arguments aⱼ and aₖ at the given
+  /// argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left unwritten are
+  ///     structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  /// @param y The value of y.
+  /// @param z The value of z.
+  template <typename G>
+  static void eval_hess(ArgArray<ArgArray<G>>& H, Scalar val, Scalar x,
+                        Scalar y, Scalar z) {
+    Scalar norm3 = val * val * val;
+    H[0][0] = (y * y + z * z) / norm3;
+    H[1][0] = -x * y / norm3;
+    H[1][1] = (x * x + z * z) / norm3;
+    H[2][0] = -x * z / norm3;
+    H[2][1] = -y * z / norm3;
+    H[2][2] = (x * x + y * y) / norm3;
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    auto norm = hypot(x, y, z);
+    auto norm3 = norm * norm * norm;
+    H[0][0] = (y * y + z * z) / norm3;
+    H[1][0] = -x * y / norm3;
+    H[1][1] = (x * x + z * z) / norm3;
+    H[2][0] = -x * z / norm3;
+    H[2][1] = -y * z / norm3;
+    H[2][2] = (x * x + y * y) / norm3;
   }
 };
 
@@ -1603,37 +2291,56 @@ struct IfElseExpression final : Expression<Scalar> {
     func(f.get());
   }
 
-  Scalar value() const override {
-    return cond(a->val, b->val) ? t->val : f->val;
+  Scalar value() const override { return eval(a->val, b->val, t->val, f->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param a The value of a.
+  /// @param b The value of b.
+  /// @param t The value of t.
+  /// @param f The value of f.
+  /// @return The expression's value.
+  Scalar eval(Scalar a, Scalar b, Scalar t, Scalar f) const {
+    return cond(a, b) ? t : f;
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "if-else"; }
 
-  // a and b have zero gradient, so only t and f accumulate adjoints
-  void accumulate_adjoints() const override {
-    if (cond(a->val, b->val)) {
-      t->adj += this->adj;
-    } else {
-      f->adj += this->adj;
-    }
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::IF_ELSE;
+
+  ExpressionOp op() const override { return OP; }
+
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param a The value of a.
+  /// @param b The value of b.
+  /// @param t The value of t.
+  /// @param f The value of f.
+  template <typename G>
+  void eval_grad(ArgArray<G>& g, [[maybe_unused]] Scalar val, Scalar a,
+                 Scalar b, [[maybe_unused]] Scalar t,
+                 [[maybe_unused]] Scalar f) const {
+    // a and b have zero gradient
+    bool c = cond(a, b);
+    g[2] = c ? Scalar(1) : Scalar(0);
+    g[3] = c ? Scalar(0) : Scalar(1);
   }
 
-  void accumulate_adjoints_expr() const override {
-    t->adj_expr += grad_expr_t();
-    f->adj_expr += grad_expr_f();
-  }
-
- private:
-  ExpressionPtr<Scalar> grad_expr_t() const {
-    // adjoint if cond(a, b), otherwise 0
-    return if_else(cond, a, b, this->adj_expr, constant_ptr(Scalar(0)));
-  }
-
-  ExpressionPtr<Scalar> grad_expr_f() const {
-    // 0 if cond(a, b), otherwise adjoint
-    return if_else(cond, a, b, constant_ptr(Scalar(0)), this->adj_expr);
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    // a and b have zero gradient
+    auto zero = constant_ptr(Scalar(0));
+    auto one = constant_ptr(Scalar(1));
+    g[2] = if_else(cond, a, b, one, zero);
+    g[3] = if_else(cond, a, b, zero, one);
   }
 };
 
@@ -1688,25 +2395,64 @@ struct LogExpression final : Expression<Scalar> {
     func(x.get());
   }
 
-  Scalar value() const override {
+  Scalar value() const override { return eval(x->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param x The value of x.
+  /// @return The expression's value.
+  static Scalar eval(Scalar x) {
     using std::log;
-    return log(x->val);
+    return log(x);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "log"; }
 
-  void accumulate_adjoints() const override { x->adj += grad_l(); }
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::LOG;
 
-  void accumulate_adjoints_expr() const override {
-    x->adj_expr += grad_expr_l();
+  ExpressionOp op() const override { return OP; }
+
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, [[maybe_unused]] Scalar val, Scalar x) {
+    g[0] = Scalar(1) / x;
   }
 
- private:
-  Scalar grad_l() const { return this->adj / x->val; }
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = constant_ptr(Scalar(1)) / x;
+  }
 
-  ExpressionPtr<Scalar> grad_expr_l() const { return this->adj_expr / x; }
+  /// Returns ∂²/∂aⱼ∂aₖ for each pair of arguments aⱼ and aₖ at the given
+  /// argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left unwritten are
+  ///     structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_hess(ArgArray<ArgArray<G>>& H, [[maybe_unused]] Scalar val,
+                        Scalar x) {
+    H[0][0] = Scalar(-1) / (x * x);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    H[0][0] = constant_ptr(Scalar(-1)) / (x * x);
+  }
 };
 
 /// log() for Expressions.
@@ -1751,28 +2497,65 @@ struct Log10Expression final : Expression<Scalar> {
     func(x.get());
   }
 
-  Scalar value() const override {
+  Scalar value() const override { return eval(x->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param x The value of x.
+  /// @return The expression's value.
+  static Scalar eval(Scalar x) {
     using std::log10;
-    return log10(x->val);
+    return log10(x);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "log10"; }
 
-  void accumulate_adjoints() const override { x->adj += grad_l(); }
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::LOG10;
 
-  void accumulate_adjoints_expr() const override {
-    x->adj_expr += grad_expr_l();
+  ExpressionOp op() const override { return OP; }
+
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, [[maybe_unused]] Scalar val, Scalar x) {
+    g[0] = Scalar(1) / (Scalar(std::numbers::ln10) * x);
   }
 
- private:
-  Scalar grad_l() const {
-    return this->adj / (Scalar(std::numbers::ln10) * x->val);
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = constant_ptr(Scalar(1)) /
+           (constant_ptr(Scalar(std::numbers::ln10)) * x);
   }
 
-  ExpressionPtr<Scalar> grad_expr_l() const {
-    return this->adj_expr / (constant_ptr(Scalar(std::numbers::ln10)) * x);
+  /// Returns ∂²/∂aⱼ∂aₖ for each pair of arguments aⱼ and aₖ at the given
+  /// argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left unwritten are
+  ///     structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_hess(ArgArray<ArgArray<G>>& H, [[maybe_unused]] Scalar val,
+                        Scalar x) {
+    H[0][0] = Scalar(-1) / (Scalar(std::numbers::ln10) * x * x);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    H[0][0] = constant_ptr(Scalar(-1)) /
+              (constant_ptr(Scalar(std::numbers::ln10)) * x * x);
   }
 };
 
@@ -1825,40 +2608,51 @@ struct MaxExpression final : Expression<Scalar> {
     func(b.get());
   }
 
-  Scalar value() const override {
+  Scalar value() const override { return eval(a->val, b->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param a The value of a.
+  /// @param b The value of b.
+  /// @return The expression's value.
+  static Scalar eval(Scalar a, Scalar b) {
     using std::max;
-    return max(a->val, b->val);
+    return max(a, b);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "max"; }
 
-  void accumulate_adjoints() const override {
-    a->adj += grad_l();
-    b->adj += grad_r();
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::MAX;
+
+  ExpressionOp op() const override { return OP; }
+
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param a The value of a.
+  /// @param b The value of b.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, [[maybe_unused]] Scalar val, Scalar a,
+                        Scalar b) {
+    bool c = a >= b;
+    g[0] = c ? Scalar(1) : Scalar(0);
+    g[1] = c ? Scalar(0) : Scalar(1);
   }
 
-  void accumulate_adjoints_expr() const override {
-    a->adj_expr += grad_expr_l();
-    b->adj_expr += grad_expr_r();
-  }
-
- private:
-  Scalar grad_l() const { return a->val >= b->val ? this->adj : Scalar(0); }
-
-  Scalar grad_r() const { return a->val >= b->val ? Scalar(0) : this->adj; }
-
-  ExpressionPtr<Scalar> grad_expr_l() const {
-    // adjoint if a >= b, otherwise 0
-    return if_else([](Scalar a, Scalar b) { return a >= b; }, a, b,
-                   this->adj_expr, constant_ptr(Scalar(0)));
-  }
-
-  ExpressionPtr<Scalar> grad_expr_r() const {
-    // 0 if a >= b, otherwise adjoint
-    return if_else([](Scalar a, Scalar b) { return a >= b; }, a, b,
-                   constant_ptr(Scalar(0)), this->adj_expr);
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    auto zero = constant_ptr(Scalar(0));
+    auto one = constant_ptr(Scalar(1));
+    auto cond = [](Scalar a, Scalar b) { return a >= b; };
+    g[0] = if_else(cond, a, b, one, zero);
+    g[1] = if_else(cond, a, b, zero, one);
   }
 };
 
@@ -1907,40 +2701,51 @@ struct MinExpression final : Expression<Scalar> {
     func(b.get());
   }
 
-  Scalar value() const override {
+  Scalar value() const override { return eval(a->val, b->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param a The value of a.
+  /// @param b The value of b.
+  /// @return The expression's value.
+  static Scalar eval(Scalar a, Scalar b) {
     using std::min;
-    return min(a->val, b->val);
+    return min(a, b);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "min"; }
 
-  void accumulate_adjoints() const override {
-    a->adj += grad_l();
-    b->adj += grad_r();
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::MIN;
+
+  ExpressionOp op() const override { return OP; }
+
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param a The value of a.
+  /// @param b The value of b.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, [[maybe_unused]] Scalar val, Scalar a,
+                        Scalar b) {
+    bool c = a <= b;
+    g[0] = c ? Scalar(1) : Scalar(0);
+    g[1] = c ? Scalar(0) : Scalar(1);
   }
 
-  void accumulate_adjoints_expr() const override {
-    a->adj_expr += grad_expr_l();
-    b->adj_expr += grad_expr_r();
-  }
-
- private:
-  Scalar grad_l() const { return a->val <= b->val ? this->adj : Scalar(0); }
-
-  Scalar grad_r() const { return a->val <= b->val ? Scalar(0) : this->adj; }
-
-  ExpressionPtr<Scalar> grad_expr_l() const {
-    // adjoint if a <= b, otherwise 0
-    return if_else([](Scalar a, Scalar b) { return a <= b; }, a, b,
-                   this->adj_expr, constant_ptr(Scalar(0)));
-  }
-
-  ExpressionPtr<Scalar> grad_expr_r() const {
-    // 0 if a <= b, otherwise adjoint
-    return if_else([](Scalar a, Scalar b) { return a <= b; }, a, b,
-                   constant_ptr(Scalar(0)), this->adj_expr);
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    auto zero = constant_ptr(Scalar(0));
+    auto one = constant_ptr(Scalar(1));
+    auto cond = [](Scalar a, Scalar b) { return a <= b; };
+    g[0] = if_else(cond, a, b, one, zero);
+    g[1] = if_else(cond, a, b, zero, one);
   }
 };
 
@@ -1993,44 +2798,82 @@ struct PowExpression final : Expression<Scalar> {
     func(power.get());
   }
 
-  Scalar value() const override {
+  Scalar value() const override { return eval(base->val, power->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param base The value of base.
+  /// @param power The value of power.
+  /// @return The expression's value.
+  static Scalar eval(Scalar base, Scalar power) {
     using std::pow;
-    return pow(base->val, power->val);
+    return pow(base, power);
   }
 
   ExpressionType type() const override { return T; }
 
   std::string_view name() const override { return "pow"; }
 
-  void accumulate_adjoints() const override {
-    base->adj += grad_l();
-    power->adj += grad_r();
-  }
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::POW;
 
-  void accumulate_adjoints_expr() const override {
-    base->adj_expr += grad_expr_l();
-    power->adj_expr += grad_expr_r();
-  }
+  ExpressionOp op() const override { return OP; }
 
- private:
-  Scalar grad_l() const {
-    using std::pow;
-    return this->adj * pow(base->val, power->val - Scalar(1)) * power->val;
-  }
-
-  Scalar grad_r() const {
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param base The value of base.
+  /// @param power The value of power.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, Scalar val, Scalar base, Scalar power) {
     using std::log;
     using std::pow;
 
-    return this->adj * pow(base->val, power->val) * log(base->val);
+    g[0] = pow(base, power - Scalar(1)) * power;
+    g[1] = val * log(base);
   }
 
-  ExpressionPtr<Scalar> grad_expr_l() const {
-    return this->adj_expr * pow(base, power - constant_ptr(Scalar(1))) * power;
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = pow(base, power - constant_ptr(Scalar(1))) * power;
+    g[1] = pow(base, power) * log(base);
   }
 
-  ExpressionPtr<Scalar> grad_expr_r() const {
-    return this->adj_expr * pow(base, power) * log(base);
+  /// Returns ∂²/∂aⱼ∂aₖ for each pair of arguments aⱼ and aₖ at the given
+  /// argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left unwritten are
+  ///     structurally zero.
+  /// @param val The expression's value.
+  /// @param base The value of base.
+  /// @param power The value of power.
+  template <typename G>
+  static void eval_hess(ArgArray<ArgArray<G>>& H, Scalar val, Scalar base,
+                        Scalar power) {
+    using std::log;
+    using std::pow;
+
+    Scalar l = log(base);
+    H[0][0] = pow(base, power - Scalar(2)) * (power - Scalar(1)) * power;
+    H[1][0] = pow(base, power - Scalar(1)) * (power * l + Scalar(1));
+    H[1][1] = val * l * l;
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    auto one = constant_ptr(Scalar(1));
+    auto l = log(base);
+    H[0][0] =
+        pow(base, power - constant_ptr(Scalar(2))) * (power - one) * power;
+    H[1][0] = pow(base, power - one) * (power * l + one);
+    H[1][1] = pow(base, power) * l * l;
   }
 };
 
@@ -2095,10 +2938,16 @@ struct SignExpression final : Expression<Scalar> {
     func(x.get());
   }
 
-  Scalar value() const override {
-    if (x->val < Scalar(0)) {
+  Scalar value() const override { return eval(x->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param x The value of x.
+  /// @return The expression's value.
+  static Scalar eval(Scalar x) {
+    if (x < Scalar(0)) {
       return Scalar(-1);
-    } else if (x->val == Scalar(0)) {
+    } else if (x == Scalar(0)) {
       return Scalar(0);
     } else {
       return Scalar(1);
@@ -2108,6 +2957,11 @@ struct SignExpression final : Expression<Scalar> {
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "sign"; }
+
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::SIGN;
+
+  ExpressionOp op() const override { return OP; }
 };
 
 /// sign() for Expressions.
@@ -2151,28 +3005,65 @@ struct SinExpression final : Expression<Scalar> {
     func(x.get());
   }
 
-  Scalar value() const override {
+  Scalar value() const override { return eval(x->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param x The value of x.
+  /// @return The expression's value.
+  static Scalar eval(Scalar x) {
     using std::sin;
-    return sin(x->val);
+    return sin(x);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "sin"; }
 
-  void accumulate_adjoints() const override { x->adj += grad_l(); }
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::SIN;
 
-  void accumulate_adjoints_expr() const override {
-    x->adj_expr += grad_expr_l();
-  }
+  ExpressionOp op() const override { return OP; }
 
- private:
-  Scalar grad_l() const {
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, [[maybe_unused]] Scalar val, Scalar x) {
     using std::cos;
-    return this->adj * cos(x->val);
+    g[0] = cos(x);
   }
 
-  ExpressionPtr<Scalar> grad_expr_l() const { return this->adj_expr * cos(x); }
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = cos(x);
+  }
+
+  /// Returns ∂²/∂aⱼ∂aₖ for each pair of arguments aⱼ and aₖ at the given
+  /// argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left unwritten are
+  ///     structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_hess(ArgArray<ArgArray<G>>& H, Scalar val,
+                        [[maybe_unused]] Scalar x) {
+    H[0][0] = -val;
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    H[0][0] = -sin(x);
+  }
 };
 
 /// sin() for Expressions.
@@ -2217,28 +3108,65 @@ struct SinhExpression final : Expression<Scalar> {
     func(x.get());
   }
 
-  Scalar value() const override {
+  Scalar value() const override { return eval(x->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param x The value of x.
+  /// @return The expression's value.
+  static Scalar eval(Scalar x) {
     using std::sinh;
-    return sinh(x->val);
+    return sinh(x);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "sinh"; }
 
-  void accumulate_adjoints() const override { x->adj += grad_l(); }
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::SINH;
 
-  void accumulate_adjoints_expr() const override {
-    x->adj_expr += grad_expr_l();
-  }
+  ExpressionOp op() const override { return OP; }
 
- private:
-  Scalar grad_l() const {
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, [[maybe_unused]] Scalar val, Scalar x) {
     using std::cosh;
-    return this->adj * cosh(x->val);
+    g[0] = cosh(x);
   }
 
-  ExpressionPtr<Scalar> grad_expr_l() const { return this->adj_expr * cosh(x); }
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = cosh(x);
+  }
+
+  /// Returns ∂²/∂aⱼ∂aₖ for each pair of arguments aⱼ and aₖ at the given
+  /// argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left unwritten are
+  ///     structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_hess(ArgArray<ArgArray<G>>& H, Scalar val,
+                        [[maybe_unused]] Scalar x) {
+    H[0][0] = val;
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    H[0][0] = sinh(x);
+  }
 };
 
 /// sinh() for Expressions.
@@ -2283,29 +3211,64 @@ struct SqrtExpression final : Expression<Scalar> {
     func(x.get());
   }
 
-  Scalar value() const override {
+  Scalar value() const override { return eval(x->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param x The value of x.
+  /// @return The expression's value.
+  static Scalar eval(Scalar x) {
     using std::sqrt;
-    return sqrt(x->val);
+    return sqrt(x);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "sqrt"; }
 
-  void accumulate_adjoints() const override { x->adj += grad_l(); }
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::SQRT;
 
-  void accumulate_adjoints_expr() const override {
-    x->adj_expr += grad_expr_l();
+  ExpressionOp op() const override { return OP; }
+
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, Scalar val, [[maybe_unused]] Scalar x) {
+    g[0] = Scalar(1) / (Scalar(2) * val);
   }
 
- private:
-  Scalar grad_l() const {
-    using std::sqrt;
-    return this->adj / (Scalar(2) * sqrt(x->val));
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
+    g[0] = constant_ptr(Scalar(1)) / (constant_ptr(Scalar(2)) * sqrt(x));
   }
 
-  ExpressionPtr<Scalar> grad_expr_l() const {
-    return this->adj_expr / (constant_ptr(Scalar(2)) * sqrt(x));
+  /// Returns ∂²/∂aⱼ∂aₖ for each pair of arguments aⱼ and aₖ at the given
+  /// argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left unwritten are
+  ///     structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_hess(ArgArray<ArgArray<G>>& H, Scalar val,
+                        [[maybe_unused]] Scalar x) {
+    H[0][0] = Scalar(-1) / (Scalar(4) * val * val * val);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    auto s = sqrt(x);
+    H[0][0] = constant_ptr(Scalar(-1)) / (constant_ptr(Scalar(4)) * s * s * s);
   }
 };
 
@@ -2351,32 +3314,70 @@ struct TanExpression final : Expression<Scalar> {
     func(x.get());
   }
 
-  Scalar value() const override {
+  Scalar value() const override { return eval(x->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param x The value of x.
+  /// @return The expression's value.
+  static Scalar eval(Scalar x) {
     using std::tan;
-    return tan(x->val);
+    return tan(x);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "tan"; }
 
-  void accumulate_adjoints() const override { x->adj += grad_l(); }
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::TAN;
 
-  void accumulate_adjoints_expr() const override {
-    x->adj_expr += grad_expr_l();
-  }
+  ExpressionOp op() const override { return OP; }
 
- private:
-  Scalar grad_l() const {
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, [[maybe_unused]] Scalar val, Scalar x) {
     using std::cos;
 
-    auto c = cos(x->val);
-    return this->adj / (c * c);
+    Scalar c = cos(x);
+    g[0] = Scalar(1) / (c * c);
   }
 
-  ExpressionPtr<Scalar> grad_expr_l() const {
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
     auto c = cos(x);
-    return this->adj_expr / (c * c);
+    g[0] = constant_ptr(Scalar(1)) / (c * c);
+  }
+
+  /// Returns ∂²/∂aⱼ∂aₖ for each pair of arguments aⱼ and aₖ at the given
+  /// argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left unwritten are
+  ///     structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_hess(ArgArray<ArgArray<G>>& H, Scalar val, Scalar x) {
+    using std::cos;
+
+    Scalar c = cos(x);
+    H[0][0] = Scalar(2) * val / (c * c);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    auto c = cos(x);
+    H[0][0] = constant_ptr(Scalar(2)) * tan(x) / (c * c);
   }
 };
 
@@ -2422,32 +3423,70 @@ struct TanhExpression final : Expression<Scalar> {
     func(x.get());
   }
 
-  Scalar value() const override {
+  Scalar value() const override { return eval(x->val); }
+
+  /// Returns the expression's value at the given argument values.
+  ///
+  /// @param x The value of x.
+  /// @return The expression's value.
+  static Scalar eval(Scalar x) {
     using std::tanh;
-    return tanh(x->val);
+    return tanh(x);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "tanh"; }
 
-  void accumulate_adjoints() const override { x->adj += grad_l(); }
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::TANH;
 
-  void accumulate_adjoints_expr() const override {
-    x->adj_expr += grad_expr_l();
-  }
+  ExpressionOp op() const override { return OP; }
 
- private:
-  Scalar grad_l() const {
+  /// Returns ∂/∂aₖ for each argument aₖ at the given argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param g The partial derivatives in visit_args() order. Elements left
+  ///     unwritten are structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_grad(ArgArray<G>& g, [[maybe_unused]] Scalar val, Scalar x) {
     using std::cosh;
 
-    auto c = cosh(x->val);
-    return this->adj / (c * c);
+    Scalar c = cosh(x);
+    g[0] = Scalar(1) / (c * c);
   }
 
-  ExpressionPtr<Scalar> grad_expr_l() const {
+  void grad_expr(ArgArray<ExpressionPtr<Scalar>>& g) const override {
     auto c = cosh(x);
-    return this->adj_expr / (c * c);
+    g[0] = constant_ptr(Scalar(1)) / (c * c);
+  }
+
+  /// Returns ∂²/∂aⱼ∂aₖ for each pair of arguments aⱼ and aₖ at the given
+  /// argument values.
+  ///
+  /// @tparam G Scalar to compute the partial derivatives, or
+  ///     std::optional<Scalar> to find which ones aren't structurally zero
+  ///     (elements left unwritten stay std::nullopt).
+  /// @param H The second partial derivatives in visit_args() order. Only the
+  ///     lower triangle (j ≥ k) is written. Elements left unwritten are
+  ///     structurally zero.
+  /// @param val The expression's value.
+  /// @param x The value of x.
+  template <typename G>
+  static void eval_hess(ArgArray<ArgArray<G>>& H, Scalar val, Scalar x) {
+    using std::cosh;
+
+    Scalar c = cosh(x);
+    H[0][0] = Scalar(-2) * val / (c * c);
+  }
+
+  void hess_expr(ArgArray<ArgArray<ExpressionPtr<Scalar>>>& H) const override {
+    auto c = cosh(x);
+    H[0][0] = constant_ptr(Scalar(-2)) * tanh(x) / (c * c);
   }
 };
 
@@ -2472,6 +3511,256 @@ ExpressionPtr<Scalar> tanh(const ExpressionPtr<Scalar>& x) {
   }
 
   return make_expression_ptr<TanhExpression<Scalar>>(x);
+}
+
+/// The derived expression types of the non-leaf operators, in ExpressionOp
+/// order.
+///
+/// Derived expression types templated on ExpressionType are listed as their
+/// nonlinear instantiation. Their eval functions don't depend on the
+/// ExpressionType.
+///
+/// @tparam Scalar Scalar type.
+template <typename Scalar>
+using NonLeafExpressionTypes = std::tuple<
+    AbsExpression<Scalar>, AcosExpression<Scalar>, AsinExpression<Scalar>,
+    AtanExpression<Scalar>, Atan2Expression<Scalar>,
+    BinaryMinusExpression<Scalar, ExpressionType::NONLINEAR>,
+    BinaryPlusExpression<Scalar, ExpressionType::NONLINEAR>,
+    CbrtExpression<Scalar>, CosExpression<Scalar>, CoshExpression<Scalar>,
+    DivExpression<Scalar, ExpressionType::NONLINEAR>, ErfExpression<Scalar>,
+    ExpExpression<Scalar>, Hypot2Expression<Scalar>, Hypot3Expression<Scalar>,
+    IfElseExpression<Scalar>, LogExpression<Scalar>, Log10Expression<Scalar>,
+    MaxExpression<Scalar>, MinExpression<Scalar>,
+    MultExpression<Scalar, ExpressionType::NONLINEAR>,
+    PowExpression<Scalar, ExpressionType::NONLINEAR>, SignExpression<Scalar>,
+    SinExpression<Scalar>, SinhExpression<Scalar>, SqrtExpression<Scalar>,
+    TanExpression<Scalar>, TanhExpression<Scalar>,
+    UnaryMinusExpression<Scalar, ExpressionType::NONLINEAR>>;
+
+/// Calls f.template operator()<T>() with the derived expression type T of a
+/// non-leaf operator in [Begin, End).
+///
+/// @tparam Scalar Scalar type.
+/// @tparam Begin First operator in the range.
+/// @tparam End One past the last operator in the range.
+/// @tparam F Function type.
+/// @param op The operator.
+/// @param f The function to call.
+/// @return f's return value.
+template <typename Scalar, size_t Begin, size_t End, typename F>
+SLEIPNIR_FORCE_INLINE decltype(auto) visit_op_in(size_t op, F& f) {
+  if constexpr (End - Begin == 1) {
+    using T = std::tuple_element_t<Begin, NonLeafExpressionTypes<Scalar>>;
+    static_assert(T::OP == static_cast<ExpressionOp>(Begin),
+                  "NonLeafExpressionTypes must be in ExpressionOp order");
+    return f.template operator()<T>();
+  } else {
+    constexpr size_t mid = Begin + (End - Begin) / 2;
+    if (op < mid) {
+      return visit_op_in<Scalar, Begin, mid>(op, f);
+    } else {
+      return visit_op_in<Scalar, mid, End>(op, f);
+    }
+  }
+}
+
+/// Calls f.template operator()<T>() with the derived expression type T of a
+/// non-leaf operator.
+///
+/// The operator is found with a binary search of conditional branches instead
+/// of a switch statement. Tapes often repeat a short sequence of operators
+/// (e.g., one sequence per term of a sum), which conditional branch predictors
+/// learn, but the single indirect branch of a switch statement's jump table
+/// often doesn't. On the extended Rosenbrock function, a jump table
+/// mispredicted about one in two operators and more than doubled tape
+/// evaluation time.
+///
+/// @tparam Scalar Scalar type.
+/// @tparam F Function type.
+/// @param op The operator. Must not be a leaf operator.
+/// @param f The function to call.
+/// @return f's return value.
+template <typename Scalar, typename F>
+SLEIPNIR_FORCE_INLINE decltype(auto) visit_op(ExpressionOp op, F&& f) {
+  return visit_op_in<Scalar, 0,
+                     std::tuple_size_v<NonLeafExpressionTypes<Scalar>>>(
+      static_cast<size_t>(op), f);
+}
+
+/// Returns the number of parameters of a function.
+///
+/// @tparam R Return type.
+/// @tparam Args Parameter types.
+/// @return The number of parameters.
+template <typename R, typename... Args>
+consteval size_t num_params(R (*)(Args...)) {
+  return sizeof...(Args);
+}
+
+/// Returns the number of parameters of a const member function.
+///
+/// @tparam C Class type.
+/// @tparam R Return type.
+/// @tparam Args Parameter types.
+/// @return The number of parameters.
+template <typename C, typename R, typename... Args>
+consteval size_t num_params(R (C::*)(Args...) const) {
+  return sizeof...(Args);
+}
+
+/// The number of arguments of derived expression type T.
+///
+/// @tparam T Derived expression type.
+template <typename T>
+inline constexpr size_t NUM_ARGS = num_params(&T::eval);
+
+/// The number of second partial derivatives of derived expression type T that
+/// can be nonzero, stored as the lower triangle of the Hessian with respect to
+/// its arguments. Zero if T's second partial derivatives are all structurally
+/// zero.
+///
+/// @tparam T Derived expression type.
+template <typename T>
+inline constexpr size_t NUM_SECOND_PARTIALS = requires {
+  &T::template eval_hess<typename T::Scalar>;
+} ? NUM_ARGS<T> * (NUM_ARGS<T> + 1) / 2 : 0;
+
+/// Returns a derived expression type's value at the given argument values.
+///
+/// Most derived expression types compute their value with a static function.
+/// The expression is only used by ones whose value depends on its state.
+///
+/// @tparam T Derived expression type.
+/// @tparam Scalar Scalar type.
+/// @param expr The expression.
+/// @param x The argument values in visit_args() order.
+/// @return The expression's value.
+template <typename T, typename Scalar>
+Scalar op_value([[maybe_unused]] const Expression<Scalar>& expr,
+                const ArgArray<Scalar>& x) {
+  return [&]<size_t... I>(std::index_sequence<I...>) {
+    if constexpr (requires { T::eval(x[I]...); }) {
+      return T::eval(x[I]...);
+    } else {
+      return static_cast<const T&>(expr).eval(x[I]...);
+    }
+  }(std::make_index_sequence<NUM_ARGS<T>>{});
+}
+
+/// Returns ∂/∂aₖ of a derived expression type for each argument aₖ at the
+/// given argument values.
+///
+/// @tparam T Derived expression type.
+/// @tparam Scalar Scalar type.
+/// @tparam G Scalar to compute the partial derivatives, or
+///     std::optional<Scalar> to find which ones aren't structurally zero
+///     (elements left unwritten stay std::nullopt).
+/// @param expr The expression.
+/// @param x The argument values in visit_args() order.
+/// @param val The expression's value.
+/// @param g The partial derivatives in visit_args() order. Elements left
+///     unwritten are structurally zero.
+template <typename T, typename Scalar, typename G>
+void op_grad([[maybe_unused]] const Expression<Scalar>& expr,
+             const ArgArray<Scalar>& x, Scalar val, ArgArray<G>& g) {
+  [&]<size_t... I>(std::index_sequence<I...>) {
+    if constexpr (requires { T::eval_grad(g, val, x[I]...); }) {
+      T::eval_grad(g, val, x[I]...);
+    } else if constexpr (requires {
+                           static_cast<const T&>(expr).eval_grad(g, val,
+                                                                 x[I]...);
+                         }) {
+      static_cast<const T&>(expr).eval_grad(g, val, x[I]...);
+    }
+  }(std::make_index_sequence<NUM_ARGS<T>>{});
+}
+
+/// Returns ∂²/∂aⱼ∂aₖ of a derived expression type for each pair of arguments
+/// aⱼ and aₖ at the given argument values.
+///
+/// @tparam T Derived expression type.
+/// @tparam Scalar Scalar type.
+/// @tparam G Scalar to compute the partial derivatives, or
+///     std::optional<Scalar> to find which ones aren't structurally zero
+///     (elements left unwritten stay std::nullopt).
+/// @param expr The expression.
+/// @param x The argument values in visit_args() order.
+/// @param val The expression's value.
+/// @param H The second partial derivatives in visit_args() order. Only the
+///     lower triangle (j ≥ k) is written. Elements left unwritten are
+///     structurally zero.
+template <typename T, typename Scalar, typename G>
+void op_hess([[maybe_unused]] const Expression<Scalar>& expr,
+             const ArgArray<Scalar>& x, Scalar val, ArgArray<ArgArray<G>>& H) {
+  [&]<size_t... I>(std::index_sequence<I...>) {
+    if constexpr (requires { T::eval_hess(H, val, x[I]...); }) {
+      T::eval_hess(H, val, x[I]...);
+    } else if constexpr (requires {
+                           static_cast<const T&>(expr).eval_hess(H, val,
+                                                                 x[I]...);
+                         }) {
+      static_cast<const T&>(expr).eval_hess(H, val, x[I]...);
+    }
+  }(std::make_index_sequence<NUM_ARGS<T>>{});
+}
+
+/// Returns which partial derivatives ∂/∂aₖ of an expression aren't
+/// structurally zero.
+///
+/// Whether a partial derivative is structurally zero only depends on the
+/// expression's operator, not its arguments's values.
+///
+/// @tparam Scalar Scalar type.
+/// @param expr The expression.
+/// @return Whether each partial derivative isn't structurally zero, in
+///     visit_args() order.
+template <typename Scalar>
+ArgArray<bool> grad_structure(const Expression<Scalar>& expr) {
+  ArgArray<bool> nonzero{};
+  if (expr.is_leaf) {
+    return nonzero;
+  }
+
+  ArgArray<std::optional<Scalar>> g;
+  visit_op<Scalar>(expr.op(), [&]<typename T>() {
+    op_grad<T>(expr, ArgArray<Scalar>{}, Scalar(0), g);
+  });
+
+  for (size_t k = 0; k < MAX_ARGS; ++k) {
+    nonzero[k] = g[k].has_value();
+  }
+  return nonzero;
+}
+
+/// Returns which second partial derivatives ∂²/∂aⱼ∂aₖ of an expression aren't
+/// structurally zero.
+///
+/// Whether a second partial derivative is structurally zero only depends on
+/// the expression's operator, not its arguments's values.
+///
+/// @tparam Scalar Scalar type.
+/// @param expr The expression.
+/// @return Whether each second partial derivative isn't structurally zero, in
+///     visit_args() order. Only the lower triangle (j ≥ k) is set.
+template <typename Scalar>
+ArgArray<ArgArray<bool>> hess_structure(const Expression<Scalar>& expr) {
+  ArgArray<ArgArray<bool>> nonzero{};
+  if (expr.is_leaf) {
+    return nonzero;
+  }
+
+  ArgArray<ArgArray<std::optional<Scalar>>> H;
+  visit_op<Scalar>(expr.op(), [&]<typename T>() {
+    op_hess<T>(expr, ArgArray<Scalar>{}, Scalar(0), H);
+  });
+
+  for (size_t j = 0; j < MAX_ARGS; ++j) {
+    for (size_t k = 0; k < MAX_ARGS; ++k) {
+      nonzero[j][k] = H[j][k].has_value();
+    }
+  }
+  return nonzero;
 }
 
 }  // namespace slp::detail
