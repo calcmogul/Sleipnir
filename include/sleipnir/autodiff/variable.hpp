@@ -26,18 +26,6 @@ namespace slp {
 
 // Forward declarations for friend declarations in Variable
 
-template <typename Scalar>
-class VariableMatrix;
-
-namespace detail {
-
-template <typename Scalar>
-VariableMatrix<Scalar> gradient_tree(
-    const detail::ExpressionGraph<Scalar>& top_list,
-    const VariableMatrix<Scalar>& wrt);
-
-}  // namespace detail
-
 template <typename Scalar, int UpLo = Eigen::Lower | Eigen::Upper>
   requires(UpLo == Eigen::Lower) || (UpLo == (Eigen::Lower | Eigen::Upper))
 class Hessian;
@@ -359,10 +347,6 @@ class Variable : public SleipnirBase {
                                 const Variable<Scalar>& y,
                                 const Variable<Scalar>& z);
 
-  template <typename Scalar>
-  friend VariableMatrix<Scalar> detail::gradient_tree(
-      const detail::ExpressionGraph<Scalar>& top_list,
-      const VariableMatrix<Scalar>& wrt);
   template <typename Scalar, int UpLo>
     requires(UpLo == Eigen::Lower) || (UpLo == (Eigen::Lower | Eigen::Upper))
   friend class Hessian;
