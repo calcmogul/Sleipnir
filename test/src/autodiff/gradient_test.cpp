@@ -58,10 +58,8 @@ TEST_CASE("Gradient - Elementary", "[Gradient]") {
   a.set_value(1.0);
   slp::Variable b;
   b.set_value(2.0);
-  slp::Variable c;
-  c.set_value(3.0);
 
-  c = -2 * a;
+  auto c = -2 * a;
   CHECK(slp::Gradient(c, a).value().coeff(0) == -2.0);
 
   c = a / 3.0;

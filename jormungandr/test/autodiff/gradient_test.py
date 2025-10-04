@@ -56,8 +56,6 @@ def test_elementary():
     a.set_value(1.0)
     b = Variable()
     b.set_value(2.0)
-    c = Variable()
-    c.set_value(3.0)
 
     c = -2 * a
     assert Gradient(c, a).value()[0, 0] == -2.0

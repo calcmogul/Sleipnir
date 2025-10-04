@@ -44,16 +44,12 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
   VariableMatrix() = default;
 
   /**
-   * Constructs a VariableMatrix column vector with the given rows.
+   * Constructs a zero-initialized VariableMatrix column vector with the given
+   * rows.
    *
    * @param rows The number of matrix rows.
    */
-  explicit VariableMatrix(int rows) : m_rows{rows}, m_cols{1} {
-    m_storage.reserve(rows);
-    for (int row = 0; row < rows; ++row) {
-      m_storage.emplace_back();
-    }
-  }
+  explicit VariableMatrix(int rows) : VariableMatrix{rows, 1} {}
 
   /**
    * Constructs a zero-initialized VariableMatrix with the given dimensions.
@@ -95,10 +91,10 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
       m_cols = list.begin()->size();
     }
 
-    // Assert the first and latest column counts are the same
+    // Assert all column counts are the same
     for ([[maybe_unused]]
          const auto& row : list) {
-      slp_assert(list.begin()->size() == row.size());
+      slp_assert(static_cast<int>(row.size()) == m_cols);
     }
 
     m_storage.reserve(rows() * cols());
@@ -122,10 +118,10 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
       m_cols = list.begin()->size();
     }
 
-    // Assert the first and latest column counts are the same
+    // Assert all column counts are the same
     for ([[maybe_unused]]
          const auto& row : list) {
-      slp_assert(list.begin()->size() == row.size());
+      slp_assert(static_cast<int>(row.size()) == m_cols);
     }
 
     m_storage.reserve(rows() * cols());
@@ -149,10 +145,10 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
       m_cols = list.begin()->size();
     }
 
-    // Assert the first and latest column counts are the same
+    // Assert all column counts are the same
     for ([[maybe_unused]]
          const auto& row : list) {
-      slp_assert(list.begin()->size() == row.size());
+      slp_assert(static_cast<int>(row.size()) == m_cols);
     }
 
     m_storage.reserve(rows() * cols());
@@ -195,58 +191,6 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
         } else {
           m_storage.emplace_back(0.0);
         }
-      }
-    }
-  }
-
-  /**
-   * Assigns an Eigen matrix to a VariableMatrix.
-   *
-   * @param values Eigen matrix of values.
-   * @return This VariableMatrix.
-   */
-  template <typename Derived>
-  VariableMatrix& operator=(const Eigen::MatrixBase<Derived>& values) {
-    slp_assert(rows() == values.rows() && cols() == values.cols());
-
-    for (int row = 0; row < values.rows(); ++row) {
-      for (int col = 0; col < values.cols(); ++col) {
-        (*this)[row, col] = values(row, col);
-      }
-    }
-
-    return *this;
-  }
-
-  /**
-   * Assigns a double to the matrix.
-   *
-   * This only works for matrices with one row and one column.
-   *
-   * @param value Value to assign.
-   * @return This VariableMatrix.
-   */
-  VariableMatrix& operator=(ScalarLike auto value) {
-    slp_assert(rows() == 1 && cols() == 1);
-
-    (*this)[0, 0] = value;
-
-    return *this;
-  }
-
-  /**
-   * Sets the VariableMatrix's internal values.
-   *
-   * @param values Eigen matrix of values.
-   */
-  template <typename Derived>
-    requires std::same_as<typename Derived::Scalar, double>
-  void set_value(const Eigen::MatrixBase<Derived>& values) {
-    slp_assert(rows() == values.rows() && cols() == values.cols());
-
-    for (int row = 0; row < values.rows(); ++row) {
-      for (int col = 0; col < values.cols(); ++col) {
-        (*this)[row, col].set_value(values(row, col));
       }
     }
   }
@@ -334,11 +278,63 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
   }
 
   /**
-   * Returns a block pointing to the given row and column.
+   * Assigns an Eigen matrix to a VariableMatrix.
    *
-   * @param row The block row.
-   * @param col The block column.
-   * @return A block pointing to the given row and column.
+   * @param values Eigen matrix of values.
+   * @return This VariableMatrix.
+   */
+  template <typename Derived>
+  VariableMatrix& operator=(const Eigen::MatrixBase<Derived>& values) {
+    slp_assert(rows() == values.rows() && cols() == values.cols());
+
+    for (int row = 0; row < values.rows(); ++row) {
+      for (int col = 0; col < values.cols(); ++col) {
+        (*this)[row, col] = values(row, col);
+      }
+    }
+
+    return *this;
+  }
+
+  /**
+   * Assigns a scalar to the matrix.
+   *
+   * This only works for matrices with one row and one column.
+   *
+   * @param value Value to assign.
+   * @return This VariableMatrix.
+   */
+  VariableMatrix& operator=(ScalarLike auto value) {
+    slp_assert(rows() == 1 && cols() == 1);
+
+    (*this)[0, 0] = value;
+
+    return *this;
+  }
+
+  /**
+   * Sets the VariableMatrix's internal values.
+   *
+   * @param values Eigen matrix of values.
+   */
+  template <typename Derived>
+    requires std::same_as<typename Derived::Scalar, double>
+  void set_value(const Eigen::MatrixBase<Derived>& values) {
+    slp_assert(rows() == values.rows() && cols() == values.cols());
+
+    for (int row = 0; row < values.rows(); ++row) {
+      for (int col = 0; col < values.cols(); ++col) {
+        (*this)[row, col].set_value(values(row, col));
+      }
+    }
+  }
+
+  /**
+   * Returns the element at the given row and column.
+   *
+   * @param row The row.
+   * @param col The column.
+   * @return The element at the given row and column.
    */
   Variable& operator[](int row, int col) {
     slp_assert(row >= 0 && row < rows());
@@ -347,11 +343,11 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
   }
 
   /**
-   * Returns a block pointing to the given row and column.
+   * Returns the element at the given row and column.
    *
-   * @param row The block row.
-   * @param col The block column.
-   * @return A block pointing to the given row and column.
+   * @param row The row.
+   * @param col The column.
+   * @return The element at the given row and column.
    */
   const Variable& operator[](int row, int col) const {
     slp_assert(row >= 0 && row < rows());
@@ -360,25 +356,25 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
   }
 
   /**
-   * Returns a block pointing to the given row.
+   * Returns the element at the given index.
    *
-   * @param row The block row.
-   * @return A block pointing to the given row.
+   * @param index The index.
+   * @return The element at the given index.
    */
-  Variable& operator[](int row) {
-    slp_assert(row >= 0 && row < rows() * cols());
-    return m_storage[row];
+  Variable& operator[](int index) {
+    slp_assert(index >= 0 && index < rows() * cols());
+    return m_storage[index];
   }
 
   /**
-   * Returns a block pointing to the given row.
+   * Returns the element at the given index.
    *
-   * @param row The block row.
-   * @return A block pointing to the given row.
+   * @param index The index.
+   * @return The element at the given index.
    */
-  const Variable& operator[](int row) const {
-    slp_assert(row >= 0 && row < rows() * cols());
-    return m_storage[row];
+  const Variable& operator[](int index) const {
+    slp_assert(index >= 0 && index < rows() * cols());
+    return m_storage[index];
   }
 
   /**
@@ -496,8 +492,9 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
    * @return A segment of the variable vector.
    */
   VariableBlock<VariableMatrix> segment(int offset, int length) {
-    slp_assert(offset >= 0 && offset < rows() * cols());
-    slp_assert(length >= 0 && length <= rows() * cols() - offset);
+    slp_assert(cols() == 1);
+    slp_assert(offset >= 0 && offset < rows());
+    slp_assert(length >= 0 && length <= rows() - offset);
     return block(offset, 0, length, 1);
   }
 
@@ -510,8 +507,9 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
    */
   const VariableBlock<const VariableMatrix> segment(int offset,
                                                     int length) const {
-    slp_assert(offset >= 0 && offset < rows() * cols());
-    slp_assert(length >= 0 && length <= rows() * cols() - offset);
+    slp_assert(cols() == 1);
+    slp_assert(offset >= 0 && offset < rows());
+    slp_assert(length >= 0 && length <= rows() - offset);
     return block(offset, 0, length, 1);
   }
 
@@ -971,10 +969,10 @@ class SLEIPNIR_DLLEXPORT VariableMatrix {
   }
 
   /**
-   * Returns a row of the variable column vector.
+   * Returns an element of the variable matrix.
    *
    * @param index The index of the element to return.
-   * @return A row of the variable column vector.
+   * @return An element of the variable matrix.
    */
   double value(int index) {
     slp_assert(index >= 0 && index < rows() * cols());
@@ -1321,7 +1319,9 @@ SLEIPNIR_DLLEXPORT inline VariableMatrix block(
       result.block(row_offset, col_offset, elem.rows(), elem.cols()) = elem;
       col_offset += elem.cols();
     }
-    row_offset += row.begin()->rows();
+    if (row.size() > 0) {
+      row_offset += row.begin()->rows();
+    }
   }
 
   return result;
@@ -1376,7 +1376,9 @@ SLEIPNIR_DLLEXPORT inline VariableMatrix block(
       result.block(row_offset, col_offset, elem.rows(), elem.cols()) = elem;
       col_offset += elem.cols();
     }
-    row_offset += row.begin()->rows();
+    if (row.size() > 0) {
+      row_offset += row.begin()->rows();
+    }
   }
 
   return result;

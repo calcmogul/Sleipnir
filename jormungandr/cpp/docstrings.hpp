@@ -1048,22 +1048,22 @@ Returns:
     A scalar subblock at the given row and column.)doc";
 
 static const char *__doc_slp_VariableBlock_operator_array_3 =
-R"doc(Returns a scalar subblock at the given row.
+R"doc(Returns a scalar subblock at the given index.
 
-Parameter ``row``:
-    The scalar subblock's row.
+Parameter ``index``:
+    The scalar subblock's index.
 
 Returns:
-    A scalar subblock at the given row.)doc";
+    A scalar subblock at the given index.)doc";
 
 static const char *__doc_slp_VariableBlock_operator_array_4 =
-R"doc(Returns a scalar subblock at the given row.
+R"doc(Returns a scalar subblock at the given index.
 
-Parameter ``row``:
-    The scalar subblock's row.
+Parameter ``index``:
+    The scalar subblock's index.
 
 Returns:
-    A scalar subblock at the given row.)doc";
+    A scalar subblock at the given index.)doc";
 
 static const char *__doc_slp_VariableBlock_operator_array_5 =
 R"doc(Returns a slice of the variable matrix.
@@ -1299,13 +1299,13 @@ Returns:
     An element of the variable matrix.)doc";
 
 static const char *__doc_slp_VariableBlock_value_2 =
-R"doc(Returns a row of the variable column vector.
+R"doc(Returns an element of the variable block.
 
 Parameter ``index``:
     The index of the element to return.
 
 Returns:
-    A row of the variable column vector.)doc";
+    An element of the variable block.)doc";
 
 static const char *__doc_slp_VariableBlock_value_3 =
 R"doc(Returns the contents of the variable matrix.
@@ -1324,7 +1324,8 @@ Returns:
 static const char *__doc_slp_VariableMatrix_VariableMatrix = R"doc(Constructs an empty VariableMatrix.)doc";
 
 static const char *__doc_slp_VariableMatrix_VariableMatrix_2 =
-R"doc(Constructs a VariableMatrix column vector with the given rows.
+R"doc(Constructs a zero-initialized VariableMatrix column vector with the
+given rows.
 
 Parameter ``rows``:
     The number of matrix rows.)doc";
@@ -1604,46 +1605,46 @@ Returns:
 static const char *__doc_slp_VariableMatrix_operator_Variable = R"doc(Implicit conversion operator from 1x1 VariableMatrix to Variable.)doc";
 
 static const char *__doc_slp_VariableMatrix_operator_array =
-R"doc(Returns a block pointing to the given row and column.
+R"doc(Returns the element at the given row and column.
 
 Parameter ``row``:
-    The block row.
+    The row.
 
 Parameter ``col``:
-    The block column.
+    The column.
 
 Returns:
-    A block pointing to the given row and column.)doc";
+    The element at the given row and column.)doc";
 
 static const char *__doc_slp_VariableMatrix_operator_array_2 =
-R"doc(Returns a block pointing to the given row and column.
+R"doc(Returns the element at the given row and column.
 
 Parameter ``row``:
-    The block row.
+    The row.
 
 Parameter ``col``:
-    The block column.
+    The column.
 
 Returns:
-    A block pointing to the given row and column.)doc";
+    The element at the given row and column.)doc";
 
 static const char *__doc_slp_VariableMatrix_operator_array_3 =
-R"doc(Returns a block pointing to the given row.
+R"doc(Returns the element at the given index.
 
-Parameter ``row``:
-    The block row.
+Parameter ``index``:
+    The index.
 
 Returns:
-    A block pointing to the given row.)doc";
+    The element at the given index.)doc";
 
 static const char *__doc_slp_VariableMatrix_operator_array_4 =
-R"doc(Returns a block pointing to the given row.
+R"doc(Returns the element at the given index.
 
-Parameter ``row``:
-    The block row.
+Parameter ``index``:
+    The index.
 
 Returns:
-    A block pointing to the given row.)doc";
+    The element at the given index.)doc";
 
 static const char *__doc_slp_VariableMatrix_operator_array_5 =
 R"doc(Returns a slice of the variable matrix.
@@ -1833,13 +1834,13 @@ Returns:
     An element of the variable matrix.)doc";
 
 static const char *__doc_slp_VariableMatrix_value_2 =
-R"doc(Returns a row of the variable column vector.
+R"doc(Returns an element of the variable matrix.
 
 Parameter ``index``:
     The index of the element to return.
 
 Returns:
-    A row of the variable column vector.)doc";
+    An element of the variable matrix.)doc";
 
 static const char *__doc_slp_VariableMatrix_value_3 =
 R"doc(Returns the contents of the variable matrix.
