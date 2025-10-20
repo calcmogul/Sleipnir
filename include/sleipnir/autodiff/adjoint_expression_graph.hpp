@@ -13,6 +13,9 @@
 #include "sleipnir/autodiff/variable.hpp"
 #include "sleipnir/autodiff/variable_matrix.hpp"
 #include "sleipnir/util/assert.hpp"
+#include "util/print_diagnostics.hpp"
+#include "util/scoped_profiler.hpp"
+#include "util/solve_profiler.hpp"
 
 namespace slp::detail {
 
@@ -420,6 +423,30 @@ class AdjointExpressionGraph {
       return;
     }
 
+    // #define DEBUG
+
+#ifdef DEBUG
+    gch::small_vector<SolveProfiler> profilers;
+    profilers.emplace_back("∇²ₓₓL");
+    profilers.emplace_back("  ↳ setup");
+    profilers.emplace_back("  ↳ iteration");
+    profilers.emplace_back("    ↳ adjoints");
+    profilers.emplace_back("    ↳ pushing");
+    profilers.emplace_back("    ↳ creating");
+    profilers.emplace_back("  ↳ matrix build");
+
+    auto& H_prof = profilers[0];
+    auto& setup_prof = profilers[1];
+    auto& iter_prof = profilers[2];
+    auto& adjoints_prof = profilers[3];
+    auto& pushing_prof = profilers[4];
+    auto& creating_prof = profilers[5];
+    auto& matrix_build_prof = profilers[6];
+
+    H_prof.start();
+    setup_prof.start();
+#endif
+
     // Hessian mapping from expression graph index pair to value
     auto h = [this](size_t j, size_t k) -> double& {
       // Sort parent index before child index
@@ -443,7 +470,15 @@ class AdjointExpressionGraph {
       elem->hessian.clear();
     }
 
+#ifdef DEBUG
+    setup_prof.stop();
+#endif
+
     for (size_t i = 0; i < m_top_list.size(); ++i) {
+#ifdef DEBUG
+      ScopedProfiler iter_profiler{iter_prof};
+#endif
+
       const auto& v_i = m_top_list[i];
       const auto& v_lhs = v_i->args[0];
       const auto& v_rhs = v_i->args[1];
@@ -454,6 +489,10 @@ class AdjointExpressionGraph {
         break;
       }
 
+#ifdef DEBUG
+      ScopedProfiler adjoints_profiler{adjoints_prof};
+#endif
+
       // Adjoints
       if (v_rhs != nullptr) {
         // Binary operator
@@ -463,6 +502,11 @@ class AdjointExpressionGraph {
         // Unary operator
         v_lhs->adjoint += v_i->grad_l(v_lhs->val, 0.0, v_i->adjoint);
       }
+
+#ifdef DEBUG
+      adjoints_profiler.stop();
+      ScopedProfiler pushing_profiler{pushing_prof};
+#endif
 
       // Pushing
       //
@@ -480,6 +524,9 @@ class AdjointExpressionGraph {
       //           h(vₖ₁, vₖ₂) += 2 ∂ϕᵢ/∂vₖ₁ ∂ϕᵢ/∂vₖ₂ h(vᵢ, vⱼ)
       //         else
       //           h(vₖ₁, vₖ₂) += ∂ϕᵢ/∂vₖ₁ ∂ϕᵢ/∂vₖ₂ h(vᵢ, vⱼ)
+#ifdef DEBUG
+      // slp::println("v_{}->hessian.size() = {}", i, v_i->hessian.size());
+#endif
       for (const auto& [j, h_i_j] : v_i->hessian) {
         if (v_rhs != nullptr) {
           // Binary operator
@@ -514,6 +561,11 @@ class AdjointExpressionGraph {
           }
         }
       }
+
+#ifdef DEBUG
+      pushing_profiler.stop();
+      ScopedProfiler creating_profiler{creating_prof};
+#endif
 
       // Creating
       //
@@ -556,7 +608,50 @@ class AdjointExpressionGraph {
           }
         }
       }
+
+      // Update live variable set
+#if 0
+      slp::println("i = {}", i);
+      if (v_rhs != nullptr) {
+        slp::println("  l = {}, r = {}", v_lhs->idx, v_rhs->idx);
+      } else {
+        slp::println("  l = {}", i, v_lhs->idx);
+      }
+#endif
+#if 0
+      for (const auto& v : m_top_list) {
+        if (v->hessian.size() == 0) {
+          continue;
+        }
+        slp::print("  h[{}] = [", v->idx);
+        size_t a = 0;
+        for (const auto& w : v->hessian) {
+          slp::print("{}", v->idx, w.first, w.second);
+          if (a < v->hessian.size() - 1) {
+            slp::print(", ");
+          }
+          ++a;
+        }
+        slp::println("]");
+      }
+#endif
+#if 0
+      auto erase_v_i = [&](const auto& v) {
+        if (!v->hessian.keys().empty() && v->hessian.keys().front() <= i) {
+          slp::println("removed h({}, {})", i, i);
+          v->hessian.erase_front();
+        }
+      };
+      erase_v_i(v_lhs);
+      if (v_rhs != nullptr) {
+        erase_v_i(v_rhs);
+      }
+#endif
     }
+
+#ifdef DEBUG
+    matrix_build_prof.start();
+#endif
 
     // Append Hessian triplets
     for (int row = 0; row < static_cast<int>(wrt.rows()); ++row) {
@@ -583,6 +678,32 @@ class AdjointExpressionGraph {
         }
       }
     }
+
+#if 0
+// #ifdef DEBUG
+    matrix_build_prof.stop();
+    H_prof.stop();
+
+    auto H_duration = to_ms(profilers[0].total_duration());
+
+    slp::println("┏{:━^23}┯{:━^18}┯{:━^10}┯{:━^9}┯{:━^5}┓", "", "", "", "", "");
+    slp::println("┃{:^23}│{:^18}│{:^10}│{:^9}│{:^5}┃",
+                 std::format("{} trace", profilers[0].name()), "percent",
+                 "total (ms)", "each (ms)", "runs");
+    slp::println("┡{:━^23}┷{:━^18}┷{:━^10}┷{:━^9}┷{:━^5}┩", "", "", "", "", "");
+
+    for (auto& profiler : profilers) {
+      double norm = H_duration == 0.0
+                        ? (&profiler == &profilers[0] ? 1.0 : 0.0)
+                        : to_ms(profiler.total_duration()) / H_duration;
+      slp::println("│{:<23} {:>6.2f}%▕{}▏ {:>10.3f} {:>9.3f} {:>5}│",
+                   profiler.name(), norm * 100.0, histogram<9>(norm),
+                   to_ms(profiler.total_duration()),
+                   to_ms(profiler.average_duration()), profiler.num_solves());
+    }
+
+    slp::println("└{:─^69}┘", "");
+#endif
   }
 
  private:
