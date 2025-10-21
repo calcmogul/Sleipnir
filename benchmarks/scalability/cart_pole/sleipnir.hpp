@@ -12,4 +12,5 @@
  * @param dt Timestep duration.
  * @param N Number of samples in the problem.
  */
-slp::Problem cart_pole_sleipnir(std::chrono::duration<double> dt, int N);
+slp::Problem<double> cart_pole_sleipnir(std::chrono::duration<double> dt,
+                                        int N);

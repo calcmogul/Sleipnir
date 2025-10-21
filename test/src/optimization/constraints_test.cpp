@@ -3,236 +3,245 @@
 #include <array>
 #include <tuple>
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <sleipnir/autodiff/variable.hpp>
 #include <sleipnir/autodiff/variable_matrix.hpp>
 
 #include "catch_string_converters.hpp"
+#include "scalar_types_under_test.hpp"
 
-TEST_CASE("constraints - Equality constraint boolean comparison",
-          "[constraints]") {
+TEMPLATE_TEST_CASE("constraints - Equality constraint boolean comparison",
+                   "[constraints]", SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
   using slp::Variable;
   using slp::VariableMatrix;
+  using MatrixXT = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>;
 
-  constexpr std::array args{std::tuple{1.0, 1.0}, std::tuple{1.0, 2.0},
-                            std::tuple{2.0, 1.0}};
+  constexpr std::array args{std::tuple{T(1.0), T(1.0)},
+                            std::tuple{T(1.0), T(2.0)},
+                            std::tuple{T(2.0), T(1.0)}};
 
-  // double-Variable
+  // T-Variable
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{double{lhs} == Variable{rhs}} == (lhs == rhs));
+    CHECK(bool{T{lhs} == Variable<T>{rhs}} == (lhs == rhs));
   }
 
-  // double-VariableMatrix
+  // T-VariableMatrix
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{double{lhs} == VariableMatrix{{rhs}}} == (lhs == rhs));
+    CHECK(bool{T{lhs} == VariableMatrix<T>{{rhs}}} == (lhs == rhs));
   }
 
-  // Variable-double
+  // Variable-T
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{Variable{lhs} == double{rhs}} == (lhs == rhs));
+    CHECK(bool{Variable<T>{lhs} == T{rhs}} == (lhs == rhs));
   }
 
   // Variable-Variable
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{Variable{lhs} == Variable{rhs}} == (lhs == rhs));
+    CHECK(bool{Variable<T>{lhs} == Variable<T>{rhs}} == (lhs == rhs));
   }
 
   // Variable-VariableMatrix
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{Variable{lhs} == VariableMatrix{{rhs}}} == (lhs == rhs));
+    CHECK(bool{Variable<T>{lhs} == VariableMatrix<T>{{rhs}}} == (lhs == rhs));
   }
 
-  // VariableMatrix-double
+  // VariableMatrix-T
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{VariableMatrix{{lhs}} == double{rhs}} == (lhs == rhs));
+    CHECK(bool{VariableMatrix<T>{{lhs}} == T{rhs}} == (lhs == rhs));
   }
 
   // VariableMatrix-Variable
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{VariableMatrix{{lhs}} == Variable{rhs}} == (lhs == rhs));
+    CHECK(bool{VariableMatrix<T>{{lhs}} == Variable<T>{rhs}} == (lhs == rhs));
   }
 
   // VariableMatrix-VariableMatrix
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{VariableMatrix{{lhs}} == VariableMatrix{{rhs}}} == (lhs == rhs));
-  }
-
-  // Eigen::MatrixXd-Variable
-  for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{Eigen::MatrixXd{{lhs}} == Variable{rhs}} == (lhs == rhs));
-  }
-
-  // Eigen::MatrixXd-VariableMatrix
-  for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{Eigen::MatrixXd{{lhs}} == VariableMatrix{{rhs}}} ==
+    CHECK(bool{VariableMatrix<T>{{lhs}} == VariableMatrix<T>{{rhs}}} ==
           (lhs == rhs));
   }
 
-  // Eigen::MatrixXd-VariableBlock
+  // MatrixXT-Variable
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{Eigen::MatrixXd{{lhs}} ==
-               VariableMatrix{{rhs}}.block(0, 0, 1, 1)} == (lhs == rhs));
+    CHECK(bool{MatrixXT{{lhs}} == Variable<T>{rhs}} == (lhs == rhs));
   }
 
-  // Variable-Eigen::MatrixXd
+  // MatrixXT-VariableMatrix
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{Variable{lhs} == Eigen::MatrixXd{{rhs}}} == (lhs == rhs));
+    CHECK(bool{MatrixXT{{lhs}} == VariableMatrix<T>{{rhs}}} == (lhs == rhs));
   }
 
-  // VariableMatrix-Eigen::MatrixXd
+  // MatrixXT-VariableBlock
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{VariableMatrix{{lhs}} == Eigen::MatrixXd{{rhs}}} ==
+    CHECK(bool{MatrixXT{{lhs}} == VariableMatrix<T>{{rhs}}.block(0, 0, 1, 1)} ==
           (lhs == rhs));
   }
 
-  // VariableBlock-Eigen::MatrixXd
+  // Variable-MatrixXT
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{VariableMatrix{{lhs}}.block(0, 0, 1, 1) ==
-               Eigen::MatrixXd{{rhs}}} == (lhs == rhs));
+    CHECK(bool{Variable<T>{lhs} == MatrixXT{{rhs}}} == (lhs == rhs));
+  }
+
+  // VariableMatrix-MatrixXT
+  for (const auto& [lhs, rhs] : args) {
+    CHECK(bool{VariableMatrix<T>{{lhs}} == MatrixXT{{rhs}}} == (lhs == rhs));
+  }
+
+  // VariableBlock-MatrixXT
+  for (const auto& [lhs, rhs] : args) {
+    CHECK(bool{VariableMatrix<T>{{lhs}}.block(0, 0, 1, 1) == MatrixXT{{rhs}}} ==
+          (lhs == rhs));
   }
 }
 
 // For the purposes of optimization, a < constraint is treated the same as a <=
 // constraint
-TEST_CASE("constraints - Inequality constraint boolean comparisons",
-          "[constraints]") {
+TEMPLATE_TEST_CASE("constraints - Inequality constraint boolean comparisons",
+                   "[constraints]", SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
   using slp::Variable;
   using slp::VariableMatrix;
+  using MatrixXT = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>;
 
-  constexpr std::array args{std::tuple{1.0, 1.0}, std::tuple{1.0, 2.0},
-                            std::tuple{2.0, 1.0}};
+  constexpr std::array args{std::tuple{T(1.0), T(1.0)},
+                            std::tuple{T(1.0), T(2.0)},
+                            std::tuple{T(2.0), T(1.0)}};
 
-  // double-Variable
+  // T-Variable
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{double{lhs} < Variable{rhs}} == (lhs <= rhs));
-    CHECK(bool{double{lhs} <= Variable{rhs}} == (lhs <= rhs));
-    CHECK(bool{double{lhs} > Variable{rhs}} == (lhs >= rhs));
-    CHECK(bool{double{lhs} >= Variable{rhs}} == (lhs >= rhs));
+    CHECK(bool{T{lhs} < Variable<T>{rhs}} == (lhs <= rhs));
+    CHECK(bool{T{lhs} <= Variable<T>{rhs}} == (lhs <= rhs));
+    CHECK(bool{T{lhs} > Variable<T>{rhs}} == (lhs >= rhs));
+    CHECK(bool{T{lhs} >= Variable<T>{rhs}} == (lhs >= rhs));
   }
 
-  // double-VariableMatrix
+  // T-VariableMatrix
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{double{lhs} < VariableMatrix{{rhs}}} == (lhs <= rhs));
-    CHECK(bool{double{lhs} <= VariableMatrix{{rhs}}} == (lhs <= rhs));
-    CHECK(bool{double{lhs} > VariableMatrix{{rhs}}} == (lhs >= rhs));
-    CHECK(bool{double{lhs} >= VariableMatrix{{rhs}}} == (lhs >= rhs));
+    CHECK(bool{T{lhs} < VariableMatrix<T>{{rhs}}} == (lhs <= rhs));
+    CHECK(bool{T{lhs} <= VariableMatrix<T>{{rhs}}} == (lhs <= rhs));
+    CHECK(bool{T{lhs} > VariableMatrix<T>{{rhs}}} == (lhs >= rhs));
+    CHECK(bool{T{lhs} >= VariableMatrix<T>{{rhs}}} == (lhs >= rhs));
   }
 
-  // Variable-double
+  // Variable-T
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{Variable{lhs} < double{rhs}} == (lhs <= rhs));
-    CHECK(bool{Variable{lhs} <= double{rhs}} == (lhs <= rhs));
-    CHECK(bool{Variable{lhs} > double{rhs}} == (lhs >= rhs));
-    CHECK(bool{Variable{lhs} >= double{rhs}} == (lhs >= rhs));
+    CHECK(bool{Variable<T>{lhs} < T{rhs}} == (lhs <= rhs));
+    CHECK(bool{Variable<T>{lhs} <= T{rhs}} == (lhs <= rhs));
+    CHECK(bool{Variable<T>{lhs} > T{rhs}} == (lhs >= rhs));
+    CHECK(bool{Variable<T>{lhs} >= T{rhs}} == (lhs >= rhs));
   }
 
   // Variable-Variable
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{Variable{lhs} < Variable{rhs}} == (lhs <= rhs));
-    CHECK(bool{Variable{lhs} <= Variable{rhs}} == (lhs <= rhs));
-    CHECK(bool{Variable{lhs} > Variable{rhs}} == (lhs >= rhs));
-    CHECK(bool{Variable{lhs} >= Variable{rhs}} == (lhs >= rhs));
+    CHECK(bool{Variable<T>{lhs} < Variable<T>{rhs}} == (lhs <= rhs));
+    CHECK(bool{Variable<T>{lhs} <= Variable<T>{rhs}} == (lhs <= rhs));
+    CHECK(bool{Variable<T>{lhs} > Variable<T>{rhs}} == (lhs >= rhs));
+    CHECK(bool{Variable<T>{lhs} >= Variable<T>{rhs}} == (lhs >= rhs));
   }
 
   // Variable-VariableMatrix
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{Variable{lhs} < VariableMatrix{{rhs}}} == (lhs <= rhs));
-    CHECK(bool{Variable{lhs} <= VariableMatrix{{rhs}}} == (lhs <= rhs));
-    CHECK(bool{Variable{lhs} > VariableMatrix{{rhs}}} == (lhs >= rhs));
-    CHECK(bool{Variable{lhs} >= VariableMatrix{{rhs}}} == (lhs >= rhs));
+    CHECK(bool{Variable<T>{lhs} < VariableMatrix<T>{{rhs}}} == (lhs <= rhs));
+    CHECK(bool{Variable<T>{lhs} <= VariableMatrix<T>{{rhs}}} == (lhs <= rhs));
+    CHECK(bool{Variable<T>{lhs} > VariableMatrix<T>{{rhs}}} == (lhs >= rhs));
+    CHECK(bool{Variable<T>{lhs} >= VariableMatrix<T>{{rhs}}} == (lhs >= rhs));
   }
 
-  // VariableMatrix-double
+  // VariableMatrix-T
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{VariableMatrix{{lhs}} < double{rhs}} == (lhs <= rhs));
-    CHECK(bool{VariableMatrix{{lhs}} <= double{rhs}} == (lhs <= rhs));
-    CHECK(bool{VariableMatrix{{lhs}} > double{rhs}} == (lhs >= rhs));
-    CHECK(bool{VariableMatrix{{lhs}} >= double{rhs}} == (lhs >= rhs));
+    CHECK(bool{VariableMatrix<T>{{lhs}} < T{rhs}} == (lhs <= rhs));
+    CHECK(bool{VariableMatrix<T>{{lhs}} <= T{rhs}} == (lhs <= rhs));
+    CHECK(bool{VariableMatrix<T>{{lhs}} > T{rhs}} == (lhs >= rhs));
+    CHECK(bool{VariableMatrix<T>{{lhs}} >= T{rhs}} == (lhs >= rhs));
   }
 
   // VariableMatrix-Variable
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{VariableMatrix{{lhs}} < Variable{rhs}} == (lhs <= rhs));
-    CHECK(bool{VariableMatrix{{lhs}} <= Variable{rhs}} == (lhs <= rhs));
-    CHECK(bool{VariableMatrix{{lhs}} > Variable{rhs}} == (lhs >= rhs));
-    CHECK(bool{VariableMatrix{{lhs}} >= Variable{rhs}} == (lhs >= rhs));
+    CHECK(bool{VariableMatrix<T>{{lhs}} < Variable<T>{rhs}} == (lhs <= rhs));
+    CHECK(bool{VariableMatrix<T>{{lhs}} <= Variable<T>{rhs}} == (lhs <= rhs));
+    CHECK(bool{VariableMatrix<T>{{lhs}} > Variable<T>{rhs}} == (lhs >= rhs));
+    CHECK(bool{VariableMatrix<T>{{lhs}} >= Variable<T>{rhs}} == (lhs >= rhs));
   }
 
   // VariableMatrix-VariableMatrix
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{VariableMatrix{{lhs}} < VariableMatrix{{rhs}}} == (lhs <= rhs));
-    CHECK(bool{VariableMatrix{{lhs}} <= VariableMatrix{{rhs}}} == (lhs <= rhs));
-    CHECK(bool{VariableMatrix{{lhs}} > VariableMatrix{{rhs}}} == (lhs >= rhs));
-    CHECK(bool{VariableMatrix{{lhs}} >= VariableMatrix{{rhs}}} == (lhs >= rhs));
-  }
-
-  // Eigen::MatrixXd-Variable
-  for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{Eigen::MatrixXd{{lhs}} < Variable{rhs}} == (lhs <= rhs));
-    CHECK(bool{Eigen::MatrixXd{{lhs}} <= Variable{rhs}} == (lhs <= rhs));
-    CHECK(bool{Eigen::MatrixXd{{lhs}} > Variable{rhs}} == (lhs >= rhs));
-    CHECK(bool{Eigen::MatrixXd{{lhs}} >= Variable{rhs}} == (lhs >= rhs));
-  }
-
-  // Eigen::MatrixXd-VariableMatrix
-  for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{Eigen::MatrixXd{{lhs}} < VariableMatrix{{rhs}}} == (lhs <= rhs));
-    CHECK(bool{Eigen::MatrixXd{{lhs}} <= VariableMatrix{{rhs}}} ==
+    CHECK(bool{VariableMatrix<T>{{lhs}} < VariableMatrix<T>{{rhs}}} ==
           (lhs <= rhs));
-    CHECK(bool{Eigen::MatrixXd{{lhs}} > VariableMatrix{{rhs}}} == (lhs >= rhs));
-    CHECK(bool{Eigen::MatrixXd{{lhs}} >= VariableMatrix{{rhs}}} ==
+    CHECK(bool{VariableMatrix<T>{{lhs}} <= VariableMatrix<T>{{rhs}}} ==
+          (lhs <= rhs));
+    CHECK(bool{VariableMatrix<T>{{lhs}} > VariableMatrix<T>{{rhs}}} ==
+          (lhs >= rhs));
+    CHECK(bool{VariableMatrix<T>{{lhs}} >= VariableMatrix<T>{{rhs}}} ==
           (lhs >= rhs));
   }
 
-  // Eigen::MatrixXd-VariableBlock
+  // MatrixXT-Variable
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{Eigen::MatrixXd{{lhs}} <
-               VariableMatrix{{rhs}}.block(0, 0, 1, 1)} == (lhs <= rhs));
-    CHECK(bool{Eigen::MatrixXd{{lhs}} <=
-               VariableMatrix{{rhs}}.block(0, 0, 1, 1)} == (lhs <= rhs));
-    CHECK(bool{Eigen::MatrixXd{{lhs}} >
-               VariableMatrix{{rhs}}.block(0, 0, 1, 1)} == (lhs >= rhs));
-    CHECK(bool{Eigen::MatrixXd{{lhs}} >=
-               VariableMatrix{{rhs}}.block(0, 0, 1, 1)} == (lhs >= rhs));
+    CHECK(bool{MatrixXT{{lhs}} < Variable<T>{rhs}} == (lhs <= rhs));
+    CHECK(bool{MatrixXT{{lhs}} <= Variable<T>{rhs}} == (lhs <= rhs));
+    CHECK(bool{MatrixXT{{lhs}} > Variable<T>{rhs}} == (lhs >= rhs));
+    CHECK(bool{MatrixXT{{lhs}} >= Variable<T>{rhs}} == (lhs >= rhs));
   }
 
-  // Variable-Eigen::MatrixXd
+  // MatrixXT-VariableMatrix
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{Variable{lhs} < Eigen::MatrixXd{{rhs}}} == (lhs <= rhs));
-    CHECK(bool{Variable{lhs} <= Eigen::MatrixXd{{rhs}}} == (lhs <= rhs));
-    CHECK(bool{Variable{lhs} > Eigen::MatrixXd{{rhs}}} == (lhs >= rhs));
-    CHECK(bool{Variable{lhs} >= Eigen::MatrixXd{{rhs}}} == (lhs >= rhs));
+    CHECK(bool{MatrixXT{{lhs}} < VariableMatrix<T>{{rhs}}} == (lhs <= rhs));
+    CHECK(bool{MatrixXT{{lhs}} <= VariableMatrix<T>{{rhs}}} == (lhs <= rhs));
+    CHECK(bool{MatrixXT{{lhs}} > VariableMatrix<T>{{rhs}}} == (lhs >= rhs));
+    CHECK(bool{MatrixXT{{lhs}} >= VariableMatrix<T>{{rhs}}} == (lhs >= rhs));
   }
 
-  // VariableMatrix-Eigen::MatrixXd
+  // MatrixXT-VariableBlock
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{VariableMatrix{{lhs}} < Eigen::MatrixXd{{rhs}}} == (lhs <= rhs));
-    CHECK(bool{VariableMatrix{{lhs}} <= Eigen::MatrixXd{{rhs}}} ==
+    CHECK(bool{MatrixXT{{lhs}} < VariableMatrix<T>{{rhs}}.block(0, 0, 1, 1)} ==
           (lhs <= rhs));
-    CHECK(bool{VariableMatrix{{lhs}} > Eigen::MatrixXd{{rhs}}} == (lhs >= rhs));
-    CHECK(bool{VariableMatrix{{lhs}} >= Eigen::MatrixXd{{rhs}}} ==
+    CHECK(bool{MatrixXT{{lhs}} <= VariableMatrix<T>{{rhs}}.block(0, 0, 1, 1)} ==
+          (lhs <= rhs));
+    CHECK(bool{MatrixXT{{lhs}} > VariableMatrix<T>{{rhs}}.block(0, 0, 1, 1)} ==
+          (lhs >= rhs));
+    CHECK(bool{MatrixXT{{lhs}} >= VariableMatrix<T>{{rhs}}.block(0, 0, 1, 1)} ==
           (lhs >= rhs));
   }
 
-  // VariableBlock-Eigen::MatrixXd
+  // Variable-MatrixXT
   for (const auto& [lhs, rhs] : args) {
-    CHECK(bool{VariableMatrix{{lhs}}.block(0, 0, 1, 1) <
-               Eigen::MatrixXd{{rhs}}} == (lhs <= rhs));
-    CHECK(bool{VariableMatrix{{lhs}}.block(0, 0, 1, 1) <=
-               Eigen::MatrixXd{{rhs}}} == (lhs <= rhs));
-    CHECK(bool{VariableMatrix{{lhs}}.block(0, 0, 1, 1) >
-               Eigen::MatrixXd{{rhs}}} == (lhs >= rhs));
-    CHECK(bool{VariableMatrix{{lhs}}.block(0, 0, 1, 1) >=
-               Eigen::MatrixXd{{rhs}}} == (lhs >= rhs));
+    CHECK(bool{Variable<T>{lhs} < MatrixXT{{rhs}}} == (lhs <= rhs));
+    CHECK(bool{Variable<T>{lhs} <= MatrixXT{{rhs}}} == (lhs <= rhs));
+    CHECK(bool{Variable<T>{lhs} > MatrixXT{{rhs}}} == (lhs >= rhs));
+    CHECK(bool{Variable<T>{lhs} >= MatrixXT{{rhs}}} == (lhs >= rhs));
+  }
+
+  // VariableMatrix-MatrixXT
+  for (const auto& [lhs, rhs] : args) {
+    CHECK(bool{VariableMatrix<T>{{lhs}} < MatrixXT{{rhs}}} == (lhs <= rhs));
+    CHECK(bool{VariableMatrix<T>{{lhs}} <= MatrixXT{{rhs}}} == (lhs <= rhs));
+    CHECK(bool{VariableMatrix<T>{{lhs}} > MatrixXT{{rhs}}} == (lhs >= rhs));
+    CHECK(bool{VariableMatrix<T>{{lhs}} >= MatrixXT{{rhs}}} == (lhs >= rhs));
+  }
+
+  // VariableBlock-MatrixXT
+  for (const auto& [lhs, rhs] : args) {
+    CHECK(bool{VariableMatrix<T>{{lhs}}.block(0, 0, 1, 1) < MatrixXT{{rhs}}} ==
+          (lhs <= rhs));
+    CHECK(bool{VariableMatrix<T>{{lhs}}.block(0, 0, 1, 1) <= MatrixXT{{rhs}}} ==
+          (lhs <= rhs));
+    CHECK(bool{VariableMatrix<T>{{lhs}}.block(0, 0, 1, 1) > MatrixXT{{rhs}}} ==
+          (lhs >= rhs));
+    CHECK(bool{VariableMatrix<T>{{lhs}}.block(0, 0, 1, 1) >= MatrixXT{{rhs}}} ==
+          (lhs >= rhs));
   }
 }
 
-TEST_CASE("constraints - Equality constraint concatenation", "[constraints]") {
+TEMPLATE_TEST_CASE("constraints - Equality constraint concatenation",
+                   "[constraints]", SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
   using slp::EqualityConstraints;
   using slp::Variable;
 
-  EqualityConstraints eq1 = Variable{1.0} == Variable{1.0};
-  EqualityConstraints eq2 = Variable{1.0} == Variable{2.0};
+  EqualityConstraints eq1 = Variable<T>{1.0} == Variable<T>{1.0};
+  EqualityConstraints eq2 = Variable<T>{1.0} == Variable<T>{2.0};
   EqualityConstraints eqs{eq1, eq2};
 
   CHECK(eq1.constraints.size() == 1);
@@ -247,13 +256,14 @@ TEST_CASE("constraints - Equality constraint concatenation", "[constraints]") {
   CHECK_FALSE(bool{eqs});
 }
 
-TEST_CASE("constraints - Inequality constraint concatenation",
-          "[constraints]") {
+TEMPLATE_TEST_CASE("constraints - Inequality constraint concatenation",
+                   "[constraints]", SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
   using slp::InequalityConstraints;
   using slp::Variable;
 
-  InequalityConstraints ineq1 = Variable{2.0} < Variable{1.0};
-  InequalityConstraints ineq2 = Variable{1.0} < Variable{2.0};
+  InequalityConstraints ineq1 = Variable<T>{2.0} < Variable<T>{1.0};
+  InequalityConstraints ineq2 = Variable<T>{1.0} < Variable<T>{2.0};
   InequalityConstraints ineqs{ineq1, ineq2};
 
   CHECK(ineq1.constraints.size() == 1);

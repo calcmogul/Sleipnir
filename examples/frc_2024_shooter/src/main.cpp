@@ -33,7 +33,7 @@ constexpr Vector6d target_wrt_field{
     {0.0}};
 constexpr double g = 9.806;  // m/s²
 
-slp::VariableMatrix f(const slp::VariableMatrix& x) {
+slp::VariableMatrix<double> f(const slp::VariableMatrix<double>& x) {
   // x' = x'
   // y' = y'
   // z' = z'
@@ -47,13 +47,13 @@ slp::VariableMatrix f(const slp::VariableMatrix& x) {
   constexpr double C_D = 0.5;
   constexpr double A = std::numbers::pi * 0.3;
   constexpr double m = 2.0;  // kg
-  auto a_D = [](auto v) { return 0.5 * rho * v * v * C_D * A / m; };
+  auto a_D = [=](auto v) { return 0.5 * rho * v * v * C_D * A / m; };
 
   auto v_x = x[3, 0];
   auto v_y = x[4, 0];
   auto v_z = x[5, 0];
-  return slp::VariableMatrix{{v_x},       {v_y},       {v_z},
-                             {-a_D(v_x)}, {-a_D(v_y)}, {-g - a_D(v_z)}};
+  return slp::VariableMatrix<double>{{v_x},       {v_y},       {v_z},
+                                     {-a_D(v_x)}, {-a_D(v_y)}, {-g - a_D(v_z)}};
 }
 
 #ifndef RUNNING_TESTS
@@ -71,7 +71,7 @@ int main() {
   Vector6d shooter_wrt_robot{{0.0}, {0.0}, {0.6096}, {0.0}, {0.0}, {0.0}};
   Vector6d shooter_wrt_field = robot_wrt_field + shooter_wrt_robot;
 
-  slp::Problem problem;
+  slp::Problem<double> problem;
 
   // Set up duration decision variables
   constexpr int N = 10;

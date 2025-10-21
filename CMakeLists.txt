@@ -45,7 +45,6 @@ add_library(Sleipnir::Sleipnir ALIAS Sleipnir)
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
 
 compiler_flags(Sleipnir)
-target_include_directories(Sleipnir PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_compile_definitions(Sleipnir PRIVATE SLEIPNIR_EXPORTS)
 target_include_directories(
     Sleipnir
@@ -74,8 +73,8 @@ if(NOT USE_SYSTEM_EIGEN)
     FetchContent_Declare(
         Eigen3
         GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
-        # master on 2025-10-14
-        GIT_TAG da55dd1471db1fb4a6fa0c385d5db40a2c9949ef
+        # master on 2025-10-23
+        GIT_TAG ac3ef16f30b7708a3c6c39b964e1f294dd16b8a3
     )
     FetchContent_MakeAvailable(Eigen3)
 else()
@@ -104,6 +103,15 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
         CMAKE_ARGS
     )
     FetchContent_MakeAvailable(Catch2)
+
+    # decimal dependency
+    FetchContent_Declare(
+        decimal
+        GIT_REPOSITORY https://github.com/cppalliance/decimal.git
+        GIT_TAG v5.2.0
+        CMAKE_ARGS
+    )
+    FetchContent_MakeAvailable(decimal)
 endif()
 
 install(
@@ -207,7 +215,12 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
             ${CMAKE_CURRENT_SOURCE_DIR}/src
             ${CMAKE_CURRENT_SOURCE_DIR}/test/include
     )
-    target_link_libraries(sleipnir_test Sleipnir Catch2::Catch2WithMain)
+    target_link_libraries(
+        sleipnir_test
+        Sleipnir
+        Catch2::Catch2WithMain
+        boost_decimal
+    )
     if(NOT CMAKE_TOOLCHAIN_FILE)
         catch_discover_tests(sleipnir_test)
     endif()

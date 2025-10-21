@@ -10,17 +10,19 @@ namespace nb = nanobind;
 
 namespace slp {
 
-void bind_gradient(nb::class_<Gradient>& cls) {
+void bind_gradient(nb::class_<Gradient<double>>& cls) {
   using namespace nb::literals;
 
-  cls.def(nb::init<Variable, Variable>(), "variable"_a, "wrt"_a,
+  cls.def(nb::init<Variable<double>, Variable<double>>(), "variable"_a, "wrt"_a,
           DOC(slp, Gradient, Gradient));
-  cls.def(nb::init<Variable, VariableMatrix>(), "variable"_a, "wrt"_a,
-          DOC(slp, Gradient, Gradient, 2));
-  cls.def("get", &Gradient::get, DOC(slp, Gradient, get));
+  cls.def(nb::init<Variable<double>, VariableMatrix<double>>(), "variable"_a,
+          "wrt"_a, DOC(slp, Gradient, Gradient, 2));
+  cls.def("get", &Gradient<double>::get, DOC(slp, Gradient, get));
   cls.def(
       "value",
-      [](Gradient& self) { return Eigen::SparseMatrix<double>{self.value()}; },
+      [](Gradient<double>& self) {
+        return Eigen::SparseMatrix<double>{self.value()};
+      },
       DOC(slp, Gradient, value));
 }
 

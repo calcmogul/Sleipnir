@@ -5,6 +5,7 @@
 #include <concepts>
 #include <cstddef>
 #include <memory>
+#include <type_traits>
 #include <utility>
 
 namespace slp {
@@ -28,6 +29,9 @@ namespace slp {
 template <typename T>
 class IntrusiveSharedPtr {
  public:
+  /// Element type.
+  using element_type = std::remove_extent_t<T>;
+
   template <typename>
   friend class IntrusiveSharedPtr;
 

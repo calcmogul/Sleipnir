@@ -8,50 +8,53 @@
 
 #include <Eigen/Core>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <sleipnir/optimization/ocp.hpp>
+#include <sleipnir/util/scope_exit.hpp>
 
 #include "catch_string_converters.hpp"
-#include "util/scope_exit.hpp"
-
-using namespace std::chrono_literals;
+#include "scalar_types_under_test.hpp"
 
 namespace {
-bool near(double expected, double actual, double tolerance) {
-  return std::abs(expected - actual) < tolerance;
+template <typename T>
+bool near(T expected, T actual, T tolerance) {
+  using std::abs;
+  return abs(expected - actual) < tolerance;  // NOLINT
 }
 }  // namespace
 
+template <typename T>
 void flywheel_test(
-    std::string test_name, double A, double B,
-    const slp::function_ref<slp::VariableMatrix(
-        const slp::VariableMatrix& x, const slp::VariableMatrix& u)>& f,
+    std::string test_name, T A, T B,
+    const slp::function_ref<slp::VariableMatrix<T>(
+        const slp::VariableMatrix<T>& x, const slp::VariableMatrix<T>& u)>& f,
     slp::DynamicsType dynamics_type,
     slp::TranscriptionMethod transcription_method) {
   slp::scope_exit exit{
       [] { CHECK(slp::global_pool_resource().blocks_in_use() == 0u); }};
 
-  constexpr std::chrono::duration<double> TOTAL_TIME = 5s;
-  constexpr std::chrono::duration<double> dt = 5ms;
-  constexpr int N = TOTAL_TIME / dt;
+  constexpr std::chrono::duration<T> TOTAL_TIME{T(5.0)};
+  constexpr std::chrono::duration<T> dt{T(0.005)};
+  constexpr int N = static_cast<int>(TOTAL_TIME / dt);
 
   // Flywheel model:
   // States: [velocity]
   // Inputs: [voltage]
-  double A_discrete = std::exp(A * dt.count());
-  double B_discrete = (1.0 - A_discrete) * B;
+  using std::exp;
+  T A_discrete = exp(A * T(dt.count()));  // NOLINT
+  T B_discrete = (T(1.0) - A_discrete) * B;
 
-  constexpr double r = 10.0;
+  constexpr T r{10.0};
 
-  slp::OCP problem(1, 1, dt, N, f, dynamics_type, slp::TimestepMethod::FIXED,
-                   transcription_method);
-  problem.constrain_initial_state(0.0);
-  problem.set_upper_input_bound(12);
-  problem.set_lower_input_bound(-12);
+  slp::OCP<T> problem(1, 1, dt, N, f, dynamics_type, slp::TimestepMethod::FIXED,
+                      transcription_method);
+  problem.constrain_initial_state(T(0.0));
+  problem.set_upper_input_bound(T(12));
+  problem.set_lower_input_bound(T(-12));
 
   // Set up cost
-  Eigen::Matrix<double, 1, N + 1> r_mat =
-      Eigen::Matrix<double, 1, N + 1>::Constant(r);
+  Eigen::Matrix<T, 1, N + 1> r_mat = Eigen::Matrix<T, 1, N + 1>::Constant(r);
   problem.minimize((r_mat - problem.X()) * (r_mat - problem.X()).T());
 
   CHECK(problem.cost_function_type() == slp::ExpressionType::QUADRATIC);
@@ -66,44 +69,45 @@ void flywheel_test(
   // uₖ = B⁺(rₖ₊₁ − Arₖ)
   // uₖ = B⁺(rₖ − Arₖ)
   // uₖ = B⁺(I − A)rₖ
-  double u_ss = 1.0 / B_discrete * (1.0 - A_discrete) * r;
+  T u_ss = T(1) / B_discrete * (T(1) - A_discrete) * r;
 
   // Verify initial state
-  CHECK(problem.X().value(0, 0) == Catch::Approx(0.0).margin(1e-8));
+  CHECK(problem.X().value(0, 0) == Catch::Approx(T(0.0)).margin(T(1e-8)));
 
   // Verify solution
-  double x = 0.0;
-  double u = 0.0;
+  T x{0.0};
+  T u{0.0};
   for (int k = 0; k < N; ++k) {
     // Verify state
-    CHECK(problem.X().value(0, k) == Catch::Approx(x).margin(1e-2));
+    CHECK(problem.X().value(0, k) == Catch::Approx(x).margin(T(1e-2)));
 
     // Determine expected input for this timestep
-    double error = r - x;
-    if (error > 1e-2) {
+    T error = r - x;
+    if (error > T(1e-2)) {
       // Max control input until the reference is reached
-      u = 12.0;
+      u = T(12.0);
     } else {
       // Maintain speed
       u = u_ss;
     }
 
     // Verify input
-    if (k > 0 && k < N - 1 && near(12.0, problem.U().value(0, k - 1), 1e-2) &&
-        near(u_ss, problem.U().value(0, k + 1), 1e-2)) {
+    if (k > 0 && k < N - 1 &&
+        near(T(12.0), problem.U().value(0, k - 1), T(1e-2)) &&
+        near(u_ss, problem.U().value(0, k + 1), T(1e-2))) {
       // If control input is transitioning between 12 and u_ss, ensure it's
       // within (u_ss, 12)
       CHECK(problem.U().value(0, k) >= u_ss);
-      CHECK(problem.U().value(0, k) <= 12.0);
+      CHECK(problem.U().value(0, k) <= T(12.0));
     } else {
       if (transcription_method ==
           slp::TranscriptionMethod::DIRECT_COLLOCATION) {
         // The tolerance is large because the trajectory is represented by a
         // spline, and splines chatter when transitioning quickly between
         // steady-states.
-        CHECK(problem.U().value(0, k) == Catch::Approx(u).margin(2.0));
+        CHECK(problem.U().value(0, k) == Catch::Approx(u).margin(T(2.0)));
       } else {
-        CHECK(problem.U().value(0, k) == Catch::Approx(u).margin(1e-4));
+        CHECK(problem.U().value(0, k) == Catch::Approx(u).margin(T(1e-4)));
       }
     }
 
@@ -114,7 +118,7 @@ void flywheel_test(
   }
 
   // Verify final state
-  CHECK(problem.X().value(0, N) == Catch::Approx(r).margin(1e-7));
+  CHECK(problem.X().value(0, N) == Catch::Approx(r).margin(T(1e-7)));
 
   // Log states for offline viewing
   std::ofstream states{std::format("{} states.csv", test_name)};
@@ -136,47 +140,54 @@ void flywheel_test(
         inputs << std::format("{},{}\n", k * dt.count(),
                               problem.U().value(0, k));
       } else {
-        inputs << std::format("{},{}\n", k * dt.count(), 0.0);
+        inputs << std::format("{},{}\n", k * dt.count(), T(0.0));
       }
     }
   }
 }
 
-TEST_CASE("OCP - Flywheel (explicit)", "[OCP]") {
-  constexpr double A = -1.0;
-  constexpr double B = 1.0;
+TEMPLATE_TEST_CASE("OCP - Flywheel (explicit)", "[OCP]",
+                   SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
 
-  auto f_ode = [=](slp::VariableMatrix x, slp::VariableMatrix u) {
+  constexpr T A{-1.0};
+  constexpr T B{1.0};
+
+  auto f_ode = [=](slp::VariableMatrix<T> x, slp::VariableMatrix<T> u) {
     return A * x + B * u;
   };
 
-  flywheel_test("OCP Flywheel Explicit Collocation", A, B, f_ode,
-                slp::DynamicsType::EXPLICIT_ODE,
-                slp::TranscriptionMethod::DIRECT_COLLOCATION);
-  flywheel_test("OCP Flywheel Explicit Transcription", A, B, f_ode,
-                slp::DynamicsType::EXPLICIT_ODE,
-                slp::TranscriptionMethod::DIRECT_TRANSCRIPTION);
-  flywheel_test("OCP Flywheel Explicit Single-Shooting", A, B, f_ode,
-                slp::DynamicsType::EXPLICIT_ODE,
-                slp::TranscriptionMethod::SINGLE_SHOOTING);
+  flywheel_test<T>("OCP Flywheel Explicit Collocation", A, B, f_ode,
+                   slp::DynamicsType::EXPLICIT_ODE,
+                   slp::TranscriptionMethod::DIRECT_COLLOCATION);
+  flywheel_test<T>("OCP Flywheel Explicit Transcription", A, B, f_ode,
+                   slp::DynamicsType::EXPLICIT_ODE,
+                   slp::TranscriptionMethod::DIRECT_TRANSCRIPTION);
+  flywheel_test<T>("OCP Flywheel Explicit Single-Shooting", A, B, f_ode,
+                   slp::DynamicsType::EXPLICIT_ODE,
+                   slp::TranscriptionMethod::SINGLE_SHOOTING);
 }
 
-TEST_CASE("OCP - Flywheel (discrete)", "[OCP]") {
-  constexpr double A = -1.0;
-  constexpr double B = 1.0;
-  constexpr std::chrono::duration<double> dt = 5ms;
+TEMPLATE_TEST_CASE("OCP - Flywheel (discrete)", "[OCP]",
+                   SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
 
-  double A_discrete = std::exp(A * dt.count());
-  double B_discrete = (1.0 - A_discrete) * B;
+  constexpr T A{-1.0};
+  constexpr T B{1.0};
+  constexpr std::chrono::duration<T> dt{T(0.005)};
 
-  auto f_discrete = [=](slp::VariableMatrix x, slp::VariableMatrix u) {
+  using std::exp;
+  T A_discrete = exp(A * T(dt.count()));  // NOLINT
+  T B_discrete = (T(1) - A_discrete) * B;
+
+  auto f_discrete = [=](slp::VariableMatrix<T> x, slp::VariableMatrix<T> u) {
     return A_discrete * x + B_discrete * u;
   };
 
-  flywheel_test("OCP Flywheel Discrete Transcription", A, B, f_discrete,
-                slp::DynamicsType::DISCRETE,
-                slp::TranscriptionMethod::DIRECT_TRANSCRIPTION);
-  flywheel_test("OCP Flywheel Discrete Single-Shooting", A, B, f_discrete,
-                slp::DynamicsType::DISCRETE,
-                slp::TranscriptionMethod::SINGLE_SHOOTING);
+  flywheel_test<T>("OCP Flywheel Discrete Transcription", A, B, f_discrete,
+                   slp::DynamicsType::DISCRETE,
+                   slp::TranscriptionMethod::DIRECT_TRANSCRIPTION);
+  flywheel_test<T>("OCP Flywheel Discrete Single-Shooting", A, B, f_discrete,
+                   slp::DynamicsType::DISCRETE,
+                   slp::TranscriptionMethod::SINGLE_SHOOTING);
 }

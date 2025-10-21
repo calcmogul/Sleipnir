@@ -13,14 +13,15 @@ namespace nb = nanobind;
 
 namespace slp {
 
-void bind_equality_constraints(nb::class_<EqualityConstraints>& cls) {
+void bind_equality_constraints(nb::class_<EqualityConstraints<double>>& cls) {
   using namespace nb::literals;
 
-  cls.def(nb::init<const std::vector<EqualityConstraints>&>(),
+  cls.def(nb::init<const std::vector<EqualityConstraints<double>>&>(),
           "equality_constraints"_a,
           DOC(slp, EqualityConstraints, EqualityConstraints, 2));
   cls.def(
-      "__bool__", [](EqualityConstraints& self) -> bool { return self; },
+      "__bool__",
+      [](EqualityConstraints<double>& self) -> bool { return self; },
       nb::is_operator(), DOC(slp, EqualityConstraints, operator, bool));
 }
 

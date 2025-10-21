@@ -1,51 +1,52 @@
 // Copyright (c) Sleipnir contributors
 
 #include <chrono>
-#include <cmath>
 #include <format>
 #include <fstream>
 #include <numbers>
 
 #include <Eigen/Core>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <sleipnir/optimization/ocp.hpp>
+#include <sleipnir/util/scope_exit.hpp>
 
 #include "cart_pole_util.hpp"
 #include "catch_string_converters.hpp"
+#include "math_util.hpp"
 #include "rk4.hpp"
-#include "util/scope_exit.hpp"
+#include "scalar_types_under_test.hpp"
 
-TEST_CASE("OCP - Cart-pole", "[OCP]") {
-  using namespace std::chrono_literals;
+TEMPLATE_TEST_CASE("OCP - Cart-pole", "[OCP]", SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
 
   slp::scope_exit exit{
       [] { CHECK(slp::global_pool_resource().blocks_in_use() == 0u); }};
 
-  constexpr std::chrono::duration<double> TOTAL_TIME = 5s;
-  constexpr std::chrono::duration<double> dt = 50ms;
-  constexpr int N = TOTAL_TIME / dt;
+  constexpr std::chrono::duration<T> TOTAL_TIME{T(5.0)};
+  constexpr std::chrono::duration<T> dt{T(0.05)};
+  constexpr int N = static_cast<int>(TOTAL_TIME / dt);
 
-  constexpr double u_max = 20.0;  // N
-  constexpr double d_max = 2.0;   // m
+  constexpr T u_max{20.0};  // N
+  constexpr T d_max{2.0};   // m
 
-  constexpr Eigen::Vector<double, 4> x_initial{{0.0, 0.0, 0.0, 0.0}};
-  constexpr Eigen::Vector<double, 4> x_final{{1.0, std::numbers::pi, 0.0, 0.0}};
+  constexpr Eigen::Vector<T, 4> x_initial{{T(0), T(0), T(0), T(0)}};
+  constexpr Eigen::Vector<T, 4> x_final{
+      {T(1), T(std::numbers::pi), T(0), T(0)}};
 
-  slp::OCP problem(4, 1, dt, N, cart_pole_dynamics,
-                   slp::DynamicsType::EXPLICIT_ODE,
-                   slp::TimestepMethod::VARIABLE_SINGLE,
-                   slp::TranscriptionMethod::DIRECT_COLLOCATION);
+  slp::OCP<T> problem(4, 1, dt, N, CartPoleUtil<T>::dynamics_variable,
+                      slp::DynamicsType::EXPLICIT_ODE,
+                      slp::TimestepMethod::VARIABLE_SINGLE,
+                      slp::TranscriptionMethod::DIRECT_COLLOCATION);
 
   // x = [q, q̇]ᵀ = [x, θ, ẋ, θ̇]ᵀ
   auto X = problem.X();
 
   // Initial guess
   for (int k = 0; k < N + 1; ++k) {
-    X[0, k].set_value(
-        std::lerp(x_initial[0], x_final[0], static_cast<double>(k) / N));
-    X[1, k].set_value(
-        std::lerp(x_initial[1], x_final[1], static_cast<double>(k) / N));
+    X[0, k].set_value(lerp(x_initial[0], x_final[0], static_cast<T>(k) / N));
+    X[1, k].set_value(lerp(x_initial[1], x_final[1], static_cast<T>(k) / N));
   }
 
   // Initial conditions
@@ -55,10 +56,10 @@ TEST_CASE("OCP - Cart-pole", "[OCP]") {
   problem.constrain_final_state(x_final);
 
   // Cart position constraints
-  problem.for_each_step([&](const slp::VariableMatrix& x,
+  problem.for_each_step([&](const slp::VariableMatrix<T>& x,
                             [[maybe_unused]]
-                            const slp::VariableMatrix& u) {
-    problem.subject_to(x[0] >= 0.0);
+                            const slp::VariableMatrix<T>& u) {
+    problem.subject_to(x[0] >= T(0));
     problem.subject_to(x[0] <= d_max);
   });
 
@@ -70,7 +71,7 @@ TEST_CASE("OCP - Cart-pole", "[OCP]") {
   auto U = problem.U();
 
   // Minimize sum squared inputs
-  slp::Variable J = 0.0;
+  slp::Variable J = T(0.0);
   for (int k = 0; k < N; ++k) {
     J += U.col(k).T() * U.col(k);
   }
@@ -83,20 +84,20 @@ TEST_CASE("OCP - Cart-pole", "[OCP]") {
   CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
 
   // Verify initial state
-  CHECK(X.value(0, 0) == Catch::Approx(x_initial[0]).margin(1e-8));
-  CHECK(X.value(1, 0) == Catch::Approx(x_initial[1]).margin(1e-8));
-  CHECK(X.value(2, 0) == Catch::Approx(x_initial[2]).margin(1e-8));
-  CHECK(X.value(3, 0) == Catch::Approx(x_initial[3]).margin(1e-8));
+  CHECK(X.value(0, 0) == Catch::Approx(x_initial[0]).margin(T(1e-8)));
+  CHECK(X.value(1, 0) == Catch::Approx(x_initial[1]).margin(T(1e-8)));
+  CHECK(X.value(2, 0) == Catch::Approx(x_initial[2]).margin(T(1e-8)));
+  CHECK(X.value(3, 0) == Catch::Approx(x_initial[3]).margin(T(1e-8)));
 
   // FIXME: Replay diverges
   SKIP("Replay diverges");
 
   // Verify solution
-  Eigen::Matrix<double, 4, 1> x{0.0, 0.0, 0.0, 0.0};
-  Eigen::Matrix<double, 1, 1> u{0.0};
+  Eigen::Matrix<T, 4, 1> x{T(0), T(0), T(0), T(0)};
+  Eigen::Matrix<T, 1, 1> u{T(0)};
   for (int k = 0; k < N; ++k) {
     // Cart position constraints
-    CHECK(X[0, k] >= 0.0);
+    CHECK(X[0, k] >= T(0));
     CHECK(X[0, k] <= d_max);
 
     // Input constraints
@@ -104,21 +105,21 @@ TEST_CASE("OCP - Cart-pole", "[OCP]") {
     CHECK(U[0, k] <= u_max);
 
     // Verify state
-    CHECK(X.value(0, k) == Catch::Approx(x[0]).margin(1e-2));
-    CHECK(X.value(1, k) == Catch::Approx(x[1]).margin(1e-2));
-    CHECK(X.value(2, k) == Catch::Approx(x[2]).margin(1e-2));
-    CHECK(X.value(3, k) == Catch::Approx(x[3]).margin(1e-2));
+    CHECK(X.value(0, k) == Catch::Approx(x[0]).margin(T(1e-2)));
+    CHECK(X.value(1, k) == Catch::Approx(x[1]).margin(T(1e-2)));
+    CHECK(X.value(2, k) == Catch::Approx(x[2]).margin(T(1e-2)));
+    CHECK(X.value(3, k) == Catch::Approx(x[3]).margin(T(1e-2)));
     INFO(std::format("  k = {}", k));
 
     // Project state forward
-    x = rk4(cart_pole_dynamics_double, x, u, dt);
+    x = rk4<T>(CartPoleUtil<T>::dynamics_scalar, x, u, dt);
   }
 
   // Verify final state
-  CHECK(X.value(0, N) == Catch::Approx(x_final[0]).margin(1e-8));
-  CHECK(X.value(1, N) == Catch::Approx(x_final[1]).margin(1e-8));
-  CHECK(X.value(2, N) == Catch::Approx(x_final[2]).margin(1e-8));
-  CHECK(X.value(3, N) == Catch::Approx(x_final[3]).margin(1e-8));
+  CHECK(X.value(0, N) == Catch::Approx(x_final[0]).margin(T(1e-8)));
+  CHECK(X.value(1, N) == Catch::Approx(x_final[1]).margin(T(1e-8)));
+  CHECK(X.value(2, N) == Catch::Approx(x_final[2]).margin(T(1e-8)));
+  CHECK(X.value(3, N) == Catch::Approx(x_final[3]).margin(T(1e-8)));
 
   // Log states for offline viewing
   std::ofstream states{"OCP Cart-pole states.csv"};
@@ -142,7 +143,7 @@ TEST_CASE("OCP - Cart-pole", "[OCP]") {
         inputs << std::format("{},{}\n", k * dt.count(),
                               problem.U().value(0, k));
       } else {
-        inputs << std::format("{},{}\n", k * dt.count(), 0.0);
+        inputs << std::format("{},{}\n", k * dt.count(), T(0.0));
       }
     }
   }

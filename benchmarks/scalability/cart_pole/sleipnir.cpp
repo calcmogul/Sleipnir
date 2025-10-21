@@ -9,8 +9,9 @@
 
 #include "rk4.hpp"
 
-slp::VariableMatrix cart_pole_dynamics(const slp::VariableMatrix& x,
-                                       const slp::VariableMatrix& u) {
+slp::VariableMatrix<double> cart_pole_dynamics(
+    const slp::VariableMatrix<double>& x,
+    const slp::VariableMatrix<double>& u) {
   // https://underactuated.mit.edu/acrobot.html#cart_pole
   //
   // θ is CCW+ measured from negative y-axis.
@@ -46,7 +47,7 @@ slp::VariableMatrix cart_pole_dynamics(const slp::VariableMatrix& x,
 
   //        [ m_c + m_p  m_p l cosθ]
   // M(q) = [m_p l cosθ    m_p l²  ]
-  slp::VariableMatrix M{2, 2};
+  slp::VariableMatrix<double> M{2, 2};
   M[0, 0] = m_c + m_p;
   M[0, 1] = m_p * l * slp::cos(theta);
   M[1, 0] = m_p * l * slp::cos(theta);
@@ -54,7 +55,7 @@ slp::VariableMatrix cart_pole_dynamics(const slp::VariableMatrix& x,
 
   //           [0  −m_p lθ̇ sinθ]
   // C(q, q̇) = [0       0      ]
-  slp::VariableMatrix C{2, 2};
+  slp::VariableMatrix<double> C{2, 2};
   C[0, 0] = 0;
   C[0, 1] = -m_p * l * thetadot * slp::sin(theta);
   C[1, 0] = 0;
@@ -62,7 +63,7 @@ slp::VariableMatrix cart_pole_dynamics(const slp::VariableMatrix& x,
 
   //          [     0      ]
   // τ_g(q) = [-m_p gl sinθ]
-  slp::VariableMatrix tau_g{2, 1};
+  slp::VariableMatrix<double> tau_g{2, 1};
   tau_g[0] = 0;
   tau_g[1] = -m_p * g * l * slp::sin(theta);
 
@@ -71,20 +72,21 @@ slp::VariableMatrix cart_pole_dynamics(const slp::VariableMatrix& x,
   Eigen::Matrix<double, 2, 1> B{{1}, {0}};
 
   // q̈ = M⁻¹(q)(τ_g(q) − C(q, q̇)q̇ + Bu)
-  slp::VariableMatrix qddot{4, 1};
+  slp::VariableMatrix<double> qddot{4, 1};
   qddot.segment(0, 2) = qdot;
   qddot.segment(2, 2) = slp::solve(M, tau_g - C * qdot + B * u);
   return qddot;
 }
 
-slp::Problem cart_pole_sleipnir(std::chrono::duration<double> dt, int N) {
+slp::Problem<double> cart_pole_sleipnir(std::chrono::duration<double> dt,
+                                        int N) {
   constexpr double u_max = 20.0;  // N
   constexpr double d_max = 2.0;   // m
 
   constexpr Eigen::Vector<double, 4> x_initial{{0.0, 0.0, 0.0, 0.0}};
   constexpr Eigen::Vector<double, 4> x_final{{1.0, std::numbers::pi, 0.0, 0.0}};
 
-  slp::Problem problem;
+  slp::Problem<double> problem;
 
   // x = [q, q̇]ᵀ = [x, θ, ẋ, θ̇]ᵀ
   auto X = problem.decision_variable(4, N + 1);
@@ -118,8 +120,9 @@ slp::Problem cart_pole_sleipnir(std::chrono::duration<double> dt, int N) {
   for (int k = 0; k < N; ++k) {
     problem.subject_to(
         X.col(k + 1) ==
-        rk4<decltype(cart_pole_dynamics), slp::VariableMatrix,
-            slp::VariableMatrix>(cart_pole_dynamics, X.col(k), U.col(k), dt));
+        rk4<decltype(cart_pole_dynamics), slp::VariableMatrix<double>,
+            slp::VariableMatrix<double>>(cart_pole_dynamics, X.col(k), U.col(k),
+                                         dt));
   }
 
   // Minimize sum squared inputs

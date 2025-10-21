@@ -20,52 +20,74 @@ namespace nb = nanobind;
 
 namespace slp {
 
-void bind_variable_block(nb::class_<VariableBlock<VariableMatrix>>& cls) {
+void bind_variable_block(
+    nb::class_<VariableBlock<VariableMatrix<double>>>& cls) {
   using namespace nb::literals;
 
   // VariableBlock-VariableMatrix overloads
-  cls.def(nb::self * VariableMatrix(), "rhs"_a);
-  cls.def(nb::self + VariableMatrix(), "rhs"_a);
-  cls.def(nb::self - VariableMatrix(), "rhs"_a);
-  cls.def(nb::self == VariableMatrix(), "rhs"_a, DOC(slp, operator, eq));
-  cls.def(nb::self < VariableMatrix(), "rhs"_a, DOC(slp, operator, lt));
-  cls.def(nb::self <= VariableMatrix(), "rhs"_a, DOC(slp, operator, le));
-  cls.def(nb::self > VariableMatrix(), "rhs"_a, DOC(slp, operator, gt));
-  cls.def(nb::self >= VariableMatrix(), "rhs"_a, DOC(slp, operator, ge));
+  cls.def(nb::self * VariableMatrix<double>(), "rhs"_a);
+  cls.def(nb::self + VariableMatrix<double>(), "rhs"_a);
+  cls.def(nb::self - VariableMatrix<double>(), "rhs"_a);
+  cls.def(
+      "__eq__",
+      [](const VariableBlock<VariableMatrix<double>>& lhs,
+         const VariableMatrix<double>& rhs) { return lhs == rhs; },
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, eq));
+  cls.def(
+      "__lt__",
+      [](const VariableBlock<VariableMatrix<double>>& lhs,
+         const VariableMatrix<double>& rhs) { return lhs < rhs; },
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, lt));
+  cls.def(
+      "__le__",
+      [](const VariableBlock<VariableMatrix<double>>& lhs,
+         const VariableMatrix<double>& rhs) { return lhs <= rhs; },
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, le));
+  cls.def(
+      "__gt__",
+      [](const VariableBlock<VariableMatrix<double>>& lhs,
+         const VariableMatrix<double>& rhs) { return lhs > rhs; },
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, gt));
+  cls.def(
+      "__ge__",
+      [](const VariableBlock<VariableMatrix<double>>& lhs,
+         const VariableMatrix<double>& rhs) { return lhs >= rhs; },
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, ge));
 
   cls.def(
       "set_value",
-      [](VariableBlock<VariableMatrix>& self, double value) {
+      [](VariableBlock<VariableMatrix<double>>& self, double value) {
         self.set_value(value);
       },
       "value"_a, DOC(slp, VariableBlock, set_value));
   cls.def(
       "set_value",
-      [](VariableBlock<VariableMatrix>& self,
+      [](VariableBlock<VariableMatrix<double>>& self,
          nb::DRef<Eigen::MatrixXd> values) { self.set_value(values); },
       "values"_a, DOC(slp, VariableBlock, set_value, 2));
   cls.def(
       "set_value",
-      [](VariableBlock<VariableMatrix>& self,
+      [](VariableBlock<VariableMatrix<double>>& self,
          nb::DRef<Eigen::MatrixXf> values) {
         self.set_value(values.cast<double>());
       },
       "values"_a, DOC(slp, VariableBlock, set_value, 2));
   cls.def(
       "set_value",
-      [](VariableBlock<VariableMatrix>& self,
+      [](VariableBlock<VariableMatrix<double>>& self,
          nb::DRef<Eigen::Matrix<int64_t, Eigen::Dynamic, Eigen::Dynamic>>
              values) { self.set_value(values.cast<double>()); },
       "values"_a, DOC(slp, VariableBlock, set_value, 2));
   cls.def(
       "set_value",
-      [](VariableBlock<VariableMatrix>& self,
+      [](VariableBlock<VariableMatrix<double>>& self,
          nb::DRef<Eigen::Matrix<int32_t, Eigen::Dynamic, Eigen::Dynamic>>
              values) { self.set_value(values.cast<double>()); },
       "values"_a, DOC(slp, VariableBlock, set_value, 2));
   cls.def(
       "__setitem__",
-      [](VariableBlock<VariableMatrix>& self, int row, const Variable& value) {
+      [](VariableBlock<VariableMatrix<double>>& self, int row,
+         const Variable<double>& value) {
         if (row < 0) {
           row += self.size();
         }
@@ -74,7 +96,7 @@ void bind_variable_block(nb::class_<VariableBlock<VariableMatrix>>& cls) {
       "row"_a, "value"_a);
   cls.def(
       "__setitem__",
-      [](VariableBlock<VariableMatrix>& self, nb::tuple slices,
+      [](VariableBlock<VariableMatrix<double>>& self, nb::tuple slices,
          nb::object value) {
         if (slices.size() != 2) {
           throw nb::index_error(
@@ -116,10 +138,11 @@ void bind_variable_block(nb::class_<VariableBlock<VariableMatrix>>& cls) {
           col_slice_length = 1;
         }
 
-        if (auto rhs = try_cast<VariableMatrix>(value)) {
+        if (auto rhs = try_cast<VariableMatrix<double>>(value)) {
           self[row_slice, row_slice_length, col_slice, col_slice_length] =
               rhs.value();
-        } else if (auto rhs = try_cast<VariableBlock<VariableMatrix>>(value)) {
+        } else if (auto rhs =
+                       try_cast<VariableBlock<VariableMatrix<double>>>(value)) {
           self[row_slice, row_slice_length, col_slice, col_slice_length] =
               rhs.value();
         } else if (auto rhs = try_cast_to_eigen<double>(value)) {
@@ -134,7 +157,7 @@ void bind_variable_block(nb::class_<VariableBlock<VariableMatrix>>& cls) {
         } else if (auto rhs = try_cast_to_eigen<int32_t>(value)) {
           self[row_slice, row_slice_length, col_slice, col_slice_length] =
               rhs.value();
-        } else if (auto rhs = try_cast<Variable>(value)) {
+        } else if (auto rhs = try_cast<Variable<double>>(value)) {
           self[row_slice, row_slice_length, col_slice, col_slice_length] =
               rhs.value();
         } else if (auto rhs = try_cast<double>(value)) {
@@ -151,7 +174,8 @@ void bind_variable_block(nb::class_<VariableBlock<VariableMatrix>>& cls) {
       "slices"_a, "value"_a);
   cls.def(
       "__getitem__",
-      [](VariableBlock<VariableMatrix>& self, int row) -> Variable& {
+      [](VariableBlock<VariableMatrix<double>>& self,
+         int row) -> Variable<double>& {
         if (row < 0) {
           row += self.size();
         }
@@ -161,7 +185,8 @@ void bind_variable_block(nb::class_<VariableBlock<VariableMatrix>>& cls) {
       DOC(slp, VariableBlock, operator, array, 3));
   cls.def(
       "__getitem__",
-      [](VariableBlock<VariableMatrix>& self, nb::tuple slices) -> nb::object {
+      [](VariableBlock<VariableMatrix<double>>& self,
+         nb::tuple slices) -> nb::object {
         if (slices.size() != 2) {
           throw nb::index_error(
               std::format("Expected 2 slices, got {}.", slices.size()).c_str());
@@ -226,16 +251,18 @@ void bind_variable_block(nb::class_<VariableBlock<VariableMatrix>>& cls) {
       },
       nb::keep_alive<0, 1>(), DOC(slp, VariableBlock, operator, array),
       "slices"_a);
-  cls.def("row", nb::overload_cast<int>(&VariableBlock<VariableMatrix>::row),
+  cls.def("row",
+          nb::overload_cast<int>(&VariableBlock<VariableMatrix<double>>::row),
           "row"_a, DOC(slp, VariableBlock, row));
-  cls.def("col", nb::overload_cast<int>(&VariableBlock<VariableMatrix>::col),
+  cls.def("col",
+          nb::overload_cast<int>(&VariableBlock<VariableMatrix<double>>::col),
           "col"_a, DOC(slp, VariableBlock, col));
 
   // https://numpy.org/doc/stable/user/basics.dispatch.html
   cls.def(
       "__array_ufunc__",
-      [](VariableBlock<VariableMatrix>& self, nb::object ufunc, nb::str method,
-         nb::args inputs, const nb::kwargs&) -> nb::object {
+      [](VariableBlock<VariableMatrix<double>>& self, nb::object ufunc,
+         nb::str method, nb::args inputs, const nb::kwargs&) -> nb::object {
         std::string method_name = nb::cast<std::string>(method);
         std::string ufunc_name =
             nb::cast<std::string>(ufunc.attr("__repr__")());
@@ -395,140 +422,205 @@ void bind_variable_block(nb::class_<VariableBlock<VariableMatrix>>& cls) {
                         "implemented for ({}, {})",
                         method_name, ufunc_name, input1_name, input2_name)
                 .c_str());
-        return nb::cast(VariableMatrix{self});
+        return nb::cast(VariableMatrix<double>{self});
       },
       "ufunc"_a, "method"_a, "inputs"_a, "kwargs"_a);
 
-  cls.def(nb::self * Variable(), "rhs"_a);
+  cls.def(nb::self * Variable<double>(), "rhs"_a);
   cls.def(nb::self * double(), "rhs"_a);
-  cls.def(Variable() * nb::self, "lhs"_a);
+  cls.def(Variable<double>() * nb::self, "lhs"_a);
   cls.def(double() * nb::self, "lhs"_a);
-  cls.def(nb::self / Variable(), "rhs"_a);
+  cls.def(nb::self / Variable<double>(), "rhs"_a);
   cls.def(nb::self / double(), "rhs"_a);
   cls.def(nb::self + nb::self, "rhs"_a);
   cls.def(
       "__add__",
-      [](const VariableBlock<VariableMatrix>& lhs,
-         nb::DRef<Eigen::MatrixXd> rhs) -> VariableMatrix { return lhs + rhs; },
+      [](const VariableBlock<VariableMatrix<double>>& lhs,
+         nb::DRef<Eigen::MatrixXd> rhs) -> VariableMatrix<double> {
+        return lhs + rhs;
+      },
       nb::is_operator(), "rhs"_a);
   cls.def(
       "__add__",
       [](nb::DRef<Eigen::MatrixXd> lhs,
-         const VariableBlock<VariableMatrix>& rhs) -> VariableMatrix {
-        return lhs + rhs;
-      },
+         const VariableBlock<VariableMatrix<double>>& rhs)
+          -> VariableMatrix<double> { return lhs + rhs; },
       nb::is_operator(), "rhs"_a);
   cls.def(nb::self - nb::self, "rhs"_a);
   cls.def(
       "__sub__",
-      [](const VariableBlock<VariableMatrix>& lhs,
-         nb::DRef<Eigen::MatrixXd> rhs) -> VariableMatrix { return lhs - rhs; },
+      [](const VariableBlock<VariableMatrix<double>>& lhs,
+         nb::DRef<Eigen::MatrixXd> rhs) -> VariableMatrix<double> {
+        return lhs - rhs;
+      },
       nb::is_operator(), "rhs"_a);
   cls.def(
       "__sub__",
       [](nb::DRef<Eigen::MatrixXd> lhs,
-         const VariableBlock<VariableMatrix>& rhs) -> VariableMatrix {
-        return lhs - rhs;
-      },
+         const VariableBlock<VariableMatrix<double>>& rhs)
+          -> VariableMatrix<double> { return lhs - rhs; },
       nb::is_operator(), "rhs"_a);
   cls.def(-nb::self);
-  cls.def_prop_ro("T", &VariableBlock<VariableMatrix>::T,
+  cls.def_prop_ro("T", &VariableBlock<VariableMatrix<double>>::T,
                   DOC(slp, VariableBlock, T));
-  cls.def("rows", &VariableBlock<VariableMatrix>::rows,
+  cls.def("rows", &VariableBlock<VariableMatrix<double>>::rows,
           DOC(slp, VariableBlock, rows));
-  cls.def("cols", &VariableBlock<VariableMatrix>::cols,
+  cls.def("cols", &VariableBlock<VariableMatrix<double>>::cols,
           DOC(slp, VariableBlock, cols));
-  cls.def_prop_ro("shape", [](const VariableBlock<VariableMatrix>& self) {
-    return nb::make_tuple(self.rows(), self.cols());
-  });
+  cls.def_prop_ro("shape",
+                  [](const VariableBlock<VariableMatrix<double>>& self) {
+                    return nb::make_tuple(self.rows(), self.cols());
+                  });
+  cls.def(
+      "value",
+      static_cast<double (VariableBlock<VariableMatrix<double>>::*)(int, int)>(
+          &VariableBlock<VariableMatrix<double>>::value),
+      "row"_a, "col"_a, DOC(slp, VariableBlock, value));
   cls.def("value",
-          static_cast<double (VariableBlock<VariableMatrix>::*)(int, int)>(
-              &VariableBlock<VariableMatrix>::value),
-          "row"_a, "col"_a, DOC(slp, VariableBlock, value));
-  cls.def("value",
-          static_cast<double (VariableBlock<VariableMatrix>::*)(int)>(
-              &VariableBlock<VariableMatrix>::value),
+          static_cast<double (VariableBlock<VariableMatrix<double>>::*)(int)>(
+              &VariableBlock<VariableMatrix<double>>::value),
           "index"_a, DOC(slp, VariableBlock, value, 2));
-  cls.def("value",
-          static_cast<Eigen::MatrixXd (VariableBlock<VariableMatrix>::*)()>(
-              &VariableBlock<VariableMatrix>::value),
-          DOC(slp, VariableBlock, value, 3));
+  cls.def(
+      "value",
+      static_cast<Eigen::MatrixXd (VariableBlock<VariableMatrix<double>>::*)()>(
+          &VariableBlock<VariableMatrix<double>>::value),
+      DOC(slp, VariableBlock, value, 3));
   cls.def(
       "cwise_map",
-      [](const VariableBlock<VariableMatrix>& self,
-         const std::function<Variable(const Variable& x)>& unary_op) {
-        return self.cwise_transform(unary_op);
-      },
+      [](const VariableBlock<VariableMatrix<double>>& self,
+         const std::function<Variable<double>(const Variable<double>& x)>&
+             unary_op) { return self.cwise_transform(unary_op); },
       "func"_a, DOC(slp, VariableBlock, cwise_transform));
   cls.def(nb::self == nb::self, "rhs"_a, DOC(slp, operator, eq));
-  cls.def(nb::self == Variable(), "rhs"_a, DOC(slp, operator, eq));
-  cls.def(nb::self == double(), "rhs"_a, DOC(slp, operator, eq));
-  cls.def(nb::self == int(), "rhs"_a, DOC(slp, operator, eq));
-  cls.def(Variable() == nb::self, "lhs"_a, DOC(slp, operator, eq));
+  cls.def(
+      "__eq__",
+      [](const VariableBlock<VariableMatrix<double>>& lhs,
+         const Variable<double>& rhs) { return lhs == rhs; },
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, eq));
+  cls.def(
+      "__eq__",
+      [](const VariableBlock<VariableMatrix<double>>& lhs, double rhs) {
+        return lhs == rhs;
+      },
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, eq));
+  cls.def(
+      "__eq__",
+      [](const VariableBlock<VariableMatrix<double>>& lhs, int rhs) {
+        return lhs == rhs;
+      },
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, eq));
+  cls.def(
+      "__eq__",
+      [](const Variable<double>& lhs,
+         const VariableBlock<VariableMatrix<double>>& self) {
+        return lhs == self;
+      },
+      nb::is_operator(), "lhs"_a, DOC(slp, operator, eq));
   cls.def(double() == nb::self, "lhs"_a, DOC(slp, operator, eq));
   cls.def(int() == nb::self, "lhs"_a, DOC(slp, operator, eq));
   cls.def(nb::self < nb::self, "rhs"_a, DOC(slp, operator, lt));
-  cls.def(nb::self < Variable(), "rhs"_a, DOC(slp, operator, lt));
+  cls.def(
+      "__lt__",
+      [](const VariableBlock<VariableMatrix<double>>& self,
+         const Variable<double>& rhs) { return self < rhs; },
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, lt));
   cls.def(nb::self < double(), "rhs"_a, DOC(slp, operator, lt));
   cls.def(nb::self < int(), "rhs"_a, DOC(slp, operator, lt));
-  cls.def(Variable() < nb::self, "lhs"_a, DOC(slp, operator, lt));
+  cls.def(
+      "__lt__",
+      [](const Variable<double>& lhs,
+         const VariableBlock<VariableMatrix<double>>& self) {
+        return lhs < self;
+      },
+      nb::is_operator(), "lhs"_a, DOC(slp, operator, lt));
   cls.def(double() < nb::self, "lhs"_a, DOC(slp, operator, lt));
   cls.def(int() < nb::self, "lhs"_a, DOC(slp, operator, lt));
   cls.def(nb::self <= nb::self, "rhs"_a, DOC(slp, operator, le));
-  cls.def(nb::self <= Variable(), "rhs"_a, DOC(slp, operator, le));
+  cls.def(
+      "__le__",
+      [](const VariableBlock<VariableMatrix<double>>& self,
+         const Variable<double>& rhs) { return self <= rhs; },
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, le));
   cls.def(nb::self <= double(), "rhs"_a, DOC(slp, operator, le));
   cls.def(nb::self <= int(), "rhs"_a, DOC(slp, operator, le));
-  cls.def(Variable() <= nb::self, "lhs"_a, DOC(slp, operator, le));
+  cls.def(
+      "__le__",
+      [](const Variable<double>& lhs,
+         const VariableBlock<VariableMatrix<double>>& self) {
+        return lhs <= self;
+      },
+      nb::is_operator(), "lhs"_a, DOC(slp, operator, le));
   cls.def(double() <= nb::self, "lhs"_a, DOC(slp, operator, le));
   cls.def(int() <= nb::self, "lhs"_a, DOC(slp, operator, le));
   cls.def(nb::self > nb::self, "rhs"_a, DOC(slp, operator, gt));
-  cls.def(nb::self > Variable(), "rhs"_a, DOC(slp, operator, gt));
+  cls.def(
+      "__gt__",
+      [](const VariableBlock<VariableMatrix<double>>& self,
+         const Variable<double>& rhs) { return self > rhs; },
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, gt));
   cls.def(nb::self > double(), "rhs"_a, DOC(slp, operator, gt));
   cls.def(nb::self > int(), "rhs"_a, DOC(slp, operator, gt));
-  cls.def(Variable() > nb::self, "lhs"_a, DOC(slp, operator, gt));
+  cls.def(
+      "__gt__",
+      [](const Variable<double>& lhs,
+         const VariableBlock<VariableMatrix<double>>& self) {
+        return lhs > self;
+      },
+      nb::is_operator(), "lhs"_a, DOC(slp, operator, gt));
   cls.def(double() > nb::self, "lhs"_a, DOC(slp, operator, gt));
   cls.def(int() > nb::self, "lhs"_a, DOC(slp, operator, gt));
   cls.def(nb::self >= nb::self, "rhs"_a, DOC(slp, operator, ge));
-  cls.def(nb::self >= Variable(), "rhs"_a, DOC(slp, operator, ge));
+  cls.def(
+      "__ge__",
+      [](const VariableBlock<VariableMatrix<double>>& self,
+         const Variable<double>& rhs) { return self >= rhs; },
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, ge));
   cls.def(nb::self >= double(), "rhs"_a, DOC(slp, operator, ge));
   cls.def(nb::self >= int(), "rhs"_a, DOC(slp, operator, ge));
-  cls.def(Variable() >= nb::self, "lhs"_a, DOC(slp, operator, ge));
+  cls.def(
+      "__ge__",
+      [](const Variable<double>& lhs,
+         const VariableBlock<VariableMatrix<double>>& self) {
+        return lhs >= self;
+      },
+      nb::is_operator(), "lhs"_a, DOC(slp, operator, ge));
   cls.def(double() >= nb::self, "lhs"_a, DOC(slp, operator, ge));
   cls.def(int() >= nb::self, "lhs"_a, DOC(slp, operator, ge));
   cls.def(
       "__eq__",
-      [](const VariableBlock<VariableMatrix>& lhs,
+      [](const VariableBlock<VariableMatrix<double>>& lhs,
          nb::DRef<Eigen::MatrixXd> rhs) { return lhs == rhs; },
       nb::is_operator(), "rhs"_a, DOC(slp, operator, eq));
   cls.def(
       "__lt__",
-      [](const VariableBlock<VariableMatrix>& lhs,
+      [](const VariableBlock<VariableMatrix<double>>& lhs,
          nb::DRef<Eigen::MatrixXd> rhs) { return lhs < rhs; },
       nb::is_operator(), "rhs"_a, DOC(slp, operator, lt));
   cls.def(
       "__le__",
-      [](const VariableBlock<VariableMatrix>& lhs,
+      [](const VariableBlock<VariableMatrix<double>>& lhs,
          nb::DRef<Eigen::MatrixXd> rhs) { return lhs <= rhs; },
       nb::is_operator(), "rhs"_a, DOC(slp, operator, le));
   cls.def(
       "__gt__",
-      [](const VariableBlock<VariableMatrix>& lhs,
+      [](const VariableBlock<VariableMatrix<double>>& lhs,
          nb::DRef<Eigen::MatrixXd> rhs) { return lhs > rhs; },
       nb::is_operator(), "rhs"_a, DOC(slp, operator, gt));
   cls.def(
       "__ge__",
-      [](const VariableBlock<VariableMatrix>& lhs,
+      [](const VariableBlock<VariableMatrix<double>>& lhs,
          nb::DRef<Eigen::MatrixXd> rhs) { return lhs >= rhs; },
       nb::is_operator(), "rhs"_a, DOC(slp, operator, ge));
 
-  cls.def("__len__", &VariableBlock<VariableMatrix>::rows,
+  cls.def("__len__", &VariableBlock<VariableMatrix<double>>::rows,
           DOC(slp, VariableBlock, rows));
 
   cls.def(
       "__iter__",
-      [](const VariableBlock<VariableMatrix>& self) {
-        return nb::make_iterator(nb::type<VariableBlock<VariableMatrix>>(),
-                                 "value_iterator", self.begin(), self.end());
+      [](const VariableBlock<VariableMatrix<double>>& self) {
+        return nb::make_iterator(
+            nb::type<VariableBlock<VariableMatrix<double>>>(), "value_iterator",
+            self.begin(), self.end());
       },
       nb::keep_alive<0, 1>());
 }  // NOLINT(readability/fn_size)

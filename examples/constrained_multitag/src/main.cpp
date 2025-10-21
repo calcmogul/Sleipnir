@@ -14,7 +14,7 @@
 #include <sleipnir/optimization/problem.hpp>
 
 int main() {
-  slp::Problem problem;
+  slp::Problem<double> problem;
 
   // camera calibration
   constexpr double fx = 600;
@@ -32,7 +32,7 @@ int main() {
   auto sinθ = slp::sin(robot_θ);
   auto cosθ = slp::cos(robot_θ);
 
-  slp::VariableMatrix field2robot{
+  slp::VariableMatrix<double> field2robot{
       {cosθ, -sinθ, 0, robot_x},
       {sinθ, cosθ, 0, robot_y},
       {0, 0, 1, robot_z},
@@ -51,8 +51,9 @@ int main() {
 
   // list of points in field space to reproject. Each one is a 4x1 vector of
   // (x,y,z,1)
-  std::vector field2points{slp::VariableMatrix{{2, 0 - 0.08255, 0.4, 1}}.T(),
-                           slp::VariableMatrix{{2, 0 + 0.08255, 0.4, 1}}.T()};
+  std::vector field2points{
+      slp::VariableMatrix<double>{{2, 0 - 0.08255, 0.4, 1}}.T(),
+      slp::VariableMatrix<double>{{2, 0 + 0.08255, 0.4, 1}}.T()};
 
   // List of points we saw the target at. These are exactly what we expect for a
   // camera located at 0,0,0 (hand-calculated)
@@ -64,7 +65,8 @@ int main() {
   robot_θ.set_value(0.2);
 
   // field2camera * field2camera⁻¹ = I
-  auto camera2field = slp::solve(field2camera, Eigen::Matrix4d::Identity());
+  auto camera2field =
+      slp::solve<double>(field2camera, Eigen::Matrix4d::Identity());
 
   // Cost
   slp::Variable J = 0.0;

@@ -5,44 +5,59 @@
 
 #include <Eigen/Core>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <sleipnir/autodiff/gradient.hpp>
 #include <sleipnir/autodiff/variable_matrix.hpp>
 
-TEST_CASE("Gradient - Trivial case", "[Gradient]") {
-  slp::Variable a;
-  a.set_value(10);
-  slp::Variable b;
-  b.set_value(20);
+#include "scalar_types_under_test.hpp"
+
+TEMPLATE_TEST_CASE("Gradient - Trivial case", "[Gradient]",
+                   SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
+
+  slp::Variable<T> a;
+  a.set_value(T(10));
+  slp::Variable<T> b;
+  b.set_value(T(20));
   slp::Variable c = a;
 
-  CHECK(slp::Gradient(a, a).value().coeff(0) == 1.0);
-  CHECK(slp::Gradient(a, b).value().coeff(0) == 0.0);
-  CHECK(slp::Gradient(c, a).value().coeff(0) == 1.0);
-  CHECK(slp::Gradient(c, b).value().coeff(0) == 0.0);
+  CHECK(slp::Gradient(a, a).value().coeff(0) == T(1.0));
+  CHECK(slp::Gradient(a, b).value().coeff(0) == T(0.0));
+  CHECK(slp::Gradient(c, a).value().coeff(0) == T(1.0));
+  CHECK(slp::Gradient(c, b).value().coeff(0) == T(0.0));
 }
 
-TEST_CASE("Gradient - Unary plus", "[Gradient]") {
-  slp::Variable a;
-  a.set_value(10);
+TEMPLATE_TEST_CASE("Gradient - Unary plus", "[Gradient]",
+                   SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
+
+  slp::Variable<T> a;
+  a.set_value(T(10));
   slp::Variable c = +a;
 
   CHECK(c.value() == a.value());
-  CHECK(slp::Gradient(c, a).value().coeff(0) == 1.0);
+  CHECK(slp::Gradient(c, a).value().coeff(0) == T(1.0));
 }
 
-TEST_CASE("Gradient - Unary minus", "[Gradient]") {
-  slp::Variable a;
-  a.set_value(10);
+TEMPLATE_TEST_CASE("Gradient - Unary minus", "[Gradient]",
+                   SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
+
+  slp::Variable<T> a;
+  a.set_value(T(10));
   slp::Variable c = -a;
 
   CHECK(c.value() == -a.value());
-  CHECK(slp::Gradient(c, a).value().coeff(0) == -1.0);
+  CHECK(slp::Gradient(c, a).value().coeff(0) == T(-1.0));
 }
 
-TEST_CASE("Gradient - Identical variables", "[Gradient]") {
-  slp::Variable a;
-  a.set_value(10);
+TEMPLATE_TEST_CASE("Gradient - Identical variables", "[Gradient]",
+                   SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
+
+  slp::Variable<T> a;
+  a.set_value(T(10));
   slp::Variable x = a;
   slp::Variable c = a * a + x;
 
@@ -53,71 +68,77 @@ TEST_CASE("Gradient - Identical variables", "[Gradient]") {
         2 * a.value() * slp::Gradient(a, x).value().coeff(0) + 1);
 }
 
-TEST_CASE("Gradient - Elementary", "[Gradient]") {
-  slp::Variable a;
-  a.set_value(1.0);
-  slp::Variable b;
-  b.set_value(2.0);
+TEMPLATE_TEST_CASE("Gradient - Elementary", "[Gradient]",
+                   SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
+
+  slp::Variable<T> a;
+  a.set_value(T(1.0));
+  slp::Variable<T> b;
+  b.set_value(T(2.0));
 
   auto c = -2 * a;
-  CHECK(slp::Gradient(c, a).value().coeff(0) == -2.0);
+  CHECK(slp::Gradient(c, a).value().coeff(0) == T(-2.0));
 
   c = a / 3.0;
-  CHECK(slp::Gradient(c, a).value().coeff(0) == 1.0 / 3.0);
+  CHECK(slp::Gradient(c, a).value().coeff(0) == T(1.0 / 3.0));
 
-  a.set_value(100.0);
-  b.set_value(200.0);
+  a.set_value(T(100.0));
+  b.set_value(T(200.0));
 
   c = a + b;
-  CHECK(slp::Gradient(c, a).value().coeff(0) == 1.0);
-  CHECK(slp::Gradient(c, b).value().coeff(0) == 1.0);
+  CHECK(slp::Gradient(c, a).value().coeff(0) == T(1.0));
+  CHECK(slp::Gradient(c, b).value().coeff(0) == T(1.0));
 
   c = a - b;
-  CHECK(slp::Gradient(c, a).value().coeff(0) == 1.0);
-  CHECK(slp::Gradient(c, b).value().coeff(0) == -1.0);
+  CHECK(slp::Gradient(c, a).value().coeff(0) == T(1.0));
+  CHECK(slp::Gradient(c, b).value().coeff(0) == T(-1.0));
 
   c = -a + b;
-  CHECK(slp::Gradient(c, a).value().coeff(0) == -1.0);
-  CHECK(slp::Gradient(c, b).value().coeff(0) == 1.0);
+  CHECK(slp::Gradient(c, a).value().coeff(0) == T(-1.0));
+  CHECK(slp::Gradient(c, b).value().coeff(0) == T(1.0));
 
   c = a + 1;
-  CHECK(slp::Gradient(c, a).value().coeff(0) == 1.0);
+  CHECK(slp::Gradient(c, a).value().coeff(0) == T(1.0));
 }
 
-TEST_CASE("Gradient - Comparison", "[Gradient]") {
-  slp::Variable x;
-  x.set_value(10.0);
-  slp::Variable a;
-  a.set_value(10.0);
-  slp::Variable b;
-  b.set_value(200.0);
+TEMPLATE_TEST_CASE("Gradient - Comparison", "[Gradient]",
+                   SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
+
+  slp::Variable<T> x;
+  x.set_value(T(10.0));
+  slp::Variable<T> a;
+  a.set_value(T(10.0));
+  slp::Variable<T> b;
+  b.set_value(T(200.0));
 
   CHECK(a.value() == a.value());
   CHECK(a.value() == x.value());
-  CHECK(a.value() == 10.0);
-  CHECK(10.0 == a.value());
+  CHECK(a.value() == T(10.0));
+  CHECK(T(10.0) == a.value());
 
   CHECK(a.value() != b.value());
-  CHECK(a.value() != 20.0);
-  CHECK(20.0 != a.value());
+  CHECK(a.value() != T(20.0));
+  CHECK(T(20.0) != a.value());
 
   CHECK(a.value() < b.value());
-  CHECK(a.value() < 20.0);
+  CHECK(a.value() < T(20.0));
 
   CHECK(b.value() > a.value());
-  CHECK(20.0 > a.value());
+  CHECK(T(20.0) > a.value());
 
   CHECK(a.value() <= a.value());
   CHECK(a.value() <= x.value());
   CHECK(a.value() <= b.value());
-  CHECK(a.value() <= 10.0);
-  CHECK(a.value() <= 20.0);
+  CHECK(a.value() <= T(10.0));
+  CHECK(a.value() <= T(20.0));
 
   CHECK(a.value() >= a.value());
   CHECK(x.value() >= a.value());
   CHECK(b.value() >= a.value());
-  CHECK(10.0 >= a.value());
-  CHECK(20.0 >= a.value());
+  CHECK(T(10.0) >= a.value());
+  CHECK(T(20.0) >= a.value());
 
   // Comparison between variables and expressions
   CHECK(a.value() == a.value() / a.value() * a.value());
@@ -145,482 +166,556 @@ TEST_CASE("Gradient - Comparison", "[Gradient]") {
   CHECK(a.value() >= (a - a).value());
 }
 
-TEST_CASE("Gradient - Trigonometry", "[Gradient]") {
-  slp::Variable x;
-  x.set_value(0.5);
+TEMPLATE_TEST_CASE("Gradient - Trigonometry", "[Gradient]",
+                   SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
+  using std::acos;
+  using std::asin;
+  using std::atan;
+  using std::cos;
+  using std::sin;
+  using std::sqrt;
+  using std::tan;
+
+  slp::Variable<T> x;
+  x.set_value(T(0.5));
 
   // std::sin(x)
-  CHECK(slp::sin(x).value() == std::sin(x.value()));
+  CHECK(slp::sin(x).value() == sin(x.value()));  // NOLINT
 
   auto g = slp::Gradient(slp::sin(x), x);
-  CHECK(g.get().value().coeff(0) == std::cos(x.value()));
-  CHECK(g.value().coeff(0) == std::cos(x.value()));
+  CHECK(g.get().value().coeff(0) == cos(x.value()));  // NOLINT
+  CHECK(g.value().coeff(0) == cos(x.value()));        // NOLINT
 
   // std::cos(x)
-  CHECK(slp::cos(x).value() == std::cos(x.value()));
+  CHECK(slp::cos(x).value() == cos(x.value()));  // NOLINT
 
   g = slp::Gradient(slp::cos(x), x);
-  CHECK(g.get().value().coeff(0) == -std::sin(x.value()));
-  CHECK(g.value().coeff(0) == -std::sin(x.value()));
+  CHECK(g.get().value().coeff(0) == -sin(x.value()));  // NOLINT
+  CHECK(g.value().coeff(0) == -sin(x.value()));        // NOLINT
 
   // std::tan(x)
-  CHECK(slp::tan(x).value() == std::tan(x.value()));
+  CHECK(slp::tan(x).value() == tan(x.value()));  // NOLINT
 
   g = slp::Gradient(slp::tan(x), x);
   CHECK(g.get().value().coeff(0) ==
-        1.0 / (std::cos(x.value()) * std::cos(x.value())));
+        T(1.0) / (cos(x.value()) * cos(x.value())));  // NOLINT
   CHECK(g.value().coeff(0) ==
-        1.0 / (std::cos(x.value()) * std::cos(x.value())));
+        T(1.0) / (cos(x.value()) * cos(x.value())));  // NOLINT
 
   // std::asin(x)
-  CHECK(slp::asin(x).value() == std::asin(x.value()));
+  CHECK(slp::asin(x).value() == asin(x.value()));  // NOLINT
 
   g = slp::Gradient(slp::asin(x), x);
-  CHECK(g.get().value().coeff(0) == 1.0 / std::sqrt(1 - x.value() * x.value()));
-  CHECK(g.value().coeff(0) == 1.0 / std::sqrt(1 - x.value() * x.value()));
+  CHECK(g.get().value().coeff(0) ==
+        T(1.0) / sqrt(T(1) - x.value() * x.value()));  // NOLINT
+  CHECK(g.value().coeff(0) ==
+        T(1.0) / sqrt(T(1) - x.value() * x.value()));  // NOLINT
 
   // std::acos(x)
-  CHECK(slp::acos(x).value() == std::acos(x.value()));
+  CHECK(slp::acos(x).value() == acos(x.value()));  // NOLINT
 
   g = slp::Gradient(slp::acos(x), x);
   CHECK(g.get().value().coeff(0) ==
-        -1.0 / std::sqrt(1 - x.value() * x.value()));
-  CHECK(g.value().coeff(0) == -1.0 / std::sqrt(1 - x.value() * x.value()));
+        T(-1.0) / sqrt(T(1) - x.value() * x.value()));  // NOLINT
+  CHECK(g.value().coeff(0) ==
+        T(-1.0) / sqrt(T(1) - x.value() * x.value()));  // NOLINT
 
   // std::atan(x)
-  CHECK(slp::atan(x).value() == std::atan(x.value()));
+  CHECK(slp::atan(x).value() == atan(x.value()));  // NOLINT
 
   g = slp::Gradient(slp::atan(x), x);
-  CHECK(g.get().value().coeff(0) == 1.0 / (1 + x.value() * x.value()));
-  CHECK(g.value().coeff(0) == 1.0 / (1 + x.value() * x.value()));
+  CHECK(g.get().value().coeff(0) == T(1.0) / (T(1) + x.value() * x.value()));
+  CHECK(g.value().coeff(0) == T(1.0) / (T(1) + x.value() * x.value()));
 }
 
-TEST_CASE("Gradient - Hyperbolic", "[Gradient]") {
-  slp::Variable x;
-  x.set_value(1.0);
+TEMPLATE_TEST_CASE("Gradient - Hyperbolic", "[Gradient]",
+                   SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
+  using std::cosh;
+  using std::sinh;
+  using std::tanh;
+
+  slp::Variable<T> x;
+  x.set_value(T(1.0));
 
   // sinh(x)
-  CHECK(slp::sinh(x).value() == std::sinh(x.value()));
+  CHECK(slp::sinh(x).value() == sinh(x.value()));  // NOLINT
 
   auto g = slp::Gradient(slp::sinh(x), x);
-  CHECK(g.get().value().coeff(0) == std::cosh(x.value()));
-  CHECK(g.value().coeff(0) == std::cosh(x.value()));
+  CHECK(g.get().value().coeff(0) == cosh(x.value()));  // NOLINT
+  CHECK(g.value().coeff(0) == cosh(x.value()));        // NOLINT
 
   // std::cosh(x)
-  CHECK(slp::cosh(x).value() == std::cosh(x.value()));
+  CHECK(slp::cosh(x).value() == cosh(x.value()));  // NOLINT
 
   g = slp::Gradient(slp::cosh(x), x);
-  CHECK(g.get().value().coeff(0) == std::sinh(x.value()));
-  CHECK(g.value().coeff(0) == std::sinh(x.value()));
+  CHECK(g.get().value().coeff(0) == sinh(x.value()));  // NOLINT
+  CHECK(g.value().coeff(0) == sinh(x.value()));        // NOLINT
 
   // tanh(x)
-  CHECK(slp::tanh(x).value() == std::tanh(x.value()));
+  CHECK(slp::tanh(x).value() == tanh(x.value()));  // NOLINT
 
   g = slp::Gradient(slp::tanh(x), x);
   CHECK(g.get().value().coeff(0) ==
-        1.0 / (std::cosh(x.value()) * std::cosh(x.value())));
+        T(1.0) / (cosh(x.value()) * cosh(x.value())));  // NOLINT
   CHECK(g.value().coeff(0) ==
-        1.0 / (std::cosh(x.value()) * std::cosh(x.value())));
+        T(1.0) / (cosh(x.value()) * cosh(x.value())));  // NOLINT
 }
 
-TEST_CASE("Gradient - Exponential", "[Gradient]") {
-  slp::Variable x;
-  x.set_value(1.0);
+TEMPLATE_TEST_CASE("Gradient - Exponential", "[Gradient]",
+                   SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
+  using std::exp;
+  using std::log;
+  using std::log10;
+
+  slp::Variable<T> x;
+  x.set_value(T(1.0));
 
   // std::log(x)
-  CHECK(slp::log(x).value() == std::log(x.value()));
+  CHECK(slp::log(x).value() == log(x.value()));  // NOLINT
 
   auto g = slp::Gradient(slp::log(x), x);
-  CHECK(g.get().value().coeff(0) == 1.0 / x.value());
-  CHECK(g.value().coeff(0) == 1.0 / x.value());
+  CHECK(g.get().value().coeff(0) == T(1.0) / x.value());
+  CHECK(g.value().coeff(0) == T(1.0) / x.value());
 
   // std::log10(x)
-  CHECK(slp::log10(x).value() == std::log10(x.value()));
+  CHECK(slp::log10(x).value() == log10(x.value()));  // NOLINT
 
   g = slp::Gradient(slp::log10(x), x);
-  CHECK(g.get().value().coeff(0) == 1.0 / (std::log(10.0) * x.value()));
-  CHECK(g.value().coeff(0) == 1.0 / (std::log(10.0) * x.value()));
+  CHECK(g.get().value().coeff(0) ==
+        T(1.0) / (log(T(10.0)) * x.value()));                        // NOLINT
+  CHECK(g.value().coeff(0) == T(1.0) / (log(T(10.0)) * x.value()));  // NOLINT
 
   // std::exp(x)
-  CHECK(slp::exp(x).value() == std::exp(x.value()));
+  CHECK(slp::exp(x).value() == exp(x.value()));  // NOLINT
 
   g = slp::Gradient(slp::exp(x), x);
-  CHECK(g.get().value().coeff(0) == std::exp(x.value()));
-  CHECK(g.value().coeff(0) == std::exp(x.value()));
+  CHECK(g.get().value().coeff(0) == exp(x.value()));  // NOLINT
+  CHECK(g.value().coeff(0) == exp(x.value()));        // NOLINT
 }
 
-TEST_CASE("Gradient - Power", "[Gradient]") {
-  slp::Variable x;
-  x.set_value(1.0);
-  slp::Variable a;
-  a.set_value(2.0);
+TEMPLATE_TEST_CASE("Gradient - Power", "[Gradient]", SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
+  using std::cbrt;
+  using std::log;
+  using std::pow;
+  using std::sqrt;
+
+  slp::Variable<T> x;
+  x.set_value(T(1.0));
+  slp::Variable<T> a;
+  a.set_value(T(2.0));
   slp::Variable y = 2 * a;
 
   // std::sqrt(x)
-  CHECK(slp::sqrt(x).value() == std::sqrt(x.value()));
+  CHECK(slp::sqrt(x).value() == sqrt(x.value()));  // NOLINT
 
   auto g = slp::Gradient(slp::sqrt(x), x);
-  CHECK(g.get().value().coeff(0) == 0.5 / std::sqrt(x.value()));
-  CHECK(g.value().coeff(0) == 0.5 / std::sqrt(x.value()));
+  CHECK(g.get().value().coeff(0) == T(0.5) / sqrt(x.value()));  // NOLINT
+  CHECK(g.value().coeff(0) == T(0.5) / sqrt(x.value()));        // NOLINT
 
   // std::sqrt(a)
-  CHECK(slp::sqrt(a).value() == std::sqrt(a.value()));
+  CHECK(slp::sqrt(a).value() == sqrt(a.value()));  // NOLINT
 
   g = slp::Gradient(slp::sqrt(a), a);
-  CHECK(g.get().value().coeff(0) == 0.5 / std::sqrt(a.value()));
-  CHECK(g.value().coeff(0) == 0.5 / std::sqrt(a.value()));
+  CHECK(g.get().value().coeff(0) == T(0.5) / sqrt(a.value()));  // NOLINT
+  CHECK(g.value().coeff(0) == T(0.5) / sqrt(a.value()));        // NOLINT
 
   // std::cbrt(x)
-  CHECK(slp::cbrt(x).value() == std::cbrt(x.value()));
+  CHECK(slp::cbrt(x).value() == cbrt(x.value()));  // NOLINT
 
   g = slp::Gradient(slp::cbrt(x), x);
   CHECK(g.get().value().coeff(0) ==
-        1.0 / (3.0 * std::cbrt(x.value()) * std::cbrt(x.value())));
+        T(1.0) / (T(3.0) * cbrt(x.value()) * cbrt(x.value())));  // NOLINT
   CHECK(g.value().coeff(0) ==
-        1.0 / (3.0 * std::cbrt(x.value()) * std::cbrt(x.value())));
+        T(1.0) / (T(3.0) * cbrt(x.value()) * cbrt(x.value())));  // NOLINT
 
   // std::cbrt(a)
-  CHECK(slp::cbrt(a).value() == std::cbrt(a.value()));
+  CHECK(slp::cbrt(a).value() == cbrt(a.value()));  // NOLINT
 
   g = slp::Gradient(slp::cbrt(a), a);
   CHECK(g.get().value().coeff(0) ==
-        1.0 / (3.0 * std::cbrt(a.value()) * std::cbrt(a.value())));
+        T(1.0) / (T(3.0) * cbrt(a.value()) * cbrt(a.value())));  // NOLINT
   CHECK(g.value().coeff(0) ==
-        1.0 / (3.0 * std::cbrt(a.value()) * std::cbrt(a.value())));
+        T(1.0) / (T(3.0) * cbrt(a.value()) * cbrt(a.value())));  // NOLINT
 
   // x²
-  CHECK(slp::pow(x, 2.0).value() == std::pow(x.value(), 2.0));
+  CHECK(slp::pow(x, T(2.0)).value() == pow(x.value(), T(2.0)));  // NOLINT
 
-  g = slp::Gradient(slp::pow(x, 2.0), x);
-  CHECK(g.get().value().coeff(0) == 2.0 * x.value());
-  CHECK(g.value().coeff(0) == 2.0 * x.value());
+  g = slp::Gradient(slp::pow(x, T(2.0)), x);
+  CHECK(g.get().value().coeff(0) == T(2.0) * x.value());
+  CHECK(g.value().coeff(0) == T(2.0) * x.value());
 
   // 2ˣ
-  CHECK(slp::pow(2.0, x).value() == std::pow(2.0, x.value()));
+  CHECK(slp::pow(T(2.0), x).value() == pow(T(2.0), x.value()));  // NOLINT
 
-  g = slp::Gradient(slp::pow(2.0, x), x);
-  CHECK(g.get().value().coeff(0) == std::log(2.0) * std::pow(2.0, x.value()));
-  CHECK(g.value().coeff(0) == std::log(2.0) * std::pow(2.0, x.value()));
+  g = slp::Gradient(slp::pow(T(2.0), x), x);
+  CHECK(g.get().value().coeff(0) ==
+        log(T(2.0)) * pow(T(2.0), x.value()));                        // NOLINT
+  CHECK(g.value().coeff(0) == log(T(2.0)) * pow(T(2.0), x.value()));  // NOLINT
 
   // xˣ
-  CHECK(slp::pow(x, x).value() == std::pow(x.value(), x.value()));
+  CHECK(slp::pow(x, x).value() == pow(x.value(), x.value()));  // NOLINT
 
   g = slp::Gradient(slp::pow(x, x), x);
   CHECK(g.get().value().coeff(0) ==
-        (std::log(x.value()) + 1) * std::pow(x.value(), x.value()));
+        (log(x.value()) + T(1)) * pow(x.value(), x.value()));  // NOLINT
   CHECK(g.value().coeff(0) ==
-        (std::log(x.value()) + 1) * std::pow(x.value(), x.value()));
+        (log(x.value()) + T(1)) * pow(x.value(), x.value()));  // NOLINT
 
   // y(a)
   CHECK(y.value() == 2 * a.value());
 
   g = slp::Gradient(y, a);
-  CHECK(g.get().value().coeff(0) == 2.0);
-  CHECK(g.value().coeff(0) == 2.0);
+  CHECK(g.get().value().coeff(0) == T(2.0));
+  CHECK(g.value().coeff(0) == T(2.0));
 
   // xʸ(x)
-  CHECK(slp::pow(x, y).value() == std::pow(x.value(), y.value()));
+  CHECK(slp::pow(x, y).value() == pow(x.value(), y.value()));  // NOLINT
 
   g = slp::Gradient(slp::pow(x, y), x);
   CHECK(g.get().value().coeff(0) ==
-        y.value() / x.value() * std::pow(x.value(), y.value()));
+        y.value() / x.value() * pow(x.value(), y.value()));  // NOLINT
   CHECK(g.value().coeff(0) ==
-        y.value() / x.value() * std::pow(x.value(), y.value()));
+        y.value() / x.value() * pow(x.value(), y.value()));  // NOLINT
 
   // xʸ(a)
-  CHECK(slp::pow(x, y).value() == std::pow(x.value(), y.value()));
+  CHECK(slp::pow(x, y).value() == pow(x.value(), y.value()));  // NOLINT
 
   g = slp::Gradient(slp::pow(x, y), a);
   CHECK(g.get().value().coeff(0) ==
-        std::pow(x.value(), y.value()) *
+        pow(x.value(), y.value()) *  // NOLINT
             (y.value() / x.value() * slp::Gradient(x, a).value().coeff(0) +
-             std::log(x.value()) * slp::Gradient(y, a).value().coeff(0)));
+             log(x.value()) * slp::Gradient(y, a).value().coeff(0)));  // NOLINT
   CHECK(g.value().coeff(0) ==
-        std::pow(x.value(), y.value()) *
+        pow(x.value(), y.value()) *  // NOLINT
             (y.value() / x.value() * slp::Gradient(x, a).value().coeff(0) +
-             std::log(x.value()) * slp::Gradient(y, a).value().coeff(0)));
+             log(x.value()) * slp::Gradient(y, a).value().coeff(0)));  // NOLINT
 
   // xʸ(y)
-  CHECK(slp::pow(x, y).value() == std::pow(x.value(), y.value()));
+  CHECK(slp::pow(x, y).value() == pow(x.value(), y.value()));  // NOLINT
 
   g = slp::Gradient(slp::pow(x, y), y);
   CHECK(g.get().value().coeff(0) ==
-        std::log(x.value()) * std::pow(x.value(), y.value()));
+        log(x.value()) * pow(x.value(), y.value()));  // NOLINT
   CHECK(g.value().coeff(0) ==
-        std::log(x.value()) * std::pow(x.value(), y.value()));
+        log(x.value()) * pow(x.value(), y.value()));  // NOLINT
 }
 
-TEST_CASE("Gradient - std::abs()", "[Gradient]") {
-  slp::Variable x;
+TEMPLATE_TEST_CASE("Gradient - std::abs()", "[Gradient]",
+                   SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
+  using std::abs;
+
+  slp::Variable<T> x;
   auto g = slp::Gradient(slp::abs(x), x);
 
-  x.set_value(1.0);
-  CHECK(slp::abs(x).value() == std::abs(x.value()));
-  CHECK(g.get().value().coeff(0) == 1.0);
-  CHECK(g.value().coeff(0) == 1.0);
+  x.set_value(T(1.0));
+  CHECK(slp::abs(x).value() == abs(x.value()));  // NOLINT
+  CHECK(g.get().value().coeff(0) == T(1.0));
+  CHECK(g.value().coeff(0) == T(1.0));
 
-  x.set_value(-1.0);
-  CHECK(slp::abs(x).value() == std::abs(x.value()));
-  CHECK(g.get().value().coeff(0) == -1.0);
-  CHECK(g.value().coeff(0) == -1.0);
+  x.set_value(T(-1.0));
+  CHECK(slp::abs(x).value() == abs(x.value()));  // NOLINT
+  CHECK(g.get().value().coeff(0) == T(-1.0));
+  CHECK(g.value().coeff(0) == T(-1.0));
 
-  x.set_value(0.0);
-  CHECK(slp::abs(x).value() == std::abs(x.value()));
-  CHECK(g.get().value().coeff(0) == 0.0);
-  CHECK(g.value().coeff(0) == 0.0);
+  x.set_value(T(0.0));
+  CHECK(slp::abs(x).value() == abs(x.value()));  // NOLINT
+  CHECK(g.get().value().coeff(0) == T(0.0));
+  CHECK(g.value().coeff(0) == T(0.0));
 }
 
-TEST_CASE("Gradient - std::atan2()", "[Gradient]") {
-  slp::Variable x;
-  slp::Variable y;
+TEMPLATE_TEST_CASE("Gradient - std::atan2()", "[Gradient]",
+                   SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
+  using std::atan2;
+  using std::cos;
+  using std::sin;
 
-  // Testing atan2 function on (double, var)
-  x.set_value(1.0);
-  y.set_value(0.9);
-  CHECK(slp::atan2(2.0, x).value() == std::atan2(2.0, x.value()));
+  slp::Variable<T> x;
+  slp::Variable<T> y;
 
-  auto g = slp::Gradient(slp::atan2(2.0, x), x);
+  // Testing atan2 function on (T, var)
+  x.set_value(T(1.0));
+  y.set_value(T(0.9));
+  CHECK(slp::atan2(2.0, x).value() == atan2(T(2.0), x.value()));  // NOLINT
+
+  auto g = slp::Gradient(slp::atan2(T(2.0), x), x);
   CHECK(g.get().value().coeff(0) ==
-        Catch::Approx(-2.0 / (2 * 2 + x.value() * x.value())).margin(1e-15));
+        Catch::Approx(T(-2.0) / (T(2) * T(2) + x.value() * x.value()))
+            .margin(T(1e-15)));
   CHECK(g.value().coeff(0) ==
-        Catch::Approx(-2.0 / (2 * 2 + x.value() * x.value())).margin(1e-15));
+        Catch::Approx(T(-2.0) / (T(2) * T(2) + x.value() * x.value()))
+            .margin(T(1e-15)));
 
-  // Testing atan2 function on (var, double)
-  x.set_value(1.0);
-  y.set_value(0.9);
-  CHECK(slp::atan2(x, 2.0).value() == std::atan2(x.value(), 2.0));
+  // Testing atan2 function on (var, T)
+  x.set_value(T(1.0));
+  y.set_value(T(0.9));
+  CHECK(slp::atan2(x, T(2.0)).value() == atan2(x.value(), T(2.0)));  // NOLINT
 
-  g = slp::Gradient(slp::atan2(x, 2.0), x);
+  g = slp::Gradient(slp::atan2(x, T(2.0)), x);
   CHECK(g.get().value().coeff(0) ==
-        Catch::Approx(2.0 / (2 * 2 + x.value() * x.value())).margin(1e-15));
+        Catch::Approx(T(2.0) / (T(2) * T(2) + x.value() * x.value()))
+            .margin(T(1e-15)));
   CHECK(g.value().coeff(0) ==
-        Catch::Approx(2.0 / (2 * 2 + x.value() * x.value())).margin(1e-15));
+        Catch::Approx(T(2.0) / (T(2) * T(2) + x.value() * x.value()))
+            .margin(T(1e-15)));
 
   // Testing atan2 function on (var, var)
-  x.set_value(1.1);
-  y.set_value(0.9);
-  CHECK(slp::atan2(y, x).value() == std::atan2(y.value(), x.value()));
+  x.set_value(T(1.1));
+  y.set_value(T(0.9));
+  CHECK(slp::atan2(y, x).value() == atan2(y.value(), x.value()));  // NOLINT
 
   g = slp::Gradient(slp::atan2(y, x), y);
   CHECK(
       g.get().value().coeff(0) ==
       Catch::Approx(x.value() / (x.value() * x.value() + y.value() * y.value()))
-          .margin(1e-15));
+          .margin(T(1e-15)));
   CHECK(g.value().coeff(0) == Catch::Approx(x.value() / (x.value() * x.value() +
                                                          y.value() * y.value()))
-                                  .margin(1e-15));
+                                  .margin(T(1e-15)));
 
   g = slp::Gradient(slp::atan2(y, x), x);
   CHECK(g.get().value().coeff(0) ==
         Catch::Approx(-y.value() /
                       (x.value() * x.value() + y.value() * y.value()))
-            .margin(1e-15));
+            .margin(T(1e-15)));
   CHECK(g.value().coeff(0) ==
         Catch::Approx(-y.value() /
                       (x.value() * x.value() + y.value() * y.value()))
-            .margin(1e-15));
+            .margin(T(1e-15)));
 
   // Testing atan2 function on (expr, expr)
-  CHECK(3 * slp::atan2(slp::sin(y), 2 * x + 1).value() ==
-        3 * std::atan2(std::sin(y.value()), 2 * x.value() + 1));
+  CHECK(3 * slp::atan2(slp::sin(y), T(2) * x + T(1)).value() ==
+        3 * atan2(sin(y.value()), T(2) * x.value() + T(1)));  // NOLINT
 
-  g = slp::Gradient(3 * slp::atan2(slp::sin(y), 2 * x + 1), y);
+  g = slp::Gradient(T(3) * slp::atan2(slp::sin(y), T(2) * x + T(1)), y);
   CHECK(g.get().value().coeff(0) ==
-        Catch::Approx(3 * (2 * x.value() + 1) * std::cos(y.value()) /
-                      ((2 * x.value() + 1) * (2 * x.value() + 1) +
-                       std::sin(y.value()) * std::sin(y.value())))
-            .margin(1e-15));
+        Catch::Approx(T(3) * (T(2) * x.value() + T(1)) *
+                      cos(y.value()) /  // NOLINT
+                      ((T(2) * x.value() + T(1)) * (T(2) * x.value() + T(1)) +
+                       sin(y.value()) * sin(y.value())))  // NOLINT
+            .margin(T(1e-15)));
   CHECK(g.value().coeff(0) ==
-        Catch::Approx(3 * (2 * x.value() + 1) * std::cos(y.value()) /
-                      ((2 * x.value() + 1) * (2 * x.value() + 1) +
-                       std::sin(y.value()) * std::sin(y.value())))
-            .margin(1e-15));
+        Catch::Approx(T(3) * (T(2) * x.value() + T(1)) *
+                      cos(y.value()) /  // NOLINT
+                      ((T(2) * x.value() + T(1)) * (T(2) * x.value() + T(1)) +
+                       sin(y.value()) * sin(y.value())))  // NOLINT
+            .margin(T(1e-15)));
 
-  g = slp::Gradient(3 * slp::atan2(slp::sin(y), 2 * x + 1), x);
+  g = slp::Gradient(T(3) * slp::atan2(slp::sin(y), T(2) * x + T(1)), x);
   CHECK(g.get().value().coeff(0) ==
-        Catch::Approx(3 * -2 * std::sin(y.value()) /
-                      ((2 * x.value() + 1) * (2 * x.value() + 1) +
-                       std::sin(y.value()) * std::sin(y.value())))
-            .margin(1e-15));
+        Catch::Approx(T(3) * -T(2) * sin(y.value()) /  // NOLINT
+                      ((T(2) * x.value() + T(1)) * (T(2) * x.value() + T(1)) +
+                       sin(y.value()) * sin(y.value())))  // NOLINT
+            .margin(T(1e-15)));
   CHECK(g.value().coeff(0) ==
-        Catch::Approx(3 * -2 * std::sin(y.value()) /
-                      ((2 * x.value() + 1) * (2 * x.value() + 1) +
-                       std::sin(y.value()) * std::sin(y.value())))
-            .margin(1e-15));
+        Catch::Approx(T(3) * T(-2) * sin(y.value()) /  // NOLINT
+                      ((T(2) * x.value() + T(1)) * (T(2) * x.value() + T(1)) +
+                       sin(y.value()) * sin(y.value())))  // NOLINT
+            .margin(T(1e-15)));
 }
 
-TEST_CASE("Gradient - std::hypot()", "[Gradient]") {
-  slp::Variable x;
-  slp::Variable y;
+TEMPLATE_TEST_CASE("Gradient - std::hypot()", "[Gradient]",
+                   SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
+  using std::hypot;
 
-  // Testing hypot function on (var, double)
-  x.set_value(1.8);
-  y.set_value(1.5);
-  CHECK(slp::hypot(x, 2.0).value() == std::hypot(x.value(), 2.0));
+  slp::Variable<T> x;
+  slp::Variable<T> y;
 
-  auto g = slp::Gradient(slp::hypot(x, 2.0), x);
-  CHECK(g.get().value().coeff(0) == x.value() / std::hypot(x.value(), 2.0));
-  CHECK(g.value().coeff(0) == x.value() / std::hypot(x.value(), 2.0));
+  // Testing hypot function on (var, T)
+  x.set_value(T(1.8));
+  y.set_value(T(1.5));
+  CHECK(slp::hypot(x, 2.0).value() == hypot(x.value(), T(2.0)));  // NOLINT
 
-  // Testing hypot function on (double, var)
-  CHECK(slp::hypot(2.0, y).value() == std::hypot(2.0, y.value()));
+  auto g = slp::Gradient(slp::hypot(x, T(2.0)), x);
+  CHECK(g.get().value().coeff(0) ==
+        x.value() / hypot(x.value(), T(2.0)));                        // NOLINT
+  CHECK(g.value().coeff(0) == x.value() / hypot(x.value(), T(2.0)));  // NOLINT
 
-  g = slp::Gradient(slp::hypot(2.0, y), y);
-  CHECK(g.get().value().coeff(0) == y.value() / std::hypot(2.0, y.value()));
-  CHECK(g.value().coeff(0) == y.value() / std::hypot(2.0, y.value()));
+  // Testing hypot function on (T, var)
+  CHECK(slp::hypot(2.0, y).value() == hypot(T(2.0), y.value()));  // NOLINT
+
+  g = slp::Gradient(slp::hypot(T(2.0), y), y);
+  CHECK(g.get().value().coeff(0) ==
+        y.value() / hypot(T(2.0), y.value()));                        // NOLINT
+  CHECK(g.value().coeff(0) == y.value() / hypot(T(2.0), y.value()));  // NOLINT
 
   // Testing hypot function on (var, var)
-  x.set_value(1.3);
-  y.set_value(2.3);
-  CHECK(slp::hypot(x, y).value() == std::hypot(x.value(), y.value()));
+  x.set_value(T(1.3));
+  y.set_value(T(2.3));
+  CHECK(slp::hypot(x, y).value() == hypot(x.value(), y.value()));  // NOLINT
 
   g = slp::Gradient(slp::hypot(x, y), x);
   CHECK(g.get().value().coeff(0) ==
-        x.value() / std::hypot(x.value(), y.value()));
-  CHECK(g.value().coeff(0) == x.value() / std::hypot(x.value(), y.value()));
+        x.value() / hypot(x.value(), y.value()));  // NOLINT
+  CHECK(g.value().coeff(0) ==
+        x.value() / hypot(x.value(), y.value()));  // NOLINT
 
   g = slp::Gradient(slp::hypot(x, y), y);
   CHECK(g.get().value().coeff(0) ==
-        y.value() / std::hypot(x.value(), y.value()));
-  CHECK(g.value().coeff(0) == y.value() / std::hypot(x.value(), y.value()));
+        y.value() / hypot(x.value(), y.value()));  // NOLINT
+  CHECK(g.value().coeff(0) ==
+        y.value() / hypot(x.value(), y.value()));  // NOLINT
 
   // Testing hypot function on (expr, expr)
-  x.set_value(1.3);
-  y.set_value(2.3);
-  CHECK(slp::hypot(2.0 * x, 3.0 * y).value() ==
-        std::hypot(2.0 * x.value(), 3.0 * y.value()));
+  x.set_value(T(1.3));
+  y.set_value(T(2.3));
+  CHECK(slp::hypot(T(2.0) * x, T(3.0) * y).value() ==
+        hypot(T(2.0) * x.value(), T(3.0) * y.value()));  // NOLINT
 
-  g = slp::Gradient(slp::hypot(2.0 * x, 3.0 * y), x);
+  g = slp::Gradient(slp::hypot(T(2.0) * x, T(3.0) * y), x);
   CHECK(g.get().value().coeff(0) ==
-        4.0 * x.value() / std::hypot(2.0 * x.value(), 3.0 * y.value()));
+        T(4.0) * x.value() /
+            hypot(T(2.0) * x.value(), T(3.0) * y.value()));  // NOLINT
   CHECK(g.value().coeff(0) ==
-        4.0 * x.value() / std::hypot(2.0 * x.value(), 3.0 * y.value()));
+        T(4.0) * x.value() /
+            hypot(T(2.0) * x.value(), T(3.0) * y.value()));  // NOLINT
 
-  g = slp::Gradient(slp::hypot(2.0 * x, 3.0 * y), y);
+  g = slp::Gradient(slp::hypot(T(2.0) * x, T(3.0) * y), y);
   CHECK(g.get().value().coeff(0) ==
-        9.0 * y.value() / std::hypot(2.0 * x.value(), 3.0 * y.value()));
+        T(9.0) * y.value() /
+            hypot(T(2.0) * x.value(), T(3.0) * y.value()));  // NOLINT
   CHECK(g.value().coeff(0) ==
-        9.0 * y.value() / std::hypot(2.0 * x.value(), 3.0 * y.value()));
+        T(9.0) * y.value() /
+            hypot(T(2.0) * x.value(), T(3.0) * y.value()));  // NOLINT
 
   // Testing hypot function on (var, var, var)
-  slp::Variable z;
-  x.set_value(1.3);
-  y.set_value(2.3);
-  z.set_value(3.3);
+  slp::Variable<T> z;
+  x.set_value(T(1.3));
+  y.set_value(T(2.3));
+  z.set_value(T(3.3));
   CHECK(slp::hypot(x, y, z).value() ==
-        std::hypot(x.value(), y.value(), z.value()));
+        hypot(x.value(), y.value(), z.value()));  // NOLINT
 
   g = slp::Gradient(slp::hypot(x, y, z), x);
   CHECK(g.get().value().coeff(0) ==
-        x.value() / std::hypot(x.value(), y.value(), z.value()));
+        x.value() / hypot(x.value(), y.value(), z.value()));  // NOLINT
   CHECK(g.value().coeff(0) ==
-        x.value() / std::hypot(x.value(), y.value(), z.value()));
+        x.value() / hypot(x.value(), y.value(), z.value()));  // NOLINT
 
   g = slp::Gradient(slp::hypot(x, y, z), y);
   CHECK(g.get().value().coeff(0) ==
-        y.value() / std::hypot(x.value(), y.value(), z.value()));
+        y.value() / hypot(x.value(), y.value(), z.value()));  // NOLINT
   CHECK(g.value().coeff(0) ==
-        y.value() / std::hypot(x.value(), y.value(), z.value()));
+        y.value() / hypot(x.value(), y.value(), z.value()));  // NOLINT
 
   g = slp::Gradient(slp::hypot(x, y, z), z);
   CHECK(g.get().value().coeff(0) ==
-        z.value() / std::hypot(x.value(), y.value(), z.value()));
+        z.value() / hypot(x.value(), y.value(), z.value()));  // NOLINT
   CHECK(g.value().coeff(0) ==
-        z.value() / std::hypot(x.value(), y.value(), z.value()));
+        z.value() / hypot(x.value(), y.value(), z.value()));  // NOLINT
 }
 
-TEST_CASE("Gradient - Miscellaneous", "[Gradient]") {
-  slp::Variable x;
+TEMPLATE_TEST_CASE("Gradient - Miscellaneous", "[Gradient]",
+                   SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
+  using std::abs;
+  using std::exp;
+
+  slp::Variable<T> x;
 
   // dx/dx
-  x.set_value(3.0);
-  CHECK(slp::abs(x).value() == std::abs(x.value()));
+  x.set_value(T(3.0));
+  CHECK(slp::abs(x).value() == abs(x.value()));  // NOLINT
 
   auto g = slp::Gradient(x, x);
-  CHECK(g.get().value().coeff(0) == 1.0);
-  CHECK(g.value().coeff(0) == 1.0);
+  CHECK(g.get().value().coeff(0) == T(1.0));
+  CHECK(g.value().coeff(0) == T(1.0));
 
   // std::erf(x)
-  x.set_value(0.5);
-  CHECK(slp::erf(x).value() == std::erf(x.value()));
+  x.set_value(T(0.5));
+  CHECK(slp::erf(x).value() == erf(x.value()));  // NOLINT
 
   g = slp::Gradient(slp::erf(x), x);
-  CHECK(g.get().value().coeff(0) ==
-        2.0 * std::numbers::inv_sqrtpi * std::exp(-x.value() * x.value()));
-  CHECK(g.value().coeff(0) ==
-        2.0 * std::numbers::inv_sqrtpi * std::exp(-x.value() * x.value()));
+  CHECK(g.get().value().coeff(0) == T(2.0) * T(std::numbers::inv_sqrtpi) *
+                                        exp(-x.value() * x.value()));  // NOLINT
+  CHECK(g.value().coeff(0) == T(2.0) * T(std::numbers::inv_sqrtpi) *
+                                  exp(-x.value() * x.value()));  // NOLINT
 }
 
-TEST_CASE("Gradient - Variable reuse", "[Gradient]") {
-  slp::Variable a;
-  a.set_value(10);
+TEMPLATE_TEST_CASE("Gradient - Variable reuse", "[Gradient]",
+                   SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
 
-  slp::Variable b;
-  b.set_value(20);
+  slp::Variable<T> a;
+  a.set_value(T(10));
+
+  slp::Variable<T> b;
+  b.set_value(T(20));
 
   slp::Variable x = a * b;
 
   auto g = slp::Gradient(x, a);
 
-  CHECK(g.get().value().coeff(0) == 20.0);
-  CHECK(g.value().coeff(0) == 20.0);
+  CHECK(g.get().value().coeff(0) == T(20.0));
+  CHECK(g.value().coeff(0) == T(20.0));
 
-  b.set_value(10);
-  CHECK(g.get().value().coeff(0) == 10.0);
-  CHECK(g.value().coeff(0) == 10.0);
+  b.set_value(T(10));
+  CHECK(g.get().value().coeff(0) == T(10.0));
+  CHECK(g.value().coeff(0) == T(10.0));
 }
 
-TEST_CASE("Gradient - sign()", "[Gradient]") {
-  auto sign = [](double x) {
-    if (x < 0.0) {
-      return -1.0;
-    } else if (x == 0.0) {
-      return 0.0;
+TEMPLATE_TEST_CASE("Gradient - sign()", "[Gradient]", SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
+
+  auto sign = [](T x) {
+    if (x < T(0.0)) {
+      return T(-1.0);
+    } else if (x == T(0.0)) {
+      return T(0.0);
     } else {
-      return 1.0;
+      return T(1.0);
     }
   };
 
-  slp::Variable x;
+  slp::Variable<T> x;
 
   // sign(1.0)
-  x.set_value(1.0);
+  x.set_value(T(1.0));
   CHECK(slp::sign(x).value() == sign(x.value()));
 
   auto g = slp::Gradient(slp::sign(x), x);
-  CHECK(g.get().value().coeff(0) == 0.0);
-  CHECK(g.value().coeff(0) == 0.0);
+  CHECK(g.get().value().coeff(0) == T(0.0));
+  CHECK(g.value().coeff(0) == T(0.0));
 
   // sign(-1.0)
-  x.set_value(-1.0);
+  x.set_value(T(-1.0));
   CHECK(slp::sign(x).value() == sign(x.value()));
 
   g = slp::Gradient(slp::sign(x), x);
-  CHECK(g.get().value().coeff(0) == 0.0);
-  CHECK(g.value().coeff(0) == 0.0);
+  CHECK(g.get().value().coeff(0) == T(0.0));
+  CHECK(g.value().coeff(0) == T(0.0));
 
   // sign(0.0)
-  x.set_value(0.0);
+  x.set_value(T(0.0));
   CHECK(slp::sign(x).value() == sign(x.value()));
 
   g = slp::Gradient(slp::sign(x), x);
-  CHECK(g.get().value().coeff(0) == 0.0);
-  CHECK(g.value().coeff(0) == 0.0);
+  CHECK(g.get().value().coeff(0) == T(0.0));
+  CHECK(g.value().coeff(0) == T(0.0));
 }
 
-TEST_CASE("Gradient - Non-scalar", "[Gradient]") {
-  slp::VariableMatrix x{3};
-  x[0].set_value(1);
-  x[1].set_value(2);
-  x[2].set_value(3);
+TEMPLATE_TEST_CASE("Gradient - Non-scalar", "[Gradient]",
+                   SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
+
+  slp::VariableMatrix<T> x{3};
+  x[0].set_value(T(1));
+  x[1].set_value(T(2));
+  x[2].set_value(T(3));
 
   // y = [x₁ + 3x₂ − 5x₃]
   //
   // dy/dx = [1  3  −5]
-  auto y = x[0] + 3 * x[1] - 5 * x[2];
+  auto y = x[0] + T(3) * x[1] - T(5) * x[2];
   auto g = slp::Gradient(y, x);
 
-  Eigen::MatrixXd expected_g{{1.0}, {3.0}, {-5.0}};
+  Eigen::Matrix<T, 3, 1> expected_g{{T(1.0)}, {T(3.0)}, {T(-5.0)}};
 
   auto g_get_value = g.get().value();
   CHECK(g_get_value.rows() == 3);

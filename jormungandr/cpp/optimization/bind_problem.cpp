@@ -15,16 +15,16 @@ namespace nb = nanobind;
 
 namespace slp {
 
-void bind_problem(nb::class_<Problem>& cls) {
+void bind_problem(nb::class_<Problem<double>>& cls) {
   using namespace nb::literals;
 
   cls.def(
       "__init__",
-      [](Problem* self) {
-        new (self) Problem();
+      [](Problem<double>* self) {
+        new (self) Problem<double>();
 
         // Make Python signals (e.g., SIGINT from Ctrl-C) abort the solve
-        self->add_persistent_callback([](const IterationInfo&) -> bool {
+        self->add_persistent_callback([](const IterationInfo<double>&) -> bool {
           if (PyErr_CheckSignals() != 0) {
             throw nb::python_error();
           }
@@ -32,49 +32,62 @@ void bind_problem(nb::class_<Problem>& cls) {
         });
       },
       DOC(slp, Problem, Problem));
-  cls.def("decision_variable", nb::overload_cast<>(&Problem::decision_variable),
+  cls.def("decision_variable",
+          nb::overload_cast<>(&Problem<double>::decision_variable),
           DOC(slp, Problem, decision_variable));
   cls.def("decision_variable",
-          nb::overload_cast<int, int>(&Problem::decision_variable), "rows"_a,
-          "cols"_a = 1, DOC(slp, Problem, decision_variable, 2));
-  cls.def("symmetric_decision_variable", &Problem::symmetric_decision_variable,
-          "rows"_a, DOC(slp, Problem, symmetric_decision_variable));
-  cls.def("minimize", nb::overload_cast<const Variable&>(&Problem::minimize),
-          "cost"_a, DOC(slp, Problem, minimize));
+          nb::overload_cast<int, int>(&Problem<double>::decision_variable),
+          "rows"_a, "cols"_a = 1, DOC(slp, Problem, decision_variable, 2));
+  cls.def("symmetric_decision_variable",
+          &Problem<double>::symmetric_decision_variable, "rows"_a,
+          DOC(slp, Problem, symmetric_decision_variable));
   cls.def(
       "minimize",
-      [](Problem& self, const VariableMatrix& cost) { self.minimize(cost); },
+      nb::overload_cast<const Variable<double>&>(&Problem<double>::minimize),
       "cost"_a, DOC(slp, Problem, minimize));
   cls.def(
-      "minimize", [](Problem& self, double cost) { self.minimize(cost); },
+      "minimize",
+      [](Problem<double>& self, const VariableMatrix<double>& cost) {
+        self.minimize(cost);
+      },
       "cost"_a, DOC(slp, Problem, minimize));
-  cls.def("maximize", nb::overload_cast<const Variable&>(&Problem::maximize),
-          "objective"_a, DOC(slp, Problem, maximize));
+  cls.def(
+      "minimize",
+      [](Problem<double>& self, double cost) { self.minimize(cost); }, "cost"_a,
+      DOC(slp, Problem, minimize));
   cls.def(
       "maximize",
-      [](Problem& self, const VariableMatrix& objective) {
+      nb::overload_cast<const Variable<double>&>(&Problem<double>::maximize),
+      "objective"_a, DOC(slp, Problem, maximize));
+  cls.def(
+      "maximize",
+      [](Problem<double>& self, const VariableMatrix<double>& objective) {
         self.maximize(objective);
       },
       "objective"_a, DOC(slp, Problem, maximize));
   cls.def(
       "maximize",
-      [](Problem& self, double objective) { self.maximize(objective); },
+      [](Problem<double>& self, double objective) { self.maximize(objective); },
       "objective"_a, DOC(slp, Problem, maximize));
   cls.def("subject_to",
-          nb::overload_cast<const EqualityConstraints&>(&Problem::subject_to),
+          nb::overload_cast<const EqualityConstraints<double>&>(
+              &Problem<double>::subject_to),
           "constraint"_a, DOC(slp, Problem, subject_to));
   cls.def("subject_to",
-          nb::overload_cast<const InequalityConstraints&>(&Problem::subject_to),
+          nb::overload_cast<const InequalityConstraints<double>&>(
+              &Problem<double>::subject_to),
           "constraint"_a, DOC(slp, Problem, subject_to, 3));
-  cls.def("cost_function_type", &Problem::cost_function_type,
+  cls.def("cost_function_type", &Problem<double>::cost_function_type,
           DOC(slp, Problem, cost_function_type));
-  cls.def("equality_constraint_type", &Problem::equality_constraint_type,
+  cls.def("equality_constraint_type",
+          &Problem<double>::equality_constraint_type,
           DOC(slp, Problem, equality_constraint_type));
-  cls.def("inequality_constraint_type", &Problem::inequality_constraint_type,
+  cls.def("inequality_constraint_type",
+          &Problem<double>::inequality_constraint_type,
           DOC(slp, Problem, inequality_constraint_type));
   cls.def(
       "solve",
-      [](Problem& self, const nb::kwargs& kwargs) {
+      [](Problem<double>& self, const nb::kwargs& kwargs) {
         Options options;
         bool spy = false;
 
@@ -82,9 +95,9 @@ void bind_problem(nb::class_<Problem>& cls) {
           // XXX: The keyword arguments are manually copied from the struct
           // members in include/sleipnir/optimization/solver/options.hpp.
           //
-          // C++'s Problem::Solve() takes an Options object instead of keyword
-          // arguments, so there's no compile-time checking that the arguments
-          // match.
+          // C++'s Problem<double>::Solve() takes an Options object instead of
+          // keyword arguments, so there's no compile-time checking that the
+          // arguments match.
           auto key_str = nb::cast<std::string>(key);
           if (key_str == "tolerance") {
             options.tolerance = nb::cast<double>(value);
@@ -110,8 +123,8 @@ void bind_problem(nb::class_<Problem>& cls) {
       // XXX: The keyword argument docs are manually copied from the struct
       // member docs in include/sleipnir/optimization/solver/options.hpp.
       //
-      // C++'s Problem::Solve() takes an Options object instead of keyword
-      // arguments, so pybind11_mkdoc generates the wrong docs.
+      // C++'s Problem<double>::Solve() takes an Options object instead of
+      // keyword arguments, so pybind11_mkdoc generates the wrong docs.
       R"doc(Solve the optimization problem. The solution will be stored in the
 original variables used to construct the problem.
 
@@ -201,12 +214,12 @@ Parameter ``spy``:
     (default: False))doc");
   cls.def(
       "add_callback",
-      [](Problem& self,
-         std::function<bool(const IterationInfo& info)> callback) {
+      [](Problem<double>& self,
+         std::function<bool(const IterationInfo<double>& info)> callback) {
         self.add_callback(std::move(callback));
       },
       "callback"_a, DOC(slp, Problem, add_callback, 2));
-  cls.def("clear_callbacks", &Problem::clear_callbacks,
+  cls.def("clear_callbacks", &Problem<double>::clear_callbacks,
           DOC(slp, Problem, clear_callbacks));
 }
 

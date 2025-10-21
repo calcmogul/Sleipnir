@@ -30,27 +30,31 @@ NB_MODULE(_jormungandr, m) {
   nb::enum_<ExpressionType> expression_type{autodiff, "ExpressionType",
                                             DOC(slp, ExpressionType)};
 
-  nb::class_<Variable> variable{autodiff, "Variable", DOC(slp, Variable)};
-  nb::class_<VariableMatrix> variable_matrix{autodiff, "VariableMatrix",
-                                             DOC(slp, VariableMatrix)};
-  nb::class_<VariableBlock<VariableMatrix>> variable_block{
+  nb::class_<Variable<double>> variable{autodiff, "Variable",
+                                        DOC(slp, Variable)};
+  nb::class_<VariableMatrix<double>> variable_matrix{autodiff, "VariableMatrix",
+                                                     DOC(slp, VariableMatrix)};
+  nb::class_<VariableBlock<VariableMatrix<double>>> variable_block{
       autodiff, "VariableBlock", DOC(slp, VariableBlock)};
 
-  nb::class_<Gradient> gradient{autodiff, "Gradient", DOC(slp, Gradient)};
-  nb::class_<Hessian<>> hessian{autodiff, "Hessian", DOC(slp, Hessian)};
-  nb::class_<Jacobian> jacobian{autodiff, "Jacobian", DOC(slp, Jacobian)};
+  nb::class_<Gradient<double>> gradient{autodiff, "Gradient",
+                                        DOC(slp, Gradient)};
+  nb::class_<Hessian<double>> hessian{autodiff, "Hessian", DOC(slp, Hessian)};
+  nb::class_<Jacobian<double>> jacobian{autodiff, "Jacobian",
+                                        DOC(slp, Jacobian)};
 
-  nb::class_<EqualityConstraints> equality_constraints{
+  nb::class_<EqualityConstraints<double>> equality_constraints{
       optimization, "EqualityConstraints", DOC(slp, EqualityConstraints)};
-  nb::class_<InequalityConstraints> inequality_constraints{
+  nb::class_<InequalityConstraints<double>> inequality_constraints{
       optimization, "InequalityConstraints", DOC(slp_InequalityConstraints)};
 
   nb::enum_<ExitStatus> exit_status{optimization, "ExitStatus",
                                     DOC(slp, ExitStatus)};
-  nb::class_<IterationInfo> iteration_info{optimization, "IterationInfo",
-                                           DOC(slp, IterationInfo)};
+  nb::class_<IterationInfo<double>> iteration_info{
+      optimization, "IterationInfo", DOC(slp, IterationInfo)};
 
-  nb::class_<Problem> problem{optimization, "Problem", DOC(slp, Problem)};
+  nb::class_<Problem<double>> problem{optimization, "Problem",
+                                      DOC(slp, Problem)};
 
   nb::enum_<DynamicsType> dynamics_type{optimization, "DynamicsType",
                                         DOC(slp, DynamicsType)};
@@ -59,7 +63,8 @@ NB_MODULE(_jormungandr, m) {
   nb::enum_<TranscriptionMethod> transcription_method{
       optimization, "TranscriptionMethod", DOC(slp, TranscriptionMethod)};
 
-  nb::class_<OCP, Problem> ocp{optimization, "OCP", DOC(slp, OCP)};
+  nb::class_<OCP<double>, Problem<double>> ocp{optimization, "OCP",
+                                               DOC(slp, OCP)};
 
   bind_expression_type(expression_type);
 
@@ -68,8 +73,9 @@ NB_MODULE(_jormungandr, m) {
   bind_variable_block(variable_block);
 
   // Implicit conversions
-  variable.def(nb::init_implicit<VariableMatrix>());
-  variable_matrix.def(nb::init_implicit<VariableBlock<VariableMatrix>>());
+  variable.def(nb::init_implicit<VariableMatrix<double>>());
+  variable_matrix.def(
+      nb::init_implicit<VariableBlock<VariableMatrix<double>>>());
 
   bind_gradient(gradient);
   bind_hessian(hessian);

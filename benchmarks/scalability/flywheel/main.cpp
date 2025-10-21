@@ -41,7 +41,7 @@ int main(int argc, char* argv[]) {
         sample_sizes_to_test, &flywheel_casadi);
   }
   if (run_sleipnir) {
-    run_benchmarks_and_log<slp::Problem>(
+    run_benchmarks_and_log<slp::Problem<double>>(
         "flywheel-scalability-results-sleipnir.csv", diagnostics, T,
         sample_sizes_to_test, &flywheel_sleipnir);
   }

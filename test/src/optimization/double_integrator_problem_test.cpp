@@ -7,25 +7,29 @@
 
 #include <Eigen/Core>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <sleipnir/optimization/problem.hpp>
+#include <sleipnir/util/scope_exit.hpp>
 
 #include "catch_string_converters.hpp"
-#include "util/scope_exit.hpp"
+#include "scalar_types_under_test.hpp"
 
-TEST_CASE("Problem - Double integrator", "[Problem]") {
-  using namespace std::chrono_literals;
+TEMPLATE_TEST_CASE("Problem - Double integrator", "[Problem]",
+                   SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
+  using std::abs;
 
   slp::scope_exit exit{
       [] { CHECK(slp::global_pool_resource().blocks_in_use() == 0u); }};
 
-  constexpr std::chrono::duration<double> TOTAL_TIME = 3.5s;
-  constexpr std::chrono::duration<double> dt = 5ms;
-  constexpr int N = TOTAL_TIME / dt;
+  constexpr std::chrono::duration<T> TOTAL_TIME{T(3.5)};
+  constexpr std::chrono::duration<T> dt{T(0.05)};
+  constexpr int N = static_cast<int>(TOTAL_TIME / dt);
 
-  constexpr double r = 2.0;  // m
+  constexpr T r{2.0};  // m
 
-  slp::Problem problem;
+  slp::Problem<T> problem;
 
   // 2x1 state vector with N + 1 timesteps (includes last state)
   auto X = problem.decision_variable(2, N + 1);
@@ -35,7 +39,7 @@ TEST_CASE("Problem - Double integrator", "[Problem]") {
 
   // Kinematics constraint assuming constant acceleration between timesteps
   for (int k = 0; k < N; ++k) {
-    constexpr double t = dt.count();
+    constexpr T t = dt.count();
     auto p_k1 = X[0, k + 1];
     auto v_k1 = X[1, k + 1];
     auto p_k = X[0, k];
@@ -50,19 +54,19 @@ TEST_CASE("Problem - Double integrator", "[Problem]") {
   }
 
   // Start and end at rest
-  problem.subject_to(X.col(0) == Eigen::Matrix<double, 2, 1>{{0.0}, {0.0}});
-  problem.subject_to(X.col(N) == Eigen::Matrix<double, 2, 1>{{r}, {0.0}});
+  problem.subject_to(X.col(0) == Eigen::Matrix<T, 2, 1>{{T(0.0)}, {T(0.0)}});
+  problem.subject_to(X.col(N) == Eigen::Matrix<T, 2, 1>{{r}, {T(0.0)}});
 
   // Limit velocity
-  problem.subject_to(-1 <= X.row(1));
-  problem.subject_to(X.row(1) <= 1);
+  problem.subject_to(T(-1) <= X.row(1));
+  problem.subject_to(X.row(1) <= T(1));
 
   // Limit acceleration
-  problem.subject_to(-1 <= U);
-  problem.subject_to(U <= 1);
+  problem.subject_to(T(-1) <= U);
+  problem.subject_to(U <= T(1));
 
   // Cost function - minimize position error
-  slp::Variable J = 0.0;
+  slp::Variable J = T(0.0);
   for (int k = 0; k < N + 1; ++k) {
     J += slp::pow(r - X[0, k], 2);
   }
@@ -74,45 +78,46 @@ TEST_CASE("Problem - Double integrator", "[Problem]") {
 
   CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
 
-  Eigen::Matrix<double, 2, 2> A{{1.0, dt.count()}, {0.0, 1.0}};
-  Eigen::Matrix<double, 2, 1> B{0.5 * dt.count() * dt.count(), dt.count()};
+  Eigen::Matrix<T, 2, 2> A{{T(1.0), dt.count()}, {T(0.0), T(1.0)}};
+  Eigen::Matrix<T, 2, 1> B{T(0.5) * dt.count() * dt.count(), dt.count()};
 
   // Verify initial state
-  CHECK(X.value(0, 0) == Catch::Approx(0.0).margin(1e-8));
-  CHECK(X.value(1, 0) == Catch::Approx(0.0).margin(1e-8));
+  CHECK(X.value(0, 0) == Catch::Approx(T(0.0)).margin(T(1e-8)));
+  CHECK(X.value(1, 0) == Catch::Approx(T(0.0)).margin(T(1e-8)));
 
   // Verify solution
-  Eigen::Matrix<double, 2, 1> x{0.0, 0.0};
-  Eigen::Matrix<double, 1, 1> u{0.0};
+  Eigen::Matrix<T, 2, 1> x{T(0.0), T(0.0)};
+  Eigen::Matrix<T, 1, 1> u{T(0.0)};
   for (int k = 0; k < N; ++k) {
     // Verify state
-    CHECK(X.value(0, k) == Catch::Approx(x(0)).margin(1e-2));
-    CHECK(X.value(1, k) == Catch::Approx(x(1)).margin(1e-2));
+    CHECK(X.value(0, k) == Catch::Approx(x(0)).margin(T(1e-2)));
+    CHECK(X.value(1, k) == Catch::Approx(x(1)).margin(T(1e-2)));
 
     // Determine expected input for this timestep
-    if (k * dt < 1s) {
+    if (k * dt < std::chrono::duration<T>{T(1.0)}) {
       // Accelerate
-      u(0) = 1.0;
-    } else if (k * dt < 2.05s) {
+      u(0) = T(1.0);
+    } else if (k * dt < std::chrono::duration<T>{T(2.05)}) {
       // Maintain speed
-      u(0) = 0.0;
-    } else if (k * dt < 3.275s) {
+      u(0) = T(0.0);
+    } else if (k * dt < std::chrono::duration<T>{T(3.275)}) {
       // Decelerate
-      u(0) = -1.0;
+      u(0) = T(-1.0);
     } else {
       // Accelerate
-      u(0) = 1.0;
+      u(0) = T(1.0);
     }
 
     // Verify input
     if (k > 0 && k < N - 1 &&
-        std::abs(U.value(0, k - 1) - U.value(0, k + 1)) >= 1.0 - 1e-2) {
+        abs(U.value(0, k - 1) - U.value(0, k + 1)) >=  // NOLINT
+            T(1.0 - 1e-2)) {
       // If control input is transitioning between -1, 0, or 1, ensure it's
       // within (-1, 1)
-      CHECK(U.value(0, k) >= -1.0);
-      CHECK(U.value(0, k) <= 1.0);
+      CHECK(U.value(0, k) >= T(-1.0));
+      CHECK(U.value(0, k) <= T(1.0));
     } else {
-      CHECK(U.value(0, k) == Catch::Approx(u(0)).margin(1e-4));
+      CHECK(U.value(0, k) == Catch::Approx(u(0)).margin(T(1e-4)));
     }
 
     INFO(std::format("  k = {}", k));
@@ -122,8 +127,8 @@ TEST_CASE("Problem - Double integrator", "[Problem]") {
   }
 
   // Verify final state
-  CHECK(X.value(0, N) == Catch::Approx(r).margin(1e-8));
-  CHECK(X.value(1, N) == Catch::Approx(0.0).margin(1e-8));
+  CHECK(X.value(0, N) == Catch::Approx(r).margin(T(1e-8)));
+  CHECK(X.value(1, N) == Catch::Approx(T(0.0)).margin(T(1e-8)));
 
   // Log states for offline viewing
   std::ofstream states{"Problem Double Integrator states.csv"};
@@ -145,7 +150,7 @@ TEST_CASE("Problem - Double integrator", "[Problem]") {
       if (k < N) {
         inputs << std::format("{},{}\n", k * dt.count(), U.value(0, k));
       } else {
-        inputs << std::format("{},{}\n", k * dt.count(), 0.0);
+        inputs << std::format("{},{}\n", k * dt.count(), T(0.0));
       }
     }
   }

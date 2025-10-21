@@ -23,9 +23,29 @@
 #endif
 
 
-static const char *__doc_Eigen_NumTraits =
-R"doc(NumTraits specialization that allows instantiating Eigen types with
-Variable.)doc";
+static const char *__doc_slp = R"doc()doc";
+
+static const char *__doc_slp_2 = R"doc()doc";
+
+static const char *__doc_slp_3 = R"doc()doc";
+
+static const char *__doc_slp_4 = R"doc()doc";
+
+static const char *__doc_slp_5 = R"doc()doc";
+
+static const char *__doc_slp_6 = R"doc()doc";
+
+static const char *__doc_slp_7 = R"doc()doc";
+
+static const char *__doc_slp_8 = R"doc()doc";
+
+static const char *__doc_slp_9 = R"doc()doc";
+
+static const char *__doc_slp_10 = R"doc()doc";
+
+static const char *__doc_slp_11 = R"doc()doc";
+
+static const char *__doc_slp_12 = R"doc()doc";
 
 static const char *__doc_slp_DynamicsType = R"doc(Enum describing a type of system dynamics constraints.)doc";
 
@@ -33,7 +53,11 @@ static const char *__doc_slp_DynamicsType_DISCRETE = R"doc(The dynamics are a fu
 
 static const char *__doc_slp_DynamicsType_EXPLICIT_ODE = R"doc(The dynamics are a function in the form dx/dt = f(t, x, u).)doc";
 
-static const char *__doc_slp_EqualityConstraints = R"doc(A vector of equality constraints of the form cₑ(x) = 0.)doc";
+static const char *__doc_slp_EqualityConstraints =
+R"doc(A vector of equality constraints of the form cₑ(x) = 0.
+
+Template parameter ``Scalar``:
+    Scalar type.)doc";
 
 static const char *__doc_slp_EqualityConstraints_EqualityConstraints =
 R"doc(Concatenates multiple equality constraints.
@@ -126,7 +150,12 @@ R"doc(This class calculates the gradient of a variable with respect to a
 vector of variables.
 
 The gradient is only recomputed if the variable expression is
-quadratic or higher order.)doc";
+quadratic or higher order.
+
+Template parameter ``Scalar``:
+    Scalar type.)doc";
+
+static const char *__doc_slp_Gradient_2 = R"doc()doc";
 
 static const char *__doc_slp_Gradient_Gradient =
 R"doc(Constructs a Gradient object.
@@ -165,6 +194,9 @@ vector of variables.
 The gradient tree is cached so subsequent Hessian calculations are
 faster, and the Hessian is only recomputed if the variable expression
 is nonlinear.
+
+Template parameter ``Scalar``:
+    Scalar type.
 
 Template parameter ``UpLo``:
     Which part of the Hessian to compute (Lower or Lower | Upper).)doc";
@@ -209,7 +241,11 @@ R"doc(Evaluates the Hessian at wrt's value.
 Returns:
     The Hessian at wrt's value.)doc";
 
-static const char *__doc_slp_InequalityConstraints = R"doc(A vector of inequality constraints of the form cᵢ(x) ≥ 0.)doc";
+static const char *__doc_slp_InequalityConstraints =
+R"doc(A vector of inequality constraints of the form cᵢ(x) ≥ 0.
+
+Template parameter ``Scalar``:
+    Scalar type.)doc";
 
 static const char *__doc_slp_InequalityConstraints_InequalityConstraints =
 R"doc(Concatenates multiple inequality constraints.
@@ -242,7 +278,11 @@ static const char *__doc_slp_InequalityConstraints_constraints = R"doc(A vector 
 
 static const char *__doc_slp_InequalityConstraints_operator_bool = R"doc(Implicit conversion operator to bool.)doc";
 
-static const char *__doc_slp_IterationInfo = R"doc(Solver iteration information exposed to an iteration callback.)doc";
+static const char *__doc_slp_IterationInfo =
+R"doc(Solver iteration information exposed to an iteration callback.
+
+Template parameter ``Scalar``:
+    Scalar type.)doc";
 
 static const char *__doc_slp_IterationInfo_A_e = R"doc(The equality constraint Jacobian.)doc";
 
@@ -261,9 +301,14 @@ R"doc(This class calculates the Jacobian of a vector of variables with
 respect to a vector of variables.
 
 The Jacobian is only recomputed if the variable expression is
-quadratic or higher order.)doc";
+quadratic or higher order.
+
+Template parameter ``Scalar``:
+    Scalar type.)doc";
 
 static const char *__doc_slp_Jacobian_2 = R"doc()doc";
+
+static const char *__doc_slp_Jacobian_3 = R"doc()doc";
 
 static const char *__doc_slp_Jacobian_Jacobian =
 R"doc(Constructs a Jacobian object.
@@ -330,7 +375,12 @@ Direct collocation requires an explicit ODE. Direct transcription and
 single-shooting can use either an ODE or state transition function.
 
 https://underactuated.mit.edu/trajopt.html goes into more detail on
-each transcription method.)doc";
+each transcription method.
+
+Template parameter ``Scalar``:
+    Scalar type.)doc";
+
+static const char *__doc_slp_OCP_2 = R"doc()doc";
 
 static const char *__doc_slp_OCP_OCP =
 R"doc(Build an optimization problem using a system evolution function
@@ -578,7 +628,12 @@ use when searching for an optimal solution.
 
 The nice thing about this class is users don't have to put their
 system in the form shown above manually; they can write it in natural
-mathematical form and it'll be converted for them.)doc";
+mathematical form and it'll be converted for them.
+
+Template parameter ``Scalar``:
+    Scalar type.)doc";
+
+static const char *__doc_slp_Problem_2 = R"doc()doc";
 
 static const char *__doc_slp_Problem_Problem = R"doc(Construct the optimization problem.)doc";
 
@@ -790,7 +845,11 @@ static const char *__doc_slp_TranscriptionMethod_SINGLE_SHOOTING =
 R"doc(States depend explicitly as a function of all previous states and all
 previous inputs.)doc";
 
-static const char *__doc_slp_Variable = R"doc(An autodiff variable pointing to an expression node.)doc";
+static const char *__doc_slp_Variable =
+R"doc(An autodiff variable pointing to an expression node.
+
+Template parameter ``Scalar_``:
+    Scalar type.)doc";
 
 static const char *__doc_slp_VariableBlock =
 R"doc(A submatrix of autodiff variables with reference semantics.
@@ -1269,7 +1328,7 @@ Returns:
     A segment of the variable vector.)doc";
 
 static const char *__doc_slp_VariableBlock_set_value =
-R"doc(Assigns a double to the block.
+R"doc(Assigns a scalar to the block.
 
 This only works for blocks with one row and one column.
 
@@ -1315,7 +1374,11 @@ R"doc(Returns the contents of the variable matrix.
 Returns:
     The contents of the variable matrix.)doc";
 
-static const char *__doc_slp_VariableMatrix = R"doc(A matrix of autodiff variables.)doc";
+static const char *__doc_slp_VariableMatrix =
+R"doc(A matrix of autodiff variables.
+
+Template parameter ``Scalar_``:
+    Scalar type.)doc";
 
 static const char *__doc_slp_VariableMatrix_T =
 R"doc(Returns the transpose of the variable matrix.
@@ -1358,7 +1421,7 @@ Parameter ``list``:
     The nested list of Variables.)doc";
 
 static const char *__doc_slp_VariableMatrix_VariableMatrix_6 =
-R"doc(Constructs a scalar VariableMatrix from a nested list of doubles.
+R"doc(Constructs a scalar VariableMatrix from a nested list of scalars.
 
 This overload is for Python bindings only.
 
@@ -1551,8 +1614,6 @@ Parameter ``unary_op``:
 
 Returns:
     Result of the unary operator.)doc";
-
-static const char *__doc_slp_VariableMatrix_empty_t = R"doc(Type tag used to designate an uninitialized VariableMatrix.)doc";
 
 static const char *__doc_slp_VariableMatrix_end =
 R"doc(Returns end iterator.
@@ -1866,17 +1927,25 @@ static const char *__doc_slp_Variable_Variable = R"doc(Constructs a linear Varia
 
 static const char *__doc_slp_Variable_Variable_2 = R"doc(Constructs an empty Variable.)doc";
 
-static const char *__doc_slp_Variable_Variable_3 = R"doc()doc";
+static const char *__doc_slp_Variable_Variable_3 =
+R"doc(Constructs a Variable from a scalar type.
+
+Parameter ``value``:
+    The value of the Variable.)doc";
 
 static const char *__doc_slp_Variable_Variable_4 = R"doc()doc";
 
-static const char *__doc_slp_Variable_Variable_5 =
+static const char *__doc_slp_Variable_Variable_5 = R"doc()doc";
+
+static const char *__doc_slp_Variable_Variable_6 = R"doc()doc";
+
+static const char *__doc_slp_Variable_Variable_7 =
 R"doc(Constructs a Variable pointing to the specified expression.
 
 Parameter ``expr``:
     The autodiff variable.)doc";
 
-static const char *__doc_slp_Variable_Variable_6 =
+static const char *__doc_slp_Variable_Variable_8 =
 R"doc(Constructs a Variable pointing to the specified expression.
 
 Parameter ``expr``:
@@ -1890,14 +1959,7 @@ dependent variables)doc";
 
 static const char *__doc_slp_Variable_m_graph_initialized = R"doc(Used for lazy initialization of m_graph)doc";
 
-static const char *__doc_slp_Variable_operator_assign =
-R"doc(Assignment operator for double.
-
-Parameter ``value``:
-    The value of the Variable.
-
-Returns:
-    This variable.)doc";
+static const char *__doc_slp_Variable_operator_assign = R"doc()doc";
 
 static const char *__doc_slp_Variable_operator_iadd =
 R"doc(Variable-Variable compound addition operator.
@@ -1957,11 +2019,17 @@ Returns:
 static const char *__doc_slp_abs =
 R"doc(std::abs() for Variables.
 
+Template parameter ``Scalar``:
+    Scalar type.
+
 Parameter ``x``:
     The argument.)doc";
 
 static const char *__doc_slp_acos =
 R"doc(std::acos() for Variables.
+
+Template parameter ``Scalar``:
+    Scalar type.
 
 Parameter ``x``:
     The argument.)doc";
@@ -1969,17 +2037,50 @@ Parameter ``x``:
 static const char *__doc_slp_asin =
 R"doc(std::asin() for Variables.
 
+Template parameter ``Scalar``:
+    Scalar type.
+
 Parameter ``x``:
     The argument.)doc";
 
 static const char *__doc_slp_atan =
 R"doc(std::atan() for Variables.
 
+Template parameter ``Scalar``:
+    Scalar type.
+
 Parameter ``x``:
     The argument.)doc";
 
 static const char *__doc_slp_atan2 =
 R"doc(std::atan2() for Variables.
+
+Template parameter ``Scalar``:
+    Scalar type.
+
+Parameter ``y``:
+    The y argument.
+
+Parameter ``x``:
+    The x argument.)doc";
+
+static const char *__doc_slp_atan2_2 =
+R"doc(std::atan2() for Variables.
+
+Template parameter ``Scalar``:
+    Scalar type.
+
+Parameter ``y``:
+    The y argument.
+
+Parameter ``x``:
+    The x argument.)doc";
+
+static const char *__doc_slp_atan2_3 =
+R"doc(std::atan2() for Variables.
+
+Template parameter ``Scalar``:
+    Scalar type.
 
 Parameter ``y``:
     The y argument.
@@ -1995,6 +2096,9 @@ rows must have the same width. For example, for the block matrix [[A,
 B], [C]] to be constructible, the number of rows in A and B must
 match, and the number of columns in [A, B] and [C] must match.
 
+Template parameter ``Scalar``:
+    Scalar type.
+
 Parameter ``list``:
     The nested list of blocks.)doc";
 
@@ -2008,11 +2112,17 @@ match, and the number of columns in [A, B] and [C] must match.
 
 This overload is for Python bindings only.
 
+Template parameter ``Scalar``:
+    Scalar type.
+
 Parameter ``list``:
     The nested list of blocks.)doc";
 
 static const char *__doc_slp_cbrt =
 R"doc(std::cbrt() for Variables.
+
+Template parameter ``Scalar``:
+    Scalar type.
 
 Parameter ``x``:
     The argument.)doc";
@@ -2020,17 +2130,26 @@ Parameter ``x``:
 static const char *__doc_slp_cos =
 R"doc(std::cos() for Variables.
 
+Template parameter ``Scalar``:
+    Scalar type.
+
 Parameter ``x``:
     The argument.)doc";
 
 static const char *__doc_slp_cosh =
 R"doc(std::cosh() for Variables.
 
+Template parameter ``Scalar``:
+    Scalar type.
+
 Parameter ``x``:
     The argument.)doc";
 
 static const char *__doc_slp_cwise_reduce =
 R"doc(Applies a coefficient-wise reduce operation to two matrices.
+
+Template parameter ``Scalar``:
+    Scalar type.
 
 Parameter ``lhs``:
     The left-hand side of the binary operator.
@@ -2046,17 +2165,26 @@ static const char *__doc_slp_detail_AdjointExpressionGraph = R"doc()doc";
 static const char *__doc_slp_erf =
 R"doc(std::erf() for Variables.
 
+Template parameter ``Scalar``:
+    Scalar type.
+
 Parameter ``x``:
     The argument.)doc";
 
 static const char *__doc_slp_exp =
 R"doc(std::exp() for Variables.
 
+Template parameter ``Scalar``:
+    Scalar type.
+
 Parameter ``x``:
     The argument.)doc";
 
 static const char *__doc_slp_hypot =
 R"doc(std::hypot() for Variables.
+
+Template parameter ``Scalar``:
+    Scalar type.
 
 Parameter ``x``:
     The x argument.
@@ -2066,6 +2194,33 @@ Parameter ``y``:
 
 static const char *__doc_slp_hypot_2 =
 R"doc(std::hypot() for Variables.
+
+Template parameter ``Scalar``:
+    Scalar type.
+
+Parameter ``x``:
+    The x argument.
+
+Parameter ``y``:
+    The y argument.)doc";
+
+static const char *__doc_slp_hypot_3 =
+R"doc(std::hypot() for Variables.
+
+Template parameter ``Scalar``:
+    Scalar type.
+
+Parameter ``x``:
+    The x argument.
+
+Parameter ``y``:
+    The y argument.)doc";
+
+static const char *__doc_slp_hypot_4 =
+R"doc(std::hypot() for Variables.
+
+Template parameter ``Scalar``:
+    Scalar type.
 
 Parameter ``x``:
     The x argument.
@@ -2079,28 +2234,28 @@ Parameter ``z``:
 static const char *__doc_slp_log =
 R"doc(std::log() for Variables.
 
+Template parameter ``Scalar``:
+    Scalar type.
+
 Parameter ``x``:
     The argument.)doc";
 
 static const char *__doc_slp_log10 =
 R"doc(std::log10() for Variables.
 
+Template parameter ``Scalar``:
+    Scalar type.
+
 Parameter ``x``:
     The argument.)doc";
 
-static const char *__doc_slp_make_constraints =
-R"doc(Make a list of constraints.
+static const char *__doc_slp_make_constraints = R"doc()doc";
 
-The standard form for equality constraints is c(x) = 0, and the
-standard form for inequality constraints is c(x) ≥ 0. This function
-takes constraints of the form lhs = rhs or lhs ≥ rhs and converts them
-to lhs - rhs = 0 or lhs - rhs ≥ 0.
+static const char *__doc_slp_make_constraints_2 = R"doc()doc";
 
-Parameter ``lhs``:
-    Left-hand side.
+static const char *__doc_slp_make_constraints_3 = R"doc()doc";
 
-Parameter ``rhs``:
-    Right-hand side.)doc";
+static const char *__doc_slp_make_constraints_4 = R"doc()doc";
 
 static const char *__doc_slp_operator_eq =
 R"doc(Equality operator that returns an equality constraint for two
@@ -2112,7 +2267,47 @@ Parameter ``lhs``:
 Parameter ``rhs``:
     Left-hand side.)doc";
 
+static const char *__doc_slp_operator_eq_2 =
+R"doc(Equality operator that returns an equality constraint for two
+Variables.
+
+Parameter ``lhs``:
+    Left-hand side.
+
+Parameter ``rhs``:
+    Left-hand side.)doc";
+
+static const char *__doc_slp_operator_eq_3 =
+R"doc(Equality operator that returns an equality constraint for two
+Variables.
+
+Parameter ``lhs``:
+    Left-hand side.
+
+Parameter ``rhs``:
+    Left-hand side.)doc";
+
 static const char *__doc_slp_operator_ge =
+R"doc(Greater-than-or-equal-to comparison operator that returns an
+inequality constraint for two Variables.
+
+Parameter ``lhs``:
+    Left-hand side.
+
+Parameter ``rhs``:
+    Left-hand side.)doc";
+
+static const char *__doc_slp_operator_ge_2 =
+R"doc(Greater-than-or-equal-to comparison operator that returns an
+inequality constraint for two Variables.
+
+Parameter ``lhs``:
+    Left-hand side.
+
+Parameter ``rhs``:
+    Left-hand side.)doc";
+
+static const char *__doc_slp_operator_ge_3 =
 R"doc(Greater-than-or-equal-to comparison operator that returns an
 inequality constraint for two Variables.
 
@@ -2155,6 +2350,33 @@ Parameter ``rhs``:
 static const char *__doc_slp_pow =
 R"doc(std::pow() for Variables.
 
+Template parameter ``Scalar``:
+    Scalar type.
+
+Parameter ``base``:
+    The base.
+
+Parameter ``power``:
+    The power.)doc";
+
+static const char *__doc_slp_pow_2 =
+R"doc(std::pow() for Variables.
+
+Template parameter ``Scalar``:
+    Scalar type.
+
+Parameter ``base``:
+    The base.
+
+Parameter ``power``:
+    The power.)doc";
+
+static const char *__doc_slp_pow_3 =
+R"doc(std::pow() for Variables.
+
+Template parameter ``Scalar``:
+    Scalar type.
+
 Parameter ``base``:
     The base.
 
@@ -2164,11 +2386,17 @@ Parameter ``power``:
 static const char *__doc_slp_sign =
 R"doc(sign() for Variables.
 
+Template parameter ``Scalar``:
+    Scalar type.
+
 Parameter ``x``:
     The argument.)doc";
 
 static const char *__doc_slp_sin =
 R"doc(std::sin() for Variables.
+
+Template parameter ``Scalar``:
+    Scalar type.
 
 Parameter ``x``:
     The argument.)doc";
@@ -2176,11 +2404,17 @@ Parameter ``x``:
 static const char *__doc_slp_sinh =
 R"doc(std::sinh() for Variables.
 
+Template parameter ``Scalar``:
+    Scalar type.
+
 Parameter ``x``:
     The argument.)doc";
 
 static const char *__doc_slp_solve =
 R"doc(Solves the VariableMatrix equation AX = B for X.
+
+Template parameter ``Scalar``:
+    Scalar type.
 
 Parameter ``A``:
     The left-hand side.
@@ -2194,17 +2428,26 @@ Returns:
 static const char *__doc_slp_sqrt =
 R"doc(std::sqrt() for Variables.
 
+Template parameter ``Scalar``:
+    Scalar type.
+
 Parameter ``x``:
     The argument.)doc";
 
 static const char *__doc_slp_tan =
 R"doc(std::tan() for Variables.
 
+Template parameter ``Scalar``:
+    Scalar type.
+
 Parameter ``x``:
     The argument.)doc";
 
 static const char *__doc_slp_tanh =
 R"doc(std::tanh() for Variables.
+
+Template parameter ``Scalar``:
+    Scalar type.
 
 Parameter ``x``:
     The argument.)doc";

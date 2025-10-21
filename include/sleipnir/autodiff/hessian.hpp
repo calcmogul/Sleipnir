@@ -23,9 +23,10 @@ namespace slp {
  * The gradient tree is cached so subsequent Hessian calculations are faster,
  * and the Hessian is only recomputed if the variable expression is nonlinear.
  *
+ * @tparam Scalar Scalar type.
  * @tparam UpLo Which part of the Hessian to compute (Lower or Lower | Upper).
  */
-template <int UpLo>
+template <typename Scalar, int UpLo>
   requires(UpLo == Eigen::Lower) || (UpLo == (Eigen::Lower | Eigen::Upper))
 class SLEIPNIR_DLLEXPORT Hessian {
  public:
@@ -35,8 +36,8 @@ class SLEIPNIR_DLLEXPORT Hessian {
    * @param variable Variable of which to compute the Hessian.
    * @param wrt Variable with respect to which to compute the Hessian.
    */
-  Hessian(Variable variable, Variable wrt)
-      : Hessian{std::move(variable), VariableMatrix{std::move(wrt)}} {}
+  Hessian(Variable<Scalar> variable, Variable<Scalar> wrt)
+      : Hessian{std::move(variable), VariableMatrix<Scalar>{std::move(wrt)}} {}
 
   /**
    * Constructs a Hessian object.
@@ -45,8 +46,8 @@ class SLEIPNIR_DLLEXPORT Hessian {
    * @param wrt Vector of variables with respect to which to compute the
    *   Hessian.
    */
-  Hessian(Variable variable, SleipnirMatrixLike auto wrt)
-      : m_variables{detail::AdjointExpressionGraph{variable}
+  Hessian(Variable<Scalar> variable, SleipnirMatrixLike<Scalar> auto wrt)
+      : m_variables{detail::AdjointExpressionGraph<Scalar>{variable}
                         .generate_gradient_tree(wrt)},
         m_wrt{wrt} {
     slp_assert(m_wrt.cols() == 1);
@@ -85,7 +86,7 @@ class SLEIPNIR_DLLEXPORT Hessian {
     if (m_nonlinear_rows.empty()) {
       m_H.setFromTriplets(m_cached_triplets.begin(), m_cached_triplets.end());
       if constexpr (UpLo == Eigen::Lower) {
-        m_H = m_H.triangularView<Eigen::Lower>();
+        m_H = m_H.template triangularView<Eigen::Lower>();
       }
     }
   }
@@ -98,9 +99,9 @@ class SLEIPNIR_DLLEXPORT Hessian {
    *
    * @return The Hessian as a VariableMatrix.
    */
-  VariableMatrix get() const {
-    VariableMatrix result{VariableMatrix::empty, m_variables.rows(),
-                          m_wrt.rows()};
+  VariableMatrix<Scalar> get() const {
+    VariableMatrix<Scalar> result{detail::empty, m_variables.rows(),
+                                  m_wrt.rows()};
 
     for (int row = 0; row < m_variables.rows(); ++row) {
       auto grad = m_graphs[row].generate_gradient_tree(m_wrt);
@@ -108,7 +109,7 @@ class SLEIPNIR_DLLEXPORT Hessian {
         if (grad[col].expr != nullptr) {
           result[row, col] = std::move(grad[col]);
         } else {
-          result[row, col] = Variable{0.0};
+          result[row, col] = Variable{Scalar(0.0)};
         }
       }
     }
@@ -121,7 +122,7 @@ class SLEIPNIR_DLLEXPORT Hessian {
    *
    * @return The Hessian at wrt's value.
    */
-  const Eigen::SparseMatrix<double>& value() {
+  const Eigen::SparseMatrix<Scalar>& value() {
     if (m_nonlinear_rows.empty()) {
       return m_H;
     }
@@ -141,22 +142,22 @@ class SLEIPNIR_DLLEXPORT Hessian {
 
     m_H.setFromTriplets(triplets.begin(), triplets.end());
     if constexpr (UpLo == Eigen::Lower) {
-      m_H = m_H.triangularView<Eigen::Lower>();
+      m_H = m_H.template triangularView<Eigen::Lower>();
     }
 
     return m_H;
   }
 
  private:
-  VariableMatrix m_variables;
-  VariableMatrix m_wrt;
+  VariableMatrix<Scalar> m_variables;
+  VariableMatrix<Scalar> m_wrt;
 
-  gch::small_vector<detail::AdjointExpressionGraph> m_graphs;
+  gch::small_vector<detail::AdjointExpressionGraph<Scalar>> m_graphs;
 
-  Eigen::SparseMatrix<double> m_H{m_variables.rows(), m_wrt.rows()};
+  Eigen::SparseMatrix<Scalar> m_H{m_variables.rows(), m_wrt.rows()};
 
   // Cached triplets for gradients of linear rows
-  gch::small_vector<Eigen::Triplet<double>> m_cached_triplets;
+  gch::small_vector<Eigen::Triplet<Scalar>> m_cached_triplets;
 
   // List of row indices for nonlinear rows whose graients will be computed in
   // Value()

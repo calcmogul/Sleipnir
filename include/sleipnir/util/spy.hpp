@@ -43,7 +43,10 @@ namespace slp {
  *   <li>Sign as a character ('+' for positive, '-' for negative, or '0' for
  *       zero)</li>
  * </ol>
+ *
+ * @tparam Scalar Scalar type.
  */
+template <typename Scalar>
 class SLEIPNIR_DLLEXPORT Spy {
  public:
   /**
@@ -82,18 +85,19 @@ class SLEIPNIR_DLLEXPORT Spy {
    *
    * @param mat The matrix.
    */
-  void add(const Eigen::SparseMatrix<double>& mat) {
+  void add(const Eigen::SparseMatrix<Scalar>& mat) {
     // Write number of coordinates
     write32le(mat.nonZeros());
 
     // Write coordinates
     for (int k = 0; k < mat.outerSize(); ++k) {
-      for (Eigen::SparseMatrix<double>::InnerIterator it{mat, k}; it; ++it) {
+      for (typename Eigen::SparseMatrix<Scalar>::InnerIterator it{mat, k}; it;
+           ++it) {
         write32le(it.row());
         write32le(it.col());
-        if (it.value() > 0.0) {
+        if (it.value() > Scalar(0.0)) {
           m_file << '+';
-        } else if (it.value() < 0.0) {
+        } else if (it.value() < Scalar(0.0)) {
           m_file << '-';
         } else {
           m_file << '0';

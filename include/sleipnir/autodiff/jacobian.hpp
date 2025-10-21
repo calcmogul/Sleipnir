@@ -22,7 +22,10 @@ namespace slp {
  *
  * The Jacobian is only recomputed if the variable expression is quadratic or
  * higher order.
+ *
+ * @tparam Scalar Scalar type.
  */
+template <typename Scalar>
 class SLEIPNIR_DLLEXPORT Jacobian {
  public:
   /**
@@ -31,9 +34,9 @@ class SLEIPNIR_DLLEXPORT Jacobian {
    * @param variable Variable of which to compute the Jacobian.
    * @param wrt Variable with respect to which to compute the Jacobian.
    */
-  Jacobian(Variable variable, Variable wrt)
-      : Jacobian{VariableMatrix{std::move(variable)},
-                 VariableMatrix{std::move(wrt)}} {}
+  Jacobian(Variable<Scalar> variable, Variable<Scalar> wrt)
+      : Jacobian{VariableMatrix<Scalar>{std::move(variable)},
+                 VariableMatrix<Scalar>{std::move(wrt)}} {}
 
   /**
    * Constructs a Jacobian object.
@@ -42,8 +45,8 @@ class SLEIPNIR_DLLEXPORT Jacobian {
    * @param wrt Vector of variables with respect to which to compute the
    *   Jacobian.
    */
-  Jacobian(Variable variable, SleipnirMatrixLike auto wrt)
-      : Jacobian{VariableMatrix{std::move(variable)}, std::move(wrt)} {}
+  Jacobian(Variable<Scalar> variable, SleipnirMatrixLike<Scalar> auto wrt)
+      : Jacobian{VariableMatrix<Scalar>{std::move(variable)}, std::move(wrt)} {}
 
   /**
    * Constructs a Jacobian object.
@@ -52,7 +55,8 @@ class SLEIPNIR_DLLEXPORT Jacobian {
    * @param wrt Vector of variables with respect to which to compute the
    *   Jacobian.
    */
-  Jacobian(VariableMatrix variables, SleipnirMatrixLike auto wrt)
+  Jacobian(VariableMatrix<Scalar> variables,
+           SleipnirMatrixLike<Scalar> auto wrt)
       : m_variables{std::move(variables)}, m_wrt{std::move(wrt)} {
     slp_assert(m_variables.cols() == 1);
     slp_assert(m_wrt.cols() == 1);
@@ -101,9 +105,9 @@ class SLEIPNIR_DLLEXPORT Jacobian {
    *
    * @return The Jacobian as a VariableMatrix.
    */
-  VariableMatrix get() const {
-    VariableMatrix result{VariableMatrix::empty, m_variables.rows(),
-                          m_wrt.rows()};
+  VariableMatrix<Scalar> get() const {
+    VariableMatrix<Scalar> result{detail::empty, m_variables.rows(),
+                                  m_wrt.rows()};
 
     for (int row = 0; row < m_variables.rows(); ++row) {
       auto grad = m_graphs[row].generate_gradient_tree(m_wrt);
@@ -111,7 +115,7 @@ class SLEIPNIR_DLLEXPORT Jacobian {
         if (grad[col].expr != nullptr) {
           result[row, col] = std::move(grad[col]);
         } else {
-          result[row, col] = Variable{0.0};
+          result[row, col] = Variable{Scalar(0.0)};
         }
       }
     }
@@ -124,7 +128,7 @@ class SLEIPNIR_DLLEXPORT Jacobian {
    *
    * @return The Jacobian at wrt's value.
    */
-  const Eigen::SparseMatrix<double>& value() {
+  const Eigen::SparseMatrix<Scalar>& value() {
     if (m_nonlinear_rows.empty()) {
       return m_J;
     }
@@ -148,19 +152,22 @@ class SLEIPNIR_DLLEXPORT Jacobian {
   }
 
  private:
-  VariableMatrix m_variables;
-  VariableMatrix m_wrt;
+  VariableMatrix<Scalar> m_variables;
+  VariableMatrix<Scalar> m_wrt;
 
-  gch::small_vector<detail::AdjointExpressionGraph> m_graphs;
+  gch::small_vector<detail::AdjointExpressionGraph<Scalar>> m_graphs;
 
-  Eigen::SparseMatrix<double> m_J{m_variables.rows(), m_wrt.rows()};
+  Eigen::SparseMatrix<Scalar> m_J{m_variables.rows(), m_wrt.rows()};
 
   // Cached triplets for gradients of linear rows
-  gch::small_vector<Eigen::Triplet<double>> m_cached_triplets;
+  gch::small_vector<Eigen::Triplet<Scalar>> m_cached_triplets;
 
   // List of row indices for nonlinear rows whose graients will be computed in
   // Value()
   gch::small_vector<int> m_nonlinear_rows;
 };
+
+extern template class EXPORT_TEMPLATE_DECLARE(
+    SLEIPNIR_DLLEXPORT) Jacobian<double>;
 
 }  // namespace slp

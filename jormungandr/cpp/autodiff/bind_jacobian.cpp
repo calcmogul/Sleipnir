@@ -10,17 +10,17 @@ namespace nb = nanobind;
 
 namespace slp {
 
-void bind_jacobian(nb::class_<Jacobian>& cls) {
+void bind_jacobian(nb::class_<Jacobian<double>>& cls) {
   using namespace nb::literals;
 
-  cls.def(nb::init<Variable, Variable>(), "variable"_a, "wrt"_a,
+  cls.def(nb::init<Variable<double>, Variable<double>>(), "variable"_a, "wrt"_a,
           DOC(slp, Jacobian, Jacobian));
-  cls.def(nb::init<Variable, VariableMatrix>(), "variable"_a, "wrt"_a,
-          DOC(slp, Jacobian, Jacobian));
-  cls.def(nb::init<VariableMatrix, VariableMatrix>(), "variables"_a, "wrt"_a,
-          DOC(slp, Jacobian, Jacobian));
-  cls.def("get", &Jacobian::get, DOC(slp, Jacobian, get));
-  cls.def("value", &Jacobian::value, DOC(slp, Jacobian, value));
+  cls.def(nb::init<Variable<double>, VariableMatrix<double>>(), "variable"_a,
+          "wrt"_a, DOC(slp, Jacobian, Jacobian));
+  cls.def(nb::init<VariableMatrix<double>, VariableMatrix<double>>(),
+          "variables"_a, "wrt"_a, DOC(slp, Jacobian, Jacobian));
+  cls.def("get", &Jacobian<double>::get, DOC(slp, Jacobian, get));
+  cls.def("value", &Jacobian<double>::value, DOC(slp, Jacobian, value));
 }
 
 }  // namespace slp

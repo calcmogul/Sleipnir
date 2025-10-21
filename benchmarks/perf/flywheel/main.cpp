@@ -8,14 +8,14 @@
 
 #include "cmdline_args.hpp"
 
-slp::Problem flywheel_problem(std::chrono::duration<double> dt, int N) {
+slp::Problem<double> flywheel_problem(std::chrono::duration<double> dt, int N) {
   // Flywheel model:
   // States: [velocity]
   // Inputs: [voltage]
   Eigen::Matrix<double, 1, 1> A{std::exp(-dt.count())};
   Eigen::Matrix<double, 1, 1> B{1.0 - std::exp(-dt.count())};
 
-  slp::Problem problem;
+  slp::Problem<double> problem;
   auto X = problem.decision_variable(1, N + 1);
   auto U = problem.decision_variable(1, N);
 

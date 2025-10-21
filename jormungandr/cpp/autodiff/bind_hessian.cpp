@@ -10,15 +10,15 @@ namespace nb = nanobind;
 
 namespace slp {
 
-void bind_hessian(nb::class_<Hessian<>>& cls) {
+void bind_hessian(nb::class_<Hessian<double>>& cls) {
   using namespace nb::literals;
 
-  cls.def(nb::init<Variable, Variable>(), "variable"_a, "wrt"_a,
+  cls.def(nb::init<Variable<double>, Variable<double>>(), "variable"_a, "wrt"_a,
           DOC(slp, Hessian, Hessian));
-  cls.def(nb::init<Variable, VariableMatrix>(), "variable"_a, "wrt"_a,
-          DOC(slp, Hessian, Hessian));
-  cls.def("get", &Hessian<>::get, DOC(slp, Hessian, get));
-  cls.def("value", &Hessian<>::value, DOC(slp, Hessian, value));
+  cls.def(nb::init<Variable<double>, VariableMatrix<double>>(), "variable"_a,
+          "wrt"_a, DOC(slp, Hessian, Hessian));
+  cls.def("get", &Hessian<double>::get, DOC(slp, Hessian, get));
+  cls.def("value", &Hessian<double>::value, DOC(slp, Hessian, value));
 }
 
 }  // namespace slp

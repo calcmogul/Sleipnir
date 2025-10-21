@@ -7,36 +7,35 @@
 
 #include <Eigen/Core>
 
+#include "sleipnir/autodiff/sleipnir_base.hpp"
+
 namespace slp {
 
 template <typename T>
-concept EigenMatrixLike =
-    std::derived_from<std::decay_t<T>, Eigen::MatrixBase<std::decay_t<T>>>;
+concept SleipnirType = std::derived_from<std::decay_t<T>, SleipnirBase>;
 
 template <typename T>
-concept SleipnirMatrixLike = requires(std::decay_t<T> t) {
+concept MatrixLike = requires(std::decay_t<T> t) {
   t.rows();
   t.cols();
-  { t.value() } -> std::same_as<Eigen::MatrixXd>;
-} && !EigenMatrixLike<T>;
-
-template <typename T>
-concept MatrixLike = EigenMatrixLike<T> || SleipnirMatrixLike<T>;
-
-template <typename T>
-concept SleipnirScalarLike = requires(std::decay_t<T> t) {
-  t + 1.0;
-  t = 1.0;
-  { t.value() } -> std::same_as<double>;
 };
 
 template <typename T>
-concept ScalarLike = requires(std::decay_t<T> t) {
-  t + 1.0;
-  t = 1.0;
-};
+concept EigenMatrixLike =
+    std::derived_from<std::decay_t<T>, Eigen::MatrixBase<std::decay_t<T>>> &&
+    MatrixLike<T>;
+
+template <typename T, typename Scalar>
+concept SleipnirMatrixLike =
+    SleipnirType<T> && MatrixLike<T> &&
+    std::same_as<typename std::decay_t<T>::Scalar, Scalar>;
+
+template <typename T, typename Scalar>
+concept SleipnirScalarLike =
+    SleipnirType<T> && !MatrixLike<T> &&
+    std::same_as<typename std::decay_t<T>::Scalar, Scalar>;
 
 template <typename T>
-concept SleipnirType = SleipnirScalarLike<T> || SleipnirMatrixLike<T>;
+concept ScalarLike = !MatrixLike<T>;
 
 }  // namespace slp
