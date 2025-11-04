@@ -46,7 +46,8 @@ class Hessian {
    *   Hessian.
    */
   Hessian(Variable<Scalar> variable, SleipnirMatrixLike<Scalar> auto wrt)
-      : m_variables{detail::AdjointExpressionGraph<Scalar>{variable}
+      : m_variables{wrt.rows(), 1,
+                    detail::AdjointExpressionGraph<Scalar>{variable}
                         .generate_gradient_tree(wrt)},
         m_wrt{wrt} {
     slp_assert(m_wrt.cols() == 1);
@@ -88,6 +89,10 @@ class Hessian {
         m_H = m_H.template triangularView<Eigen::Lower>();
       }
     }
+
+#if 1
+    H_get = get();
+#endif
   }
 
   /**
@@ -98,21 +103,18 @@ class Hessian {
    *
    * @return The Hessian as a VariableMatrix.
    */
-  VariableMatrix<Scalar> get() const {
-    VariableMatrix<Scalar> result{detail::empty, m_variables.rows(),
-                                  m_wrt.rows()};
-
+  Eigen::SparseMatrix<Variable<Scalar>> get() const {
+    gch::small_vector<Eigen::Triplet<Variable<Scalar>>> triplets;
     for (int row = 0; row < m_variables.rows(); ++row) {
-      auto grad = m_graphs[row].generate_gradient_tree(m_wrt);
-      for (int col = 0; col < m_wrt.rows(); ++col) {
-        if (grad[col].expr != nullptr) {
-          result[row, col] = std::move(grad[col]);
-        } else {
-          result[row, col] = Variable{Scalar(0)};
-        }
+      auto row_triplets = m_graphs[row].generate_gradient_tree(m_wrt);
+      for (const auto& triplet : row_triplets) {
+        triplets.emplace_back(row, triplet.row(), triplet.value());
       }
     }
 
+    Eigen::SparseMatrix<Variable<Scalar>> result{m_variables.rows(),
+                                                 m_wrt.rows()};
+    result.setFromTriplets(triplets.begin(), triplets.end());
     return result;
   }
 
@@ -121,7 +123,10 @@ class Hessian {
    *
    * @return The Hessian at wrt's value.
    */
-  const Eigen::SparseMatrix<Scalar>& value() {
+  Eigen::SparseMatrix<Scalar> value() {
+#if 1
+    return slp::value(H_get);
+#else
     if (m_nonlinear_rows.empty()) {
       return m_H;
     }
@@ -145,11 +150,15 @@ class Hessian {
     }
 
     return m_H;
+#endif
   }
 
  private:
   VariableMatrix<Scalar> m_variables;
   VariableMatrix<Scalar> m_wrt;
+#if 1
+  Eigen::SparseMatrix<Variable<Scalar>> H_get;
+#endif
 
   gch::small_vector<detail::AdjointExpressionGraph<Scalar>> m_graphs;
 
