@@ -45,7 +45,9 @@ class Gradient {
   /// them.
   ///
   /// @return The gradient as a VariableMatrix.
-  VariableMatrix<Scalar> get() const { return m_jacobian.get().T(); }
+  Eigen::SparseVector<Variable<Scalar>> get() const {
+    return m_jacobian.get().transpose();
+  }
 
   /// Evaluates the gradient at wrt's value.
   ///

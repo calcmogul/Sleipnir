@@ -31,7 +31,7 @@ TEMPLATE_TEST_CASE("Jacobian - y = x", "[Jacobian]", SCALAR_TYPES_UNDER_TEST) {
 
   Eigen::Matrix<T, 3, 3> expected_J{
       {T(1), T(0), T(0)}, {T(0), T(1), T(0)}, {T(0), T(0), T(1)}};
-  CHECK(J.get().value() == expected_J);
+  CHECK(slp::value(J.get()).toDense() == expected_J);
   CHECK(J.value().toDense() == expected_J);
 }
 
@@ -56,7 +56,7 @@ TEMPLATE_TEST_CASE("Jacobian - y = 3x", "[Jacobian]", SCALAR_TYPES_UNDER_TEST) {
 
   Eigen::Matrix<T, 3, 3> expected_J{
       {T(3), T(0), T(0)}, {T(0), T(3), T(0)}, {T(0), T(0), T(3)}};
-  CHECK(J.get().value() == expected_J);
+  CHECK(slp::value(J.get()).toDense() == expected_J);
   CHECK(J.value().toDense() == expected_J);
 }
 
@@ -91,7 +91,7 @@ TEMPLATE_TEST_CASE("Jacobian - Products", "[Jacobian]",
 
   Eigen::Matrix<T, 3, 3> expected_J{
       {T(2), T(1), T(0)}, {T(0), T(3), T(2)}, {T(3), T(0), T(1)}};
-  CHECK(J.get().value() == expected_J);
+  CHECK(slp::value(J.get()).toDense() == expected_J);
   CHECK(J.value().toDense() == expected_J);
 }
 
@@ -137,9 +137,10 @@ TEMPLATE_TEST_CASE("Jacobian - Nested products", "[Jacobian]",
   //         [11]
   {
     auto J = slp::Jacobian(y, x);
-    CHECK(J.get().value(0, 0) == T(5));
-    CHECK(J.get().value(1, 0) == T(7));
-    CHECK(J.get().value(2, 0) == T(11));
+    auto J_get_value = slp::value(J.get());
+    CHECK(J_get_value.coeff(0, 0) == T(5));
+    CHECK(J_get_value.coeff(1, 0) == T(7));
+    CHECK(J_get_value.coeff(2, 0) == T(11));
     CHECK(J.value().coeff(0, 0) == T(5));
     CHECK(J.value().coeff(1, 0) == T(7));
     CHECK(J.value().coeff(2, 0) == T(11));
@@ -156,7 +157,7 @@ TEMPLATE_TEST_CASE("Jacobian - Nested products", "[Jacobian]",
     auto J = slp::Jacobian(z, y);
     Eigen::Matrix<T, 3, 3> expected_J{
         {T(21), T(15), T(0)}, {T(0), T(33), T(21)}, {T(33), T(0), T(15)}};
-    CHECK(J.get().value() == expected_J);
+    CHECK(slp::value(J.get()).toDense() == expected_J);
     CHECK(J.value().toDense() == expected_J);
   }
 
@@ -170,7 +171,7 @@ TEMPLATE_TEST_CASE("Jacobian - Nested products", "[Jacobian]",
   {
     auto J = slp::Jacobian(z, x);
     Eigen::Matrix<T, 3, 1> expected_J{{T(210)}, {T(462)}, {T(330)}};
-    CHECK(J.get().value() == expected_J);
+    CHECK(slp::value(J.get()).toDense() == expected_J);
     CHECK(J.value().toDense() == expected_J);
   }
 }
@@ -196,10 +197,10 @@ TEMPLATE_TEST_CASE("Jacobian - Non-square", "[Jacobian]",
 
   Eigen::Matrix<T, 1, 3> expected_J{{T(1), T(3), T(-5)}};
 
-  auto J_get_value = J.get().value();
+  auto J_get_value = slp::value(J.get());
   CHECK(J_get_value.rows() == 1);
   CHECK(J_get_value.cols() == 3);
-  CHECK(J_get_value == expected_J);
+  CHECK(J_get_value.toDense() == expected_J);
 
   auto J_value = J.value();
   CHECK(J_value.rows() == 1);
