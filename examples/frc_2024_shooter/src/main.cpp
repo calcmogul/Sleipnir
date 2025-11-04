@@ -163,7 +163,7 @@ int main() {
 
   // Minimize sensitivity of vertical position to velocity
   auto sensitivity = slp::Gradient(x_k[3], x.segment(3, 3)).get();
-  problem.minimize(sensitivity.T() * sensitivity);
+  problem.minimize((sensitivity.transpose() * sensitivity).eval().coeff(0, 0));
 
   // Minimize initial velocity
   // problem.minimize(v0_wrt_shooter.T() * v0_wrt_shooter);

@@ -34,7 +34,7 @@ TEMPLATE_TEST_CASE("Hessian - Linear", "[Hessian]", SCALAR_TYPES_UNDER_TEST) {
 
   // d²y/dx² = 0
   auto H = slp::Hessian(y, x);
-  CHECK(H.get().value(0, 0) == T(0));
+  CHECK(slp::value(H.get()).coeff(0, 0) == T(0));
   CHECK(H.value().coeff(0, 0) == T(0));
 }
 
@@ -56,7 +56,7 @@ TEMPLATE_TEST_CASE("Hessian - Quadratic", "[Hessian]",
 
   // d²y/dx² = 2
   auto H = slp::Hessian(y, x);
-  CHECK(H.get().value(0, 0) == T(2));
+  CHECK(slp::value(H.get()).coeff(0, 0) == T(2));
   CHECK(H.value().coeff(0, 0) == T(2));
 }
 
@@ -77,7 +77,7 @@ TEMPLATE_TEST_CASE("Hessian - Cubic", "[Hessian]", SCALAR_TYPES_UNDER_TEST) {
 
   // d²y/dx² = 6x = 18
   auto H = slp::Hessian(y, x);
-  CHECK(H.get().value(0, 0) == T(18));
+  CHECK(slp::value(H.get()).coeff(0, 0) == T(18));
   CHECK(H.value().coeff(0, 0) == T(18));
 }
 
@@ -98,7 +98,7 @@ TEMPLATE_TEST_CASE("Hessian - Quartic", "[Hessian]", SCALAR_TYPES_UNDER_TEST) {
 
   // d²y/dx² = 12x² = 108
   auto H = slp::Hessian(y, x);
-  CHECK(H.get().value(0, 0) == T(108));
+  CHECK(slp::value(H.get()).coeff(0, 0) == T(108));
   CHECK(H.value().coeff(0, 0) == T(108));
 }
 
@@ -120,11 +120,12 @@ TEMPLATE_TEST_CASE("Hessian - Sum", "[Hessian]", SCALAR_TYPES_UNDER_TEST) {
   CHECK(y.value() == T(15));
 
   auto g = slp::Gradient(y, x);
-  CHECK(g.get().value() == Eigen::Matrix<T, 5, 1>::Constant(T(1)));
+  CHECK(slp::value(g.get()).toDense() ==
+        Eigen::Matrix<T, 5, 1>::Constant(T(1)));
   CHECK(g.value().toDense() == Eigen::Matrix<T, 5, 1>::Constant(T(1)));
 
   auto H = slp::Hessian(y, x);
-  CHECK(H.get().value() == Eigen::Matrix<T, 5, 5>::Zero());
+  CHECK(slp::value(H.get()).toDense() == Eigen::Matrix<T, 5, 5>::Zero());
   CHECK(H.value().toDense() == Eigen::Matrix<T, 5, 5>::Zero());
 }
 
@@ -145,14 +146,14 @@ TEMPLATE_TEST_CASE("Hessian - Sum of products", "[Hessian]",
   CHECK(y.value() == T(1 * 1 + 2 * 2 + 3 * 3 + 4 * 4 + 5 * 5));
 
   auto g = slp::Gradient(y, x);
-  CHECK(g.get().value() == T(2) * x.value());
+  CHECK(slp::value(g.get()).toDense() == T(2) * x.value());
   CHECK(g.value().toDense() == T(2) * x.value());
 
   auto H = slp::Hessian(y, x);
 
   Eigen::Matrix<T, 5, 5> expected_H =
       Eigen::Vector<T, 5>::Constant(T(2)).asDiagonal();
-  CHECK(H.get().value() == expected_H);
+  CHECK(slp::value(H.get()).toDense() == expected_H);
   CHECK(H.value().toDense() == expected_H);
 }
 
@@ -180,7 +181,7 @@ TEMPLATE_TEST_CASE("Hessian - Product of sines", "[Hessian]",
 
   auto g = slp::Gradient(y, x);
   for (int i = 0; i < x.rows(); ++i) {
-    CHECK_THAT(g.get().value(i),
+    CHECK_THAT(slp::value(g.get()).coeff(i),
                WithinAbs(y.value() / tan(x[i].value()), T(1e-15)));
     CHECK_THAT(g.value().coeff(i),
                WithinAbs(y.value() / tan(x[i].value()), T(1e-15)));
@@ -198,7 +199,7 @@ TEMPLATE_TEST_CASE("Hessian - Product of sines", "[Hessian]",
       }
     }
   }
-  CHECK_THAT(H.get().value(), MatrixWithinAbs(expected_H, T(1e-15)));
+  CHECK_THAT(slp::value(H.get()), MatrixWithinAbs(expected_H, T(1e-15)));
   CHECK_THAT(H.value().toDense(), MatrixWithinAbs(expected_H, T(1e-15)));
 }
 
@@ -239,7 +240,7 @@ TEMPLATE_TEST_CASE("Hessian - Sum of squared residuals", "[Hessian]",
                                     {T(0), T(-2), T(4), T(-2), T(0)},
                                     {T(0), T(0), T(-2), T(4), T(-2)},
                                     {T(0), T(0), T(0), T(-2), T(2)}};
-  CHECK(H.get().value() == expected_H);
+  CHECK(slp::value(H.get()).toDense() == expected_H);
   CHECK(H.value().toDense() == expected_H);
 }
 
@@ -267,7 +268,7 @@ TEMPLATE_TEST_CASE("Hessian - Sum of squares", "[Hessian]",
 
   Eigen::Matrix<T, 4, 4> expected_H =
       Eigen::Vector<T, 4>::Constant(T(2)).asDiagonal();
-  CHECK(H.get().value() == expected_H);
+  CHECK(slp::value(H.get()).toDense() == expected_H);
   CHECK(H.value().toDense() == expected_H);
 }
 
@@ -359,7 +360,7 @@ TEMPLATE_TEST_CASE("Hessian - Edge pushing (Wang) example 1", "[Hessian]",
   // dy/dx = [ 6sin(4)     9cos(4)  ]
   auto J = slp::Jacobian(y, x);
   Eigen::Matrix<T, 1, 2> expected_J{{T(6) * sin(T(4)), T(9) * cos(T(4))}};
-  CHECK(J.get().value() == expected_J);
+  CHECK(slp::value(J.get()).toDense() == expected_J);
   CHECK(J.value().toDense() == expected_J);
 
   //           [ 2sin(x₁)    2x₀cos(x₁)]
@@ -370,7 +371,7 @@ TEMPLATE_TEST_CASE("Hessian - Edge pushing (Wang) example 1", "[Hessian]",
   auto H = slp::Hessian(y, x);
   Eigen::Matrix<T, 2, 2> expected_H{{T(2) * sin(T(4)), T(6) * cos(T(4))},
                                     {T(6) * cos(T(4)), T(-9) * sin(T(4))}};
-  CHECK(H.get().value() == expected_H);
+  CHECK(slp::value(H.get()).toDense() == expected_H);
   CHECK(H.value().toDense() == expected_H);
 }
 

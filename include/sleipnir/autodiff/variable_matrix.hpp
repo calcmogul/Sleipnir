@@ -12,6 +12,7 @@
 
 #include <Eigen/Core>
 #include <Eigen/QR>
+#include <Eigen/SparseCore>
 #include <gch/small_vector.hpp>
 
 #include "sleipnir/autodiff/sleipnir_base.hpp"
@@ -179,6 +180,51 @@ class VariableMatrix : public SleipnirBase {
     }
   }
 
+  /// Constructs a VariableMatrix from a list of sparse matrix triplets.
+  ///
+  /// @param rows Number of rows.
+  /// @param cols Number of columns.
+  /// @param triplets List of sparse matrix triplets.
+  /// @return This VariableMatrix.
+  explicit VariableMatrix(
+      int rows, int cols,
+      const gch::small_vector<Eigen::Triplet<Variable<Scalar>>>& triplets)
+      : m_rows{rows}, m_cols{cols} {
+    m_storage.reserve(m_rows * m_cols);
+    for (int row = 0; row < m_rows; ++row) {
+      for (int col = 0; col < m_cols; ++col) {
+        m_storage.emplace_back(Scalar(0));
+      }
+    }
+
+    for (const auto& triplet : triplets) {
+      (*this)[triplet.row(), triplet.col()] = triplet.value();
+    }
+  }
+
+  /// Constructs a VariableMatrix from an Eigen sparse matrix.
+  ///
+  /// @param values Eigen matrix of values.
+  /// @return This VariableMatrix.
+  template <typename Derived>
+  explicit VariableMatrix(const Eigen::SparseMatrixBase<Derived>& values)
+      : m_rows{values.rows()}, m_cols{values.cols()} {
+    slp_assert(rows() == values.rows() && cols() == values.cols());
+
+    m_storage.reserve(m_rows * m_cols);
+    for (int row = 0; row < m_rows; ++row) {
+      for (int col = 0; col < m_cols; ++col) {
+        m_storage.emplace_back(Scalar(0));
+      }
+    }
+
+    for (int k = 0; k < values.outerSize(); ++k) {
+      for (typename decltype(values)::InnerIterator it{values, k}; it; ++it) {
+        (*this)[it.row(), it.col()] = it.value();
+      }
+    }
+  }
+
   /// Constructs a scalar VariableMatrix from a Variable.
   ///
   /// @param variable Variable.
@@ -252,7 +298,7 @@ class VariableMatrix : public SleipnirBase {
     }
   }
 
-  /// Assigns an Eigen matrix to a VariableMatrix.
+  /// Assigns an Eigen dense matrix to a VariableMatrix.
   ///
   /// @param values Eigen matrix of values.
   /// @return This VariableMatrix.
@@ -263,6 +309,23 @@ class VariableMatrix : public SleipnirBase {
     for (int row = 0; row < values.rows(); ++row) {
       for (int col = 0; col < values.cols(); ++col) {
         (*this)[row, col] = values[row, col];
+      }
+    }
+
+    return *this;
+  }
+
+  /// Assigns an Eigen sparse matrix to a VariableMatrix.
+  ///
+  /// @param values Eigen matrix of values.
+  /// @return This VariableMatrix.
+  template <typename Derived>
+  VariableMatrix& operator=(const Eigen::SparseMatrixBase<Derived>& values) {
+    slp_assert(rows() == values.rows() && cols() == values.cols());
+
+    for (int k = 0; k < values.outerSize(); ++k) {
+      for (typename decltype(values)::InnerIterator it{values, k}; it; ++it) {
+        (*this)[it.row(), it.col()] = it.value();
       }
     }
 
@@ -1243,6 +1306,49 @@ VariableMatrix(const Eigen::MatrixBase<Derived>&)
 template <typename Derived>
 VariableMatrix(const Eigen::DiagonalBase<Derived>&)
     -> VariableMatrix<typename Derived::Scalar>;
+
+/// Converts a sparse matrix of Variables to a sparse matrix of values.
+///
+/// @tparam Scalar Scalar type.
+/// @param mat Sparse matrix of Variables.
+/// @return Sparse matrix of values.
+template <typename Scalar>
+Eigen::SparseMatrix<Scalar> value(
+    const Eigen::SparseMatrix<Variable<Scalar>>& mat) {
+  gch::small_vector<Eigen::Triplet<Scalar>> triplets;
+  triplets.reserve(mat.nonZeros());
+
+  for (int k = 0; k < mat.outerSize(); ++k) {
+    for (typename Eigen::SparseMatrix<Variable<Scalar>>::InnerIterator it{mat,
+                                                                          k};
+         it; ++it) {
+      triplets.emplace_back(it.row(), it.col(), Variable{it.value()}.value());
+    }
+  }
+
+  Eigen::SparseMatrix<Scalar> result{mat.rows(), mat.cols()};
+  result.setFromSortedTriplets(triplets.begin(), triplets.end());
+  return result;
+}
+
+/// Converts a sparse vector of Variables to a sparse vector of values.
+///
+/// @tparam Scalar Scalar type.
+/// @param mat Sparse vector of Variables.
+/// @return Sparse vector of values.
+template <typename Scalar>
+Eigen::SparseVector<Scalar> value(
+    const Eigen::SparseVector<Variable<Scalar>>& vec) {
+  Eigen::SparseVector<Scalar> result{vec.rows()};
+  result.reserve(vec.nonZeros());
+
+  for (typename Eigen::SparseVector<Variable<Scalar>>::InnerIterator it{vec};
+       it; ++it) {
+    result.insertBack(it.row()) = Variable{it.value()}.value();
+  }
+
+  return result;
+}
 
 /// Applies a coefficient-wise reduce operation to two matrices.
 ///
