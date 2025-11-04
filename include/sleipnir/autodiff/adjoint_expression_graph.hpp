@@ -54,7 +54,7 @@ class AdjointExpressionGraph {
    * @param wrt Variables with respect to which to compute the gradient.
    * @return The variable's gradient tree.
    */
-  VariableMatrix<Scalar> generate_gradient_tree(
+  gch::small_vector<Eigen::Triplet<Variable<Scalar>>> generate_gradient_tree(
       const VariableMatrix<Scalar>& wrt) const {
     slp_assert(wrt.cols() == 1);
 
@@ -62,7 +62,7 @@ class AdjointExpressionGraph {
     // for background on reverse accumulation automatic differentiation.
 
     if (m_top_list.empty()) {
-      return VariableMatrix<Scalar>{detail::empty, wrt.rows(), 1};
+      return {};
     }
 
     // Set root node's adjoint to 1 since df/df is 1
@@ -89,9 +89,12 @@ class AdjointExpressionGraph {
     }
 
     // Move gradient tree to return value
-    VariableMatrix<Scalar> grad{detail::empty, wrt.rows(), 1};
-    for (int row = 0; row < grad.rows(); ++row) {
-      grad[row] = Variable{std::move(wrt[row].expr->adjoint_expr)};
+    gch::small_vector<Eigen::Triplet<Variable<Scalar>>> triplets;
+    for (int row = 0; row < wrt.rows(); ++row) {
+      if (wrt[row].expr->adjoint_expr != nullptr) {
+        triplets.emplace_back(row, 0,
+                              Variable{std::move(wrt[row].expr->adjoint_expr)});
+      }
     }
 
     // Unlink adjoints to avoid circular references between them and their
@@ -101,7 +104,7 @@ class AdjointExpressionGraph {
       node->adjoint_expr = nullptr;
     }
 
-    return grad;
+    return triplets;
   }
 
   /**
