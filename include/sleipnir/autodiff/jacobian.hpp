@@ -96,21 +96,18 @@ class Jacobian {
   /// them.
   ///
   /// @return The Jacobian as a VariableMatrix.
-  VariableMatrix<Scalar> get() const {
-    VariableMatrix<Scalar> result{detail::empty, m_variables.rows(),
-                                  m_wrt.rows()};
-
+  Eigen::SparseMatrix<Variable<Scalar>> get() const {
+    gch::small_vector<Eigen::Triplet<Variable<Scalar>>> triplets;
     for (int row = 0; row < m_variables.rows(); ++row) {
-      auto grad = m_graphs[row].generate_tree(m_wrt);
-      for (int col = 0; col < m_wrt.rows(); ++col) {
-        if (grad[col].expr != nullptr) {
-          result[row, col] = std::move(grad[col]);
-        } else {
-          result[row, col] = Variable{Scalar(0)};
-        }
+      auto row_triplets = m_graphs[row].generate_tree(m_wrt);
+      for (const auto& triplet : row_triplets) {
+        triplets.emplace_back(row, triplet.row(), triplet.value());
       }
     }
 
+    Eigen::SparseMatrix<Variable<Scalar>> result{m_variables.rows(),
+                                                 m_wrt.rows()};
+    result.setFromTriplets(triplets.begin(), triplets.end());
     return result;
   }
 
