@@ -18,7 +18,12 @@ void bind_gradient(nb::class_<Gradient<double>>& cls) {
           DOC(slp, Gradient, Gradient));
   cls.def(nb::init<Variable<double>, VariableMatrix<double>>(), "variable"_a,
           "wrt"_a, DOC(slp, Gradient, Gradient, 2));
-  cls.def("get", &Gradient<double>::get, DOC(slp, Gradient, get));
+  cls.def(
+      "get",
+      [](Gradient<double>& self) {
+        return Eigen::SparseMatrix<slp::Variable<double>>{self.get()};
+      },
+      DOC(slp, Gradient, get));
   cls.def(
       "value",
       [](Gradient<double>& self) {
