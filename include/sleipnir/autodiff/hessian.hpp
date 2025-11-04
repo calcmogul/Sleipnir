@@ -16,7 +16,6 @@
 #include "sleipnir/autodiff/variable_matrix.hpp"
 #include "sleipnir/util/assert.hpp"
 #include "sleipnir/util/concepts.hpp"
-#include "sleipnir/util/empty.hpp"
 #include "sleipnir/util/symbol_exports.hpp"
 
 namespace slp {
@@ -47,8 +46,9 @@ class Hessian {
   /// @param wrt Vector of variables with respect to which to compute the
   ///     Hessian.
   Hessian(Variable<Scalar> variable, SleipnirMatrixLike<Scalar> auto wrt)
-      : m_variables{detail::gradient_tree(
-            detail::topological_sort(variable.expr), wrt)},
+      : m_variables{wrt.rows(), 1,
+                    detail::gradient_tree(
+                        detail::topological_sort(variable.expr), wrt)},
         m_wrt{std::move(wrt)} {
     slp_assert(m_wrt.cols() == 1);
 
@@ -100,6 +100,8 @@ class Hessian {
         m_H = m_H.template triangularView<Eigen::Lower>();
       }
     }
+
+    H_get = get();
   }
 
   /// Returns the Hessian as a VariableMatrix.
@@ -108,57 +110,30 @@ class Hessian {
   /// them.
   ///
   /// @return The Hessian as a VariableMatrix.
-  VariableMatrix<Scalar> get() const {
-    VariableMatrix<Scalar> result{detail::empty, m_variables.rows(),
-                                  m_wrt.rows()};
-
+  Eigen::SparseMatrix<Variable<Scalar>> get() const {
+    gch::small_vector<Eigen::Triplet<Variable<Scalar>>> triplets;
     for (int row = 0; row < m_variables.rows(); ++row) {
-      auto grad = detail::gradient_tree(m_top_lists[row], m_wrt);
-      for (int col = 0; col < m_wrt.rows(); ++col) {
-        if (grad[col].expr != nullptr) {
-          result[row, col] = std::move(grad[col]);
-        } else {
-          result[row, col] = Variable{Scalar(0)};
-        }
+      auto row_triplets = detail::gradient_tree(m_top_lists[row], m_wrt);
+      for (const auto& triplet : row_triplets) {
+        triplets.emplace_back(row, triplet.row(), triplet.value());
       }
     }
 
+    Eigen::SparseMatrix<Variable<Scalar>> result{m_variables.rows(),
+                                                 m_wrt.rows()};
+    result.setFromTriplets(triplets.begin(), triplets.end());
     return result;
   }
 
   /// Evaluates the Hessian at wrt's value.
   ///
   /// @return The Hessian at wrt's value.
-  const Eigen::SparseMatrix<Scalar>& value() {
-    if (m_nonlinear_rows.empty()) {
-      return m_H;
-    }
-
-    for (auto& top_list : m_top_lists) {
-      detail::update_values(top_list);
-    }
-
-    // Copy the cached triplets so triplets added for the nonlinear rows are
-    // thrown away at the end of the function
-    auto triplets = m_cached_triplets;
-
-    // Compute each nonlinear row of the Hessian
-    for (int row : m_nonlinear_rows) {
-      detail::append_triplets(m_top_lists[row], m_output_lists[row], triplets,
-                              row);
-    }
-
-    m_H.setFromTriplets(triplets.begin(), triplets.end());
-    if constexpr (UpLo == Eigen::Lower) {
-      m_H = m_H.template triangularView<Eigen::Lower>();
-    }
-
-    return m_H;
-  }
+  Eigen::SparseMatrix<Scalar> value() { return slp::value(H_get); }
 
  private:
   VariableMatrix<Scalar> m_variables;
   VariableMatrix<Scalar> m_wrt;
+  Eigen::SparseMatrix<Variable<Scalar>> H_get;
 
   /// List of topologically sorted graphs from parent to child, one for each row
   gch::small_vector<detail::ExpressionGraph<Scalar>> m_top_lists;
