@@ -272,6 +272,8 @@ static const char *mkd_doc_slp_Hessian_2 = R"doc()doc";
 
 static const char *mkd_doc_slp_Hessian_3 = R"doc()doc";
 
+static const char *mkd_doc_slp_Hessian_H_get = R"doc()doc";
+
 static const char *mkd_doc_slp_Hessian_Hessian =
 R"doc(Constructs a Hessian object.
 
@@ -1042,6 +1044,12 @@ R"doc(An autodiff variable pointing to an expression node.
 Template Args:
     Scalar_: Scalar type.)doc";
 
+static const char *mkd_doc_slp_Variable_2 =
+R"doc(An autodiff variable pointing to an expression node.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
 static const char *mkd_doc_slp_VariableBlock =
 R"doc(A submatrix of autodiff variables with reference semantics.
 
@@ -1776,14 +1784,30 @@ Args:
 )doc";
 
 static const char *mkd_doc_slp_VariableMatrix_VariableMatrix_10 =
-R"doc(Constructs a scalar VariableMatrix from a Variable.
+R"doc(Constructs a VariableMatrix from a list of sparse matrix triplets.
 
 Args:
-    variable: Variable.
+    rows: Number of rows.
+    cols: Number of columns.
+    triplets: List of sparse matrix triplets.
+
+Returns:
+    This VariableMatrix.
 
 )doc";
 
 static const char *mkd_doc_slp_VariableMatrix_VariableMatrix_11 =
+R"doc(Constructs a VariableMatrix from an Eigen sparse matrix.
+
+Args:
+    values: Eigen matrix of values.
+
+Returns:
+    This VariableMatrix.
+
+)doc";
+
+static const char *mkd_doc_slp_VariableMatrix_VariableMatrix_12 =
 R"doc(Constructs a scalar VariableMatrix from a Variable.
 
 Args:
@@ -1791,23 +1815,31 @@ Args:
 
 )doc";
 
-static const char *mkd_doc_slp_VariableMatrix_VariableMatrix_12 =
-R"doc(Constructs a VariableMatrix from a VariableBlock.
-
-Args:
-    values: VariableBlock of values.
-
-)doc";
-
 static const char *mkd_doc_slp_VariableMatrix_VariableMatrix_13 =
-R"doc(Constructs a VariableMatrix from a VariableBlock.
+R"doc(Constructs a scalar VariableMatrix from a Variable.
 
 Args:
-    values: VariableBlock of values.
+    variable: Variable.
 
 )doc";
 
 static const char *mkd_doc_slp_VariableMatrix_VariableMatrix_14 =
+R"doc(Constructs a VariableMatrix from a VariableBlock.
+
+Args:
+    values: VariableBlock of values.
+
+)doc";
+
+static const char *mkd_doc_slp_VariableMatrix_VariableMatrix_15 =
+R"doc(Constructs a VariableMatrix from a VariableBlock.
+
+Args:
+    values: VariableBlock of values.
+
+)doc";
+
+static const char *mkd_doc_slp_VariableMatrix_VariableMatrix_16 =
 R"doc(Constructs a column vector wrapper around a Variable array.
 
 Args:
@@ -1815,7 +1847,7 @@ Args:
 
 )doc";
 
-static const char *mkd_doc_slp_VariableMatrix_VariableMatrix_15 =
+static const char *mkd_doc_slp_VariableMatrix_VariableMatrix_17 =
 R"doc(Constructs a matrix wrapper around a Variable array.
 
 Args:
@@ -2153,7 +2185,7 @@ Returns:
 )doc";
 
 static const char *mkd_doc_slp_VariableMatrix_operator_assign =
-R"doc(Assigns an Eigen matrix to a VariableMatrix.
+R"doc(Assigns an Eigen dense matrix to a VariableMatrix.
 
 Args:
     values: Eigen matrix of values.
@@ -2164,6 +2196,17 @@ Returns:
 )doc";
 
 static const char *mkd_doc_slp_VariableMatrix_operator_assign_2 =
+R"doc(Assigns an Eigen sparse matrix to a VariableMatrix.
+
+Args:
+    values: Eigen matrix of values.
+
+Returns:
+    This VariableMatrix.
+
+)doc";
+
+static const char *mkd_doc_slp_VariableMatrix_operator_assign_3 =
 R"doc(Assigns a scalar to the matrix.
 
 This only works for matrices with one row and one column.
@@ -3135,6 +3178,34 @@ Args:
 
 Template Args:
     Scalar: Scalar type.
+
+)doc";
+
+static const char *mkd_doc_slp_value =
+R"doc(Converts a sparse matrix of Variables to a sparse matrix of values.
+
+Args:
+    mat: Sparse matrix of Variables.
+
+Template Args:
+    Scalar: Scalar type.
+
+Returns:
+    Sparse matrix of values.
+
+)doc";
+
+static const char *mkd_doc_slp_value_2 =
+R"doc(Converts a sparse vector of Variables to a sparse vector of values.
+
+Args:
+    mat: Sparse vector of Variables.
+
+Template Args:
+    Scalar: Scalar type.
+
+Returns:
+    Sparse vector of values.
 
 )doc";
 
