@@ -28,4 +28,8 @@ compile_commands.json
 __pycache__/
 dist/
 
+# Rust
+target/
+Cargo.lock
+
 *.spy
