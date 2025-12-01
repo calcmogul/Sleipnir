@@ -404,6 +404,19 @@ TEMPLATE_TEST_CASE("Hessian - Edge pushing (Petro) figure 1", "[Hessian]",
   CHECK(H.value().toDense() == expected_H);
 }
 
+TEMPLATE_TEST_CASE("Hessian - Cart-pole", "[Hessian]",
+                   SCALAR_TYPES_UNDER_TEST) {
+  using T = TestType;
+
+  slp::scope_exit exit{
+      [] { CHECK(slp::global_pool_resource().blocks_in_use() == 0u); }};
+
+  // L(x, y, z) = f(x) − yᵀcₑ(x) − zᵀcᵢ(x)
+  //
+  // ∇ₓₓ²L = ∂/∂x²f(x) − ∂/∂x Aₑ(x)ᵀy − ∂/∂x Aᵢ(x)ᵀz
+  auto expected_H = 0;
+}
+
 TEMPLATE_TEST_CASE("Hessian - Variable reuse", "[Hessian]",
                    SCALAR_TYPES_UNDER_TEST) {
   using T = TestType;
