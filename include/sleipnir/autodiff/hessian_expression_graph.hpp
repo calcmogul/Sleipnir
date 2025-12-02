@@ -91,8 +91,12 @@ class HessianExpressionGraph {
     // Append value to Hessian mapping
     auto push_edge = [this](size_t j, size_t k, ExpressionPtr<Scalar> value) {
       // Sort parent index before child index
-      m_top_list[std::min(j, k)]->hessian_expr[std::max(j, k)] +=
-          std::move(value);
+      auto& h = m_top_list[std::min(j, k)]->hessian_expr;
+      if (!h.empty() && h.back().first == std::max(j, k)) {
+        h.back().second += std::move(value);
+      } else {
+        h.emplace_back(std::max(j, k), std::move(value));
+      }
     };
 
     auto ptr_1 = constant_ptr(Scalar(1));
@@ -249,14 +253,14 @@ class HessianExpressionGraph {
         if constexpr (UpLo == Eigen::Lower) {
           // In lower triangle, row index ≥ column index
           if (row > col) {
-            H[row, col] = value;
+            H[row, col] += value;
           } else {
-            H[col, row] = value;
+            H[col, row] += value;
           }
         } else {
-          H[row, col] = value;
+          H[row, col] += value;
           if (row != col) {
-            H[col, row] = value;
+            H[col, row] += value;
           }
         }
       }
@@ -330,7 +334,12 @@ class HessianExpressionGraph {
     // Append value to Hessian mapping
     auto push_edge = [this](size_t j, size_t k, const Scalar& value) {
       // Sort parent index before child index
-      m_top_list[std::min(j, k)]->hessian[std::max(j, k)] += value;
+      auto& h = m_top_list[std::min(j, k)]->hessian;
+      if (!h.empty() && h.back().first == std::max(j, k)) {
+        h.back().second += value;
+      } else {
+        h.emplace_back(std::max(j, k), value);
+      }
     };
 
     // Set root node's adjoint to 1 since df/df is 1
