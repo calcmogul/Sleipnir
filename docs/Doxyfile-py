@@ -1007,7 +1007,6 @@ RECURSIVE              = YES
 EXCLUDE                = benchmarks \
                          build \
                          examples \
-                         include/sleipnir/util/flat_map.hpp \
                          thirdparty \
                          test \
                          tools
