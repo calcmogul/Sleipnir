@@ -16,7 +16,6 @@
 #include <gch/small_vector.hpp>
 
 #include "sleipnir/autodiff/expression_type.hpp"
-#include "sleipnir/util/flat_map.hpp"
 #include "sleipnir/util/intrusive_shared_ptr.hpp"
 #include "sleipnir/util/pool.hpp"
 
@@ -101,7 +100,7 @@ struct Expression {
   /// The Hessian of the expression node's row, used during autodiff.
   ///
   /// Maps column index to value.
-  flat_map<size_t, Scalar> hessian;
+  gch::small_vector<std::pair<size_t, Scalar>> hessian;
 
   /// This expression's index in the topological list.
   size_t idx = 0;
@@ -114,7 +113,7 @@ struct Expression {
   /// tree generation.
   ///
   /// Maps column index to value.
-  flat_map<size_t, ExpressionPtr<Scalar>> hessian_expr;
+  gch::small_vector<std::pair<size_t, ExpressionPtr<Scalar>>> hessian_expr;
 
   /// Expression arguments.
   std::array<ExpressionPtr<Scalar>, 2> args{nullptr, nullptr};
