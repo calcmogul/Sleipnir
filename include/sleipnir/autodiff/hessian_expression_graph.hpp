@@ -87,9 +87,19 @@ class HessianExpressionGraph {
     auto push_edge = [this](size_t j, size_t k, ExpressionPtr<Scalar> value) {
       // Sort parent index before child index
       if (j < k) {
-        m_top_list[j]->hessian_expr[k] += std::move(value);
+        auto& h = m_top_list[j]->hessian_expr;
+        if (!h.empty() && h.back().first == k) {
+          h.back().second += value;
+        } else {
+          h.emplace_back(k, std::move(value));
+        }
       } else {
-        m_top_list[k]->hessian_expr[j] += std::move(value);
+        auto& h = m_top_list[k]->hessian_expr;
+        if (!h.empty() && h.back().first == j) {
+          h.back().second += value;
+        } else {
+          h.emplace_back(j, std::move(value));
+        }
       }
     };
 
@@ -258,14 +268,14 @@ class HessianExpressionGraph {
         if constexpr (UpLo == Eigen::Lower) {
           // In lower triangle, row index ≥ column index
           if (row > col) {
-            H[row, col] = value;
+            H[row, col] += value;
           } else {
-            H[col, row] = value;
+            H[col, row] += value;
           }
         } else {
-          H[row, col] = value;
+          H[row, col] += value;
           if (row != col) {
-            H[col, row] = value;
+            H[col, row] += value;
           }
         }
       }
@@ -340,9 +350,19 @@ class HessianExpressionGraph {
     auto push_edge = [this](size_t j, size_t k, const Scalar& value) {
       // Sort parent index before child index
       if (j < k) {
-        m_top_list[j]->hessian[k] += value;
+        auto& h = m_top_list[j]->hessian;
+        if (!h.empty() && h.back().first == k) {
+          h.back().second += value;
+        } else {
+          h.emplace_back(k, value);
+        }
       } else {
-        m_top_list[k]->hessian[j] += value;
+        auto& h = m_top_list[k]->hessian;
+        if (!h.empty() && h.back().first == j) {
+          h.back().second += value;
+        } else {
+          m_top_list[k]->hessian.emplace_back(j, value);
+        }
       }
     };
 
