@@ -4,9 +4,9 @@
 
 #include <stdint.h>
 
-#include <utility>
-
 #include <fmt/base.h>
+
+#include "sleipnir/util/unreachable.hpp"
 
 namespace slp {
 
@@ -61,7 +61,7 @@ struct fmt::formatter<slp::ExpressionType> {
       case NONLINEAR:
         return m_underlying.format("nonlinear", ctx);
       default:
-        std::unreachable();
+        slp::unreachable();
     }
   }
 
