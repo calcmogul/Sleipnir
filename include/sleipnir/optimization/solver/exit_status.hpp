@@ -4,9 +4,9 @@
 
 #include <stdint.h>
 
-#include <utility>
-
 #include <fmt/base.h>
+
+#include "sleipnir/util/unreachable.hpp"
 
 namespace slp {
 
@@ -88,7 +88,7 @@ struct fmt::formatter<slp::ExitStatus> {
       case TIMEOUT:
         return m_underlying.format("timeout", ctx);
       default:
-        std::unreachable();
+        slp::unreachable();
     }
   }
 
