@@ -1,11 +1,15 @@
 // Copyright (c) Sleipnir contributors
 
+#include <concepts>
+#include <utility>
+
 #include <nanobind/eigen/dense.h>
 #include <nanobind/nanobind.h>
 #include <nanobind/operators.h>
 #include <sleipnir/autodiff/variable.hpp>
 
 #include "docstrings.hpp"
+#include "for_each_type.hpp"
 
 namespace nb = nanobind;
 
@@ -17,6 +21,60 @@ namespace nb = nanobind;
 
 namespace slp {
 
+/// Bind unary math function.
+template <typename F, typename... Args>
+void def_unary_math(nb::module_& autodiff, const char* name, F&& f,
+                    Args&&... args) {
+  using V = Variable<double>;
+  for_each_type<double, const V&>([&]<typename X> {
+    if constexpr (std::same_as<X, const V&>) {
+      autodiff.def(name, f, std::forward<Args>(args)...);
+    } else {
+      autodiff.def(
+          name, [=](X&& x) { return f(x); }, std::forward<Args>(args)...);
+    }
+  });
+}
+
+/// Bind binary math function.
+template <typename F, typename... Args>
+void def_binary_math(nb::module_& autodiff, const char* name, F&& f,
+                     Args&&... args) {
+  using V = Variable<double>;
+  for_each_type<double, const V&>([&]<typename L> {
+    for_each_type<double, const V&>([&]<typename R> {
+      if constexpr (std::same_as<L, const V&> && std::same_as<R, const V&>) {
+        autodiff.def(name, f, std::forward<Args>(args)...);
+      } else {
+        autodiff.def(
+            name, [=](L&& l, R&& r) { return f(l, r); },
+            std::forward<Args>(args)...);
+      }
+    });
+  });
+}
+
+/// Bind ternary math function.
+template <typename F, typename... Args>
+void def_ternary_math(nb::module_& autodiff, const char* name, F&& f,
+                      Args&&... args) {
+  using V = Variable<double>;
+  for_each_type<double, const V&>([&]<typename L> {
+    for_each_type<double, const V&>([&]<typename M> {
+      for_each_type<double, const V&>([&]<typename R> {
+        if constexpr (std::same_as<L, const V&> && std::same_as<M, const V&> &&
+                      std::same_as<R, const V&>) {
+          autodiff.def(name, f, std::forward<Args>(args)...);
+        } else {
+          autodiff.def(
+              name, [=](L&& l, M&& m, R&& r) { return f(l, m, r); },
+              std::forward<Args>(args)...);
+        }
+      });
+    });
+  });
+}
+
 void bind_variable(nb::module_& autodiff, nb::class_<Variable<double>>& cls) {
   using namespace nb::literals;
 
@@ -27,33 +85,22 @@ void bind_variable(nb::module_& autodiff, nb::class_<Variable<double>>& cls) {
   cls.def("value", &Variable<double>::value, DOC(slp, Variable, value));
   cls.def("type", &Variable<double>::type, DOC(slp, Variable, type));
 
-  // Scalar-scalar multiplication
-  cls.def(double() * nb::self, "lhs"_a);
-  cls.def(nb::self * double(), "rhs"_a);
-  cls.def(nb::self * nb::self, "rhs"_a);
-  cls.def(nb::self *= double(), "rhs"_a, DOC(slp, Variable, operator, imul));
-  cls.def(nb::self *= nb::self, "rhs"_a, DOC(slp, Variable, operator, imul));
-
-  // Scalar-scalar division
-  cls.def(double() / nb::self, "lhs"_a);
-  cls.def(nb::self / double(), "rhs"_a);
-  cls.def(nb::self / nb::self, "rhs"_a);
-  cls.def(nb::self /= double(), "rhs"_a, DOC(slp, Variable, operator, idiv));
-  cls.def(nb::self /= nb::self, "rhs"_a, DOC(slp, Variable, operator, idiv));
-
-  // Scalar-scalar addition
-  cls.def(double() + nb::self, "lhs"_a);
-  cls.def(nb::self + double(), "rhs"_a);
-  cls.def(nb::self + nb::self, "rhs"_a);
-  cls.def(nb::self += double(), "rhs"_a, DOC(slp, Variable, operator, iadd));
-  cls.def(nb::self += nb::self, "rhs"_a, DOC(slp, Variable, operator, iadd));
-
-  // Scalar-scalar subtraction
-  cls.def(double() - nb::self, "lhs"_a);
-  cls.def(nb::self - double(), "rhs"_a);
-  cls.def(nb::self - nb::self, "rhs"_a);
-  cls.def(nb::self -= double(), "rhs"_a, DOC(slp, Variable, operator, isub));
-  cls.def(nb::self -= nb::self, "rhs"_a, DOC(slp, Variable, operator, isub));
+  for_each_type<nb::detail::self_t, double, int>([&]<typename T> {
+    cls.def(nb::self * T(), "rhs"_a);
+    cls.def(nb::self *= T(), "rhs"_a, DOC(slp, Variable, operator, imul));
+    cls.def(nb::self / T(), "rhs"_a);
+    cls.def(nb::self /= T(), "rhs"_a, DOC(slp, Variable, operator, idiv));
+    cls.def(nb::self + T(), "rhs"_a);
+    cls.def(nb::self += T(), "rhs"_a, DOC(slp, Variable, operator, iadd));
+    cls.def(nb::self - T(), "rhs"_a);
+    cls.def(nb::self -= T(), "rhs"_a, DOC(slp, Variable, operator, isub));
+    if constexpr (!std::same_as<T, nb::detail::self_t>) {
+      cls.def(T() * nb::self, "lhs"_a);
+      cls.def(T() / nb::self, "lhs"_a);
+      cls.def(T() + nb::self, "lhs"_a);
+      cls.def(T() - nb::self, "lhs"_a);
+    }
+  });
 
   cls.def(
       "__pow__",
@@ -63,169 +110,51 @@ void bind_variable(nb::module_& autodiff, nb::class_<Variable<double>>& cls) {
   cls.def(+nb::self);
 
   // Comparison operators
-  cls.def(nb::self == nb::self, "rhs"_a, DOC(slp, operator, eq));
-  cls.def(nb::self < nb::self, "rhs"_a, DOC(slp, operator, lt));
-  cls.def(nb::self <= nb::self, "rhs"_a, DOC(slp, operator, le));
-  cls.def(nb::self > nb::self, "rhs"_a, DOC(slp, operator, gt));
-  cls.def(nb::self >= nb::self, "rhs"_a, DOC(slp, operator, ge));
-  cls.def(nb::self == double(), "rhs"_a, DOC(slp, operator, eq));
-  cls.def(nb::self < double(), "rhs"_a, DOC(slp, operator, lt));
-  cls.def(nb::self <= double(), "rhs"_a, DOC(slp, operator, le));
-  cls.def(nb::self > double(), "rhs"_a, DOC(slp, operator, gt));
-  cls.def(nb::self >= double(), "rhs"_a, DOC(slp, operator, ge));
-  cls.def(double() == nb::self, "lhs"_a, DOC(slp, operator, eq));
-  cls.def(double() < nb::self, "lhs"_a, DOC(slp, operator, lt));
-  cls.def(double() <= nb::self, "lhs"_a, DOC(slp, operator, le));
-  cls.def(double() > nb::self, "lhs"_a, DOC(slp, operator, gt));
-  cls.def(double() >= nb::self, "lhs"_a, DOC(slp, operator, ge));
+  for_each_type<nb::detail::self_t, double, int>([&]<typename T> {
+    cls.def(nb::self == T(), "rhs"_a, DOC(slp, operator, eq));
+    cls.def(nb::self < T(), "rhs"_a, DOC(slp, operator, lt));
+    cls.def(nb::self <= T(), "rhs"_a, DOC(slp, operator, le));
+    cls.def(nb::self > T(), "rhs"_a, DOC(slp, operator, gt));
+    cls.def(nb::self >= T(), "rhs"_a, DOC(slp, operator, ge));
+    if constexpr (!std::same_as<T, nb::detail::self_t>) {
+      cls.def(T() == nb::self, "lhs"_a, DOC(slp, operator, eq));
+      cls.def(T() < nb::self, "lhs"_a, DOC(slp, operator, lt));
+      cls.def(T() <= nb::self, "lhs"_a, DOC(slp, operator, le));
+      cls.def(T() > nb::self, "lhs"_a, DOC(slp, operator, gt));
+      cls.def(T() >= nb::self, "lhs"_a, DOC(slp, operator, ge));
+    }
+  });
 
   // Math functions
-  autodiff.def(
-      "abs", [](double x) { return abs(Variable<double>{x}); }, "x"_a,
-      DOC(slp, abs));
-  autodiff.def("abs",
-               static_cast<Variable<double> (*)(const Variable<double>&)>(&abs),
-               "x"_a, DOC(slp, abs));
-  autodiff.def(
-      "acos", [](double x) { return acos(Variable<double>{x}); }, "x"_a,
-      DOC(slp, acos));
-  autodiff.def(
-      "acos", static_cast<Variable<double> (*)(const Variable<double>&)>(&acos),
-      "x"_a, DOC(slp, acos));
-  autodiff.def(
-      "asin", [](double x) { return asin(Variable<double>{x}); }, "x"_a,
-      DOC(slp, asin));
-  autodiff.def(
-      "asin", static_cast<Variable<double> (*)(const Variable<double>&)>(&asin),
-      "x"_a, DOC(slp, asin));
-  autodiff.def(
-      "atan", [](double x) { return atan(Variable<double>{x}); }, "x"_a,
-      DOC(slp, atan));
-  autodiff.def(
-      "atan", static_cast<Variable<double> (*)(const Variable<double>&)>(&atan),
-      "x"_a, DOC(slp, atan));
-  autodiff.def(
-      "atan2", [](double y, const Variable<double>& x) { return atan2(y, x); },
-      "y"_a, "x"_a, DOC(slp, atan2));
-  autodiff.def(
-      "atan2", [](const Variable<double>& y, double x) { return atan2(y, x); },
-      "y"_a, "x"_a, DOC(slp, atan2));
-  autodiff.def(
-      "atan2",
-      [](const Variable<double>& y, const Variable<double>& x) {
-        return atan2(y, x);
-      },
-      "y"_a, "x"_a, DOC(slp, atan2));
-  autodiff.def(
-      "cbrt", [](double x) { return cbrt(Variable<double>{x}); }, "x"_a,
-      DOC(slp, cbrt));
-  autodiff.def(
-      "cbrt", static_cast<Variable<double> (*)(const Variable<double>&)>(&cbrt),
-      "x"_a, DOC(slp, cbrt));
-  autodiff.def(
-      "cos", [](double x) { return cos(Variable<double>{x}); }, "x"_a,
-      DOC(slp, cos));
-  autodiff.def("cos",
-               static_cast<Variable<double> (*)(const Variable<double>&)>(&cos),
-               "x"_a, DOC(slp, cos));
-  autodiff.def(
-      "cosh", [](double x) { return cosh(Variable<double>{x}); }, "x"_a,
-      DOC(slp, cosh));
-  autodiff.def(
-      "cosh", static_cast<Variable<double> (*)(const Variable<double>&)>(&cosh),
-      "x"_a, DOC(slp, cosh));
-  autodiff.def(
-      "erf", [](double x) { return erf(Variable<double>{x}); }, "x"_a,
-      DOC(slp, erf));
-  autodiff.def("erf",
-               static_cast<Variable<double> (*)(const Variable<double>&)>(&erf),
-               "x"_a, DOC(slp, erf));
-  autodiff.def(
-      "exp", [](double x) { return exp(Variable<double>{x}); }, "x"_a,
-      DOC(slp, exp));
-  autodiff.def("exp",
-               static_cast<Variable<double> (*)(const Variable<double>&)>(&exp),
-               "x"_a, DOC(slp, exp));
-  autodiff.def(
-      "hypot", [](double x, const Variable<double>& y) { return hypot(x, y); },
-      "x"_a, "y"_a, DOC(slp, hypot));
-  autodiff.def(
-      "hypot", [](const Variable<double>& x, double y) { return hypot(x, y); },
-      "x"_a, "y"_a, DOC(slp, hypot));
-  autodiff.def("hypot",
-               static_cast<Variable<double> (*)(
-                   const Variable<double>&, const Variable<double>&)>(&hypot),
-               "x"_a, "y"_a, DOC(slp, hypot));
-  autodiff.def("hypot",
-               static_cast<Variable<double> (*)(
-                   const Variable<double>&, const Variable<double>&,
-                   const Variable<double>&)>(&hypot),
-               "x"_a, "y"_a, "z"_a, DOC(slp, hypot, 2));
-  autodiff.def(
-      "log", [](double x) { return log(Variable<double>{x}); }, "x"_a,
-      DOC(slp, log));
-  autodiff.def("log",
-               static_cast<Variable<double> (*)(const Variable<double>&)>(&log),
-               "x"_a, DOC(slp, log));
-  autodiff.def(
-      "log10", [](double x) { return log10(Variable<double>{x}); }, "x"_a,
-      DOC(slp, log10));
-  autodiff.def(
-      "log10",
-      static_cast<Variable<double> (*)(const Variable<double>&)>(&log10), "x"_a,
-      DOC(slp, log10));
-  autodiff.def(
-      "pow",
-      [](double base, const Variable<double>& power) {
-        return pow(base, power);
-      },
-      "base"_a, "power"_a, DOC(slp, pow));
-  autodiff.def(
-      "pow",
-      [](const Variable<double>& base, double power) {
-        return pow(base, power);
-      },
-      "base"_a, "power"_a, DOC(slp, pow));
-  autodiff.def("pow",
-               static_cast<Variable<double> (*)(const Variable<double>&,
-                                                const Variable<double>&)>(&pow),
-               "base"_a, "power"_a, DOC(slp, pow));
-  autodiff.def(
-      "sign", [](double x) { return sign(Variable<double>{x}); }, "x"_a,
-      DOC(slp, sign));
-  autodiff.def(
-      "sign", static_cast<Variable<double> (*)(const Variable<double>&)>(&sign),
-      "x"_a, DOC(slp, sign));
-  autodiff.def(
-      "sin", [](double x) { return sin(Variable<double>{x}); }, "x"_a,
-      DOC(slp, sin));
-  autodiff.def("sin",
-               static_cast<Variable<double> (*)(const Variable<double>&)>(&sin),
-               "x"_a, DOC(slp, sin));
-  autodiff.def(
-      "sinh", [](double x) { return sinh(Variable<double>{x}); }, "x"_a,
-      DOC(slp, sinh));
-  autodiff.def(
-      "sinh", static_cast<Variable<double> (*)(const Variable<double>&)>(&sinh),
-      "x"_a, DOC(slp, sinh));
-  autodiff.def(
-      "sqrt", [](double x) { return sqrt(Variable<double>{x}); }, "x"_a,
-      DOC(slp, sqrt));
-  autodiff.def(
-      "sqrt", static_cast<Variable<double> (*)(const Variable<double>&)>(&sqrt),
-      "x"_a, DOC(slp, sqrt));
-  autodiff.def(
-      "tan", [](double x) { return tan(Variable<double>{x}); }, "x"_a,
-      DOC(slp, tan));
-  autodiff.def("tan",
-               static_cast<Variable<double> (*)(const Variable<double>&)>(&tan),
-               "x"_a, DOC(slp, tan));
-  autodiff.def(
-      "tanh", [](double x) { return tanh(Variable<double>{x}); }, "x"_a,
-      DOC(slp, tanh));
-  autodiff.def(
-      "tanh", static_cast<Variable<double> (*)(const Variable<double>&)>(&tanh),
-      "x"_a, DOC(slp, tanh));
+  using V = Variable<double>;
+  def_unary_math(autodiff, "abs", &abs<double>, "x"_a, DOC(slp, abs));
+  def_unary_math(autodiff, "acos", &acos<double>, "x"_a, DOC(slp, acos));
+  def_unary_math(autodiff, "asin", &asin<double>, "x"_a, DOC(slp, asin));
+  def_unary_math(autodiff, "atan", &atan<double>, "x"_a, DOC(slp, atan));
+  def_binary_math(autodiff, "atan2", &atan2<double>, "y"_a, "x"_a,
+                  DOC(slp, atan2));
+  def_unary_math(autodiff, "cbrt", &cbrt<double>, "x"_a, DOC(slp, cbrt));
+  def_unary_math(autodiff, "cos", &cos<double>, "x"_a, DOC(slp, cos));
+  def_unary_math(autodiff, "cosh", &cosh<double>, "x"_a, DOC(slp, cosh));
+  def_unary_math(autodiff, "erf", &erf<double>, "x"_a, DOC(slp, erf));
+  def_unary_math(autodiff, "exp", &exp<double>, "x"_a, DOC(slp, exp));
+  def_binary_math(autodiff, "hypot",
+                  static_cast<V (*)(const V&, const V&)>(&hypot<double>), "x"_a,
+                  "y"_a, DOC(slp, hypot));
+  def_ternary_math(
+      autodiff, "hypot",
+      static_cast<V (*)(const V&, const V&, const V&)>(&hypot<double>), "x"_a,
+      "y"_a, "z"_a, DOC(slp, hypot, 2));
+  def_unary_math(autodiff, "log", &log<double>, "x"_a, DOC(slp, log));
+  def_unary_math(autodiff, "log10", &log10<double>, "x"_a, DOC(slp, log10));
+  def_binary_math(autodiff, "pow", &pow<double>, "base"_a, "power"_a,
+                  DOC(slp, pow));
+  def_unary_math(autodiff, "sign", &sign<double>, "x"_a, DOC(slp, sign));
+  def_unary_math(autodiff, "sin", &sin<double>, "x"_a, DOC(slp, sin));
+  def_unary_math(autodiff, "sinh", &sinh<double>, "x"_a, DOC(slp, sinh));
+  def_unary_math(autodiff, "sqrt", &sqrt<double>, "x"_a, DOC(slp, sqrt));
+  def_unary_math(autodiff, "tan", &tan<double>, "x"_a, DOC(slp, tan));
+  def_unary_math(autodiff, "tanh", &tanh<double>, "x"_a, DOC(slp, tanh));
 }
 
 }  // namespace slp
