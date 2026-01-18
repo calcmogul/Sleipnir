@@ -191,6 +191,8 @@ class Problem {
                                    constraint.constraints.size());
     std::ranges::copy(constraint.constraints,
                       std::back_inserter(m_equality_constraints));
+
+    m_warm_startable = true;
   }
 
   /// Tells the solver to solve the problem while satisfying the given equality
@@ -202,6 +204,8 @@ class Problem {
                                    constraint.constraints.size());
     std::ranges::copy(constraint.constraints,
                       std::back_inserter(m_equality_constraints));
+
+    m_warm_startable = true;
   }
 
   /// Tells the solver to solve the problem while satisfying the given
@@ -213,6 +217,8 @@ class Problem {
                                      constraint.constraints.size());
     std::ranges::copy(constraint.constraints,
                       std::back_inserter(m_inequality_constraints));
+
+    m_warm_startable = false;
   }
 
   /// Tells the solver to solve the problem while satisfying the given
@@ -224,6 +230,8 @@ class Problem {
                                      constraint.constraints.size());
     std::ranges::copy(constraint.constraints,
                       std::back_inserter(m_inequality_constraints));
+
+    m_warm_startable = false;
   }
 
   /// Returns the cost function's type.
@@ -515,48 +523,91 @@ class Problem {
         return ExitStatus::GLOBALLY_INFEASIBLE;
       }
 
-#ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
-      project_onto_bounds(x, bounds);
-#endif
       // Invoke interior-point method solver
-      status = interior_point<Scalar>(
-          InteriorPointMatrixCallbacks<Scalar>{
-              [&](const DenseVector& x) -> Scalar {
-                x_ad.set_value(x);
-                return f.value();
-              },
-              [&](const DenseVector& x) -> SparseVector {
-                x_ad.set_value(x);
-                return g.value();
-              },
-              [&](const DenseVector& x, const DenseVector& y,
-                  const DenseVector& z) -> SparseMatrix {
-                x_ad.set_value(x);
-                y_ad.set_value(y);
-                z_ad.set_value(z);
-                return H.value();
-              },
-              [&](const DenseVector& x) -> DenseVector {
-                x_ad.set_value(x);
-                return c_e_ad.value();
-              },
-              [&](const DenseVector& x) -> SparseMatrix {
-                x_ad.set_value(x);
-                return A_e.value();
-              },
-              [&](const DenseVector& x) -> DenseVector {
-                x_ad.set_value(x);
-                return c_i_ad.value();
-              },
-              [&](const DenseVector& x) -> SparseMatrix {
-                x_ad.set_value(x);
-                return A_i.value();
-              }},
-          callbacks, options,
+      if (m_warm_startable) {
+        status = interior_point<Scalar>(
+            InteriorPointMatrixCallbacks<Scalar>{
+                [&](const DenseVector& x) -> Scalar {
+                  x_ad.set_value(x);
+                  return f.value();
+                },
+                [&](const DenseVector& x) -> SparseVector {
+                  x_ad.set_value(x);
+                  return g.value();
+                },
+                [&](const DenseVector& x, const DenseVector& y,
+                    const DenseVector& z) -> SparseMatrix {
+                  x_ad.set_value(x);
+                  y_ad.set_value(y);
+                  z_ad.set_value(z);
+                  return H.value();
+                },
+                [&](const DenseVector& x) -> DenseVector {
+                  x_ad.set_value(x);
+                  return c_e_ad.value();
+                },
+                [&](const DenseVector& x) -> SparseMatrix {
+                  x_ad.set_value(x);
+                  return A_e.value();
+                },
+                [&](const DenseVector& x) -> DenseVector {
+                  x_ad.set_value(x);
+                  return c_i_ad.value();
+                },
+                [&](const DenseVector& x) -> SparseMatrix {
+                  x_ad.set_value(x);
+                  return A_i.value();
+                }},
+            callbacks, options,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
-          bound_constraint_mask,
+            bound_constraint_mask,
 #endif
-          x);
+            m_equality_constraints.size(), m_inequality_constraints.size(), x);
+      } else {
+#ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
+        project_onto_bounds(x, bounds);
+#endif
+        status = interior_point<Scalar>(
+            InteriorPointMatrixCallbacks<Scalar>{
+                [&](const DenseVector& x) -> Scalar {
+                  x_ad.set_value(x);
+                  return f.value();
+                },
+                [&](const DenseVector& x) -> SparseVector {
+                  x_ad.set_value(x);
+                  return g.value();
+                },
+                [&](const DenseVector& x, const DenseVector& y,
+                    const DenseVector& z) -> SparseMatrix {
+                  x_ad.set_value(x);
+                  y_ad.set_value(y);
+                  z_ad.set_value(z);
+                  return H.value();
+                },
+                [&](const DenseVector& x) -> DenseVector {
+                  x_ad.set_value(x);
+                  return c_e_ad.value();
+                },
+                [&](const DenseVector& x) -> SparseMatrix {
+                  x_ad.set_value(x);
+                  return A_e.value();
+                },
+                [&](const DenseVector& x) -> DenseVector {
+                  x_ad.set_value(x);
+                  return c_i_ad.value();
+                },
+                [&](const DenseVector& x) -> SparseMatrix {
+                  x_ad.set_value(x);
+                  return A_i.value();
+                }},
+            callbacks, options,
+#ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
+            bound_constraint_mask,
+#endif
+            m_equality_constraints.size(), m_inequality_constraints.size(), x);
+
+        m_warm_startable = true;
+      }
     }
 
     if (options.diagnostics) {
@@ -640,6 +691,8 @@ class Problem {
       m_iteration_callbacks;
   gch::small_vector<std::function<bool(const IterationInfo<Scalar>& info)>>
       m_persistent_iteration_callbacks;
+
+  bool m_warm_startable = false;
 
   void print_exit_conditions([[maybe_unused]] const Options& options) {
     // Print possible exit conditions
