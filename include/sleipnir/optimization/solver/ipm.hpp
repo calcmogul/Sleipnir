@@ -29,6 +29,7 @@
 #include "sleipnir/optimization/solver/util/first_derivatives.hpp"
 #include "sleipnir/optimization/solver/util/fraction_to_the_boundary_rule.hpp"
 #include "sleipnir/optimization/solver/util/function_values.hpp"
+#include "sleipnir/optimization/solver/util/ipm_initial_iterate.hpp"
 #include "sleipnir/optimization/solver/util/iterates.hpp"
 #include "sleipnir/optimization/solver/util/kkt_error.hpp"
 #include "sleipnir/optimization/solver/util/kkt_system.hpp"
@@ -80,16 +81,16 @@ ExitStatus ipm(
     Eigen::VectorX<Scalar>& x) {
   using DenseVector = Eigen::VectorX<Scalar>;
 
-  const DenseVector c_i = matrix_callbacks.c_i(x);
-
+  // Leave every entry of the initial iterate unset
   IPMIterates<Scalar> iterates{
       .x = std::move(x),
-      // If cᵢ(x) is sufficiently feasible, start the constraint with zero
-      // violation. Otherwise, make Σ = S⁻¹Z ≈ I.
-      .s = (c_i.array() >= Scalar(1e-2)).select(c_i, Scalar(1)),
-      .y = DenseVector::Zero(matrix_callbacks.num_equality_constraints),
-      .z = DenseVector::Ones(matrix_callbacks.num_inequality_constraints)};
-  Scalar μ = Scalar(0.1) * matrix_callbacks.scaling.f;
+      .s = DenseVector::Constant(matrix_callbacks.num_inequality_constraints,
+                                 std::numeric_limits<Scalar>::quiet_NaN()),
+      .y = DenseVector::Constant(matrix_callbacks.num_equality_constraints,
+                                 std::numeric_limits<Scalar>::quiet_NaN()),
+      .z = DenseVector::Constant(matrix_callbacks.num_inequality_constraints,
+                                 std::numeric_limits<Scalar>::quiet_NaN())};
+  Scalar μ(0);
   int iterations = 0;
 
   const auto status = ipm(matrix_callbacks, iteration_callbacks, options, false,
@@ -117,6 +118,10 @@ ExitStatus ipm(
 /// where f(x) is the cost function, cₑ(x) are the equality constraints, and
 /// cᵢ(x) are the inequality constraints.
 ///
+/// Outside feasibility restoration, NaN entries of s, y, and z are unset, and
+/// unset and out-of-bounds entries are filled by fill_ipm_initial_iterate().
+/// The initial barrier parameter is then chosen from the initial iterate.
+///
 /// @tparam Scalar Scalar type.
 /// @param[in] matrix_callbacks Matrix callbacks.
 /// @param[in] iteration_callbacks The list of callbacks to call at the
@@ -127,7 +132,7 @@ ExitStatus ipm(
 /// @param[in,out] iterates The initial guess and output location for the
 ///     iterates.
 /// @param[in,out] μ The initial guess and output location for the barrier
-///     parameter.
+///     parameter. The initial guess is only used in feasibility restoration.
 /// @param[in,out] iterations The iteration counter.
 /// @return The exit status.
 template <typename Scalar>
@@ -190,6 +195,15 @@ ExitStatus ipm(
       .g = matrices.g(x), .A_e = matrices.A_e(x), .A_i = matrices.A_i(x)};
   auto& [f, c_e, c_i] = function_values;
   auto& [g, A_e, A_i] = first_derivatives;
+
+  // Barrier parameter minimum
+  const Scalar μ_min = matrices.scaling.f * options.tolerance / Scalar(10);
+
+  // Feasibility restoration constructs its own initial iterate
+  if (!in_feasibility_restoration) {
+    fill_ipm_initial_iterate(c_i, μ_min, s, y, z);
+  }
+
   SparseMatrix H = matrices.H(x, y, z);
 
   // Ensure matrix callback dimensions are consistent
@@ -229,9 +243,6 @@ ExitStatus ipm(
   s = bound_constraint_mask.select(c_i, s);
 #endif
 
-  // Barrier parameter minimum
-  const Scalar μ_min = matrices.scaling.f * options.tolerance / Scalar(10);
-
   // Fraction-to-the-boundary rule scale factor minimum
   constexpr Scalar τ_min(0.99);
 
@@ -239,6 +250,16 @@ ExitStatus ipm(
   Scalar τ = τ_min;
 
   IPMKKTSystem<Scalar> kkt_system{H, A_e, A_i};
+
+  // Feasibility restoration chooses its own initial barrier parameter
+  if (!in_feasibility_restoration) {
+    choose_ipm_initial_iterate(matrices, kkt_system, iterates, function_values,
+                               first_derivatives, H, μ_min, τ,
+#ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
+                               bound_constraint_mask,
+#endif
+                               μ);
+  }
 
   Filter<Scalar> filter{constraint_violation(c_e, c_i, s)};
 

@@ -99,7 +99,7 @@ ExitStatus sqp(
 ///     beginning of each iteration.
 /// @param[in] options Solver options.
 /// @param[in,out] iterates The initial guess and output location for the
-///     iterates.
+///     iterates. Nonfinite entries of y start at zero.
 /// @return The exit status.
 template <typename Scalar>
 ExitStatus sqp(
@@ -145,6 +145,8 @@ ExitStatus sqp(
 #endif
 
   ScopedTimeTracer setup_tracer{diagnostics[SETUP]};
+
+  y = y.array().isFinite().select(y, Scalar(0));
 
   SQPFunctionValues<Scalar> function_values{.f = matrices.f(x),
                                             .c_e = matrices.c_e(x)};

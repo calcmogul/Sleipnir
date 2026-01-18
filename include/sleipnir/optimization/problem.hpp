@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <functional>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <ranges>
@@ -205,6 +206,8 @@ class Problem {
                                    constraint.constraints.size());
     std::ranges::copy(constraint.constraints,
                       std::back_inserter(m_equality_constraints));
+
+    append_unset_entries(m_initial_y, constraint.constraints.size());
   }
 
   /// Tells the solver to solve the problem while satisfying the given equality
@@ -216,6 +219,8 @@ class Problem {
                                    constraint.constraints.size());
     std::ranges::copy(constraint.constraints,
                       std::back_inserter(m_equality_constraints));
+
+    append_unset_entries(m_initial_y, constraint.constraints.size());
   }
 
   /// Tells the solver to solve the problem while satisfying the given
@@ -227,6 +232,9 @@ class Problem {
                                      constraint.constraints.size());
     std::ranges::copy(constraint.constraints,
                       std::back_inserter(m_inequality_constraints));
+
+    append_unset_entries(m_initial_s, constraint.constraints.size());
+    append_unset_entries(m_initial_z, constraint.constraints.size());
   }
 
   /// Tells the solver to solve the problem while satisfying the given
@@ -238,6 +246,9 @@ class Problem {
                                      constraint.constraints.size());
     std::ranges::copy(constraint.constraints,
                       std::back_inserter(m_inequality_constraints));
+
+    append_unset_entries(m_initial_s, constraint.constraints.size());
+    append_unset_entries(m_initial_z, constraint.constraints.size());
   }
 
   /// Returns the cost function's type.
@@ -412,6 +423,38 @@ class Problem {
   gch::small_vector<
       std::function<ControlFlow(const IterationInfo<Scalar>& info)>>
       m_persistent_iteration_callbacks;
+
+  // The next solve's initial slack variables and dual variables, with one row
+  // per constraint. NaN entries are unset and start at their defaults.
+  //
+  // Stored in unscaled form because the problem scaling depends on the initial
+  // guess, which can change between solves
+  DenseVector m_initial_s;
+  DenseVector m_initial_y;
+  DenseVector m_initial_z;
+
+  /// Appends unset entries to the next solve's initial iterate entries.
+  ///
+  /// @param entries The initial iterate entries.
+  /// @param rows The number of entries to append.
+  static void append_unset_entries(DenseVector& entries, size_t rows) {
+    const auto old_rows = entries.rows();
+    entries.conservativeResize(old_rows + static_cast<int>(rows));
+    entries.tail(static_cast<int>(rows))
+        .setConstant(std::numeric_limits<Scalar>::quiet_NaN());
+  }
+
+  /// Returns true if the solver's final iterate is usable as the initial
+  /// iterate for the next solve.
+  ///
+  /// @param status The solver's exit status.
+  static bool iterate_is_reusable(ExitStatus status) {
+    // Failures can leave the iterates in an arbitrarily bad state
+    return status == ExitStatus::SUCCESS ||
+           status == ExitStatus::CALLBACK_REQUESTED_STOP ||
+           status == ExitStatus::MAX_ITERATIONS_EXCEEDED ||
+           status == ExitStatus::TIMEOUT;
+  }
 
   ExitStatus solve_newton(const Options<Scalar>& options,
                           [[maybe_unused]] bool spy, DenseVector& x) {
@@ -613,13 +656,19 @@ class Problem {
 
     SQPIterates<Scalar> iterates{
         .x = std::move(x),
-        .y = DenseVector::Zero(matrix_callbacks.num_equality_constraints)};
+        .y = scaling.f * m_initial_y.cwiseQuotient(scaling.c_e)};
 
     // Invoke SQP solver
     auto status =
         sqp<Scalar>(matrix_callbacks, iteration_callbacks, options, iterates);
 
     x = std::move(iterates.x);
+
+    if (iterate_is_reusable(status)) {
+      m_initial_y = scaling.c_e.cwiseProduct(iterates.y) / scaling.f;
+    } else {
+      m_initial_y.setConstant(std::numeric_limits<Scalar>::quiet_NaN());
+    }
 
     return status;
   }
@@ -782,16 +831,12 @@ class Problem {
         },
         scaling};
 
-    const DenseVector c_i = matrix_callbacks.c_i(x);
-
     IPMIterates<Scalar> iterates{
         .x = std::move(x),
-        // If cᵢ(x) is sufficiently feasible, start the constraint with zero
-        // violation. Otherwise, make Σ = S⁻¹Z ≈ I.
-        .s = (c_i.array() >= Scalar(1e-2)).select(c_i, Scalar(1)),
-        .y = DenseVector::Zero(matrix_callbacks.num_equality_constraints),
-        .z = DenseVector::Ones(matrix_callbacks.num_inequality_constraints)};
-    Scalar μ = Scalar(0.1) * scaling.f;
+        .s = scaling.c_i.cwiseProduct(m_initial_s),
+        .y = scaling.f * m_initial_y.cwiseQuotient(scaling.c_e),
+        .z = scaling.f * m_initial_z.cwiseQuotient(scaling.c_i)};
+    Scalar μ(0);
 
     // Invoke interior-point method solver
     int iterations = 0;
@@ -803,6 +848,16 @@ class Problem {
                     iterates, μ, iterations);
 
     x = std::move(iterates.x);
+
+    if (iterate_is_reusable(status)) {
+      m_initial_s = iterates.s.cwiseQuotient(scaling.c_i);
+      m_initial_y = scaling.c_e.cwiseProduct(iterates.y) / scaling.f;
+      m_initial_z = scaling.c_i.cwiseProduct(iterates.z) / scaling.f;
+    } else {
+      m_initial_s.setConstant(std::numeric_limits<Scalar>::quiet_NaN());
+      m_initial_y.setConstant(std::numeric_limits<Scalar>::quiet_NaN());
+      m_initial_z.setConstant(std::numeric_limits<Scalar>::quiet_NaN());
+    }
 
     return status;
   }
