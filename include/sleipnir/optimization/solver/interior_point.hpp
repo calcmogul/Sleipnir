@@ -55,6 +55,8 @@ namespace slp {
 /// @param[in] iteration_callbacks The list of callbacks to call at the
 ///     beginning of each iteration.
 /// @param[in] options Solver options.
+/// @param[in] num_equality_constraints The number of equality constraints.
+/// @param[in] num_inequality_constraints The number of inequality constraints.
 /// @param[in,out] x The initial guess and output location for the decision
 ///     variables.
 /// @return The exit status.
@@ -67,7 +69,65 @@ ExitStatus interior_point(
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
     const Eigen::ArrayX<bool>& bound_constraint_mask,
 #endif
+    int num_equality_constraints, int num_inequality_constraints,
     Eigen::Vector<Scalar, Eigen::Dynamic>& x) {
+  using DenseVector = Eigen::Vector<Scalar, Eigen::Dynamic>;
+
+  DenseVector s = DenseVector::Ones(num_inequality_constraints);
+  DenseVector y = DenseVector::Zero(num_equality_constraints);
+  DenseVector z = DenseVector::Ones(num_inequality_constraints);
+  Scalar μ(0.1);
+
+  return interior_point(matrix_callbacks, iteration_callbacks, options,
+#ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
+                        bound_constraint_mask,
+#endif
+                        x, y, s, z, μ);
+}
+
+/// Finds the optimal solution to a nonlinear program using the interior-point
+/// method.
+///
+/// A nonlinear program has the form:
+///
+/// ```
+///      min_x f(x)
+/// subject to cₑ(x) = 0
+///            cᵢ(x) ≥ 0
+/// ```
+///
+/// where f(x) is the cost function, cₑ(x) are the equality constraints, and
+/// cᵢ(x) are the inequality constraints.
+///
+/// @tparam Scalar Scalar type.
+/// @param[in] matrix_callbacks Matrix callbacks.
+/// @param[in] iteration_callbacks The list of callbacks to call at the
+///     beginning of each iteration.
+/// @param[in] options Solver options.
+/// @param[in,out] x The initial guess and output location for the decision
+///     variables.
+/// @param[in,out] y The initial guess and output location for the equality
+///     constraint dual variables.
+/// @param[in,out] s The initial guess and output location for the inequality
+///     constraint slack variables.
+/// @param[in,out] z The initial guess and output location for the inequality
+///     constraint dual variables.
+/// @param[in,out] μ The initial guess and output location for the barrier
+///     parameter.
+/// @return The exit status.
+template <typename Scalar>
+ExitStatus interior_point(
+    const InteriorPointMatrixCallbacks<Scalar>& matrix_callbacks,
+    std::span<std::function<bool(const IterationInfo<Scalar>& info)>>
+        iteration_callbacks,
+    const Options& options,
+#ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
+    const Eigen::ArrayX<bool>& bound_constraint_mask,
+#endif
+    Eigen::Vector<Scalar, Eigen::Dynamic>& x,
+    Eigen::Vector<Scalar, Eigen::Dynamic>& y,
+    Eigen::Vector<Scalar, Eigen::Dynamic>& s,
+    Eigen::Vector<Scalar, Eigen::Dynamic>& z, Scalar& μ) {
   using DenseVector = Eigen::Vector<Scalar, Eigen::Dynamic>;
   using SparseMatrix = Eigen::SparseMatrix<Scalar>;
   using SparseVector = Eigen::SparseVector<Scalar>;
@@ -172,8 +232,9 @@ ExitStatus interior_point(
   DenseVector c_i = matrices.c_i(x);
 
   int num_decision_variables = x.rows();
-  int num_equality_constraints = c_e.rows();
-  int num_inequality_constraints = c_i.rows();
+  int num_equality_constraints = y.rows();
+  [[maybe_unused]]
+  int num_inequality_constraints = z.rows();
 
   // Check for overconstrained problem
   if (num_equality_constraints > num_decision_variables) {
@@ -188,13 +249,10 @@ ExitStatus interior_point(
   SparseMatrix A_e = matrices.A_e(x);
   SparseMatrix A_i = matrices.A_i(x);
 
-  DenseVector s = DenseVector::Ones(num_inequality_constraints);
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
   // We set sʲ = cᵢʲ(x) for each bound inequality constraint index j
   s = bound_constraint_mask.select(c_i, s);
 #endif
-  DenseVector y = DenseVector::Zero(num_equality_constraints);
-  DenseVector z = DenseVector::Ones(num_inequality_constraints);
 
   SparseMatrix H = matrices.H(x, y, z);
 
@@ -216,9 +274,6 @@ ExitStatus interior_point(
 
   // Barrier parameter minimum
   const Scalar μ_min = Scalar(options.tolerance) / Scalar(10);
-
-  // Barrier parameter μ
-  Scalar μ(0.1);
 
   // Fraction-to-the-boundary rule scale factor minimum
   constexpr Scalar τ_min(0.99);
@@ -700,6 +755,7 @@ interior_point(const InteriorPointMatrixCallbacks<double>& matrix_callbacks,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
                const Eigen::ArrayX<bool>& bound_constraint_mask,
 #endif
+               int num_equality_constraints, int num_inequality_constraints,
                Eigen::Vector<double, Eigen::Dynamic>& x);
 
 }  // namespace slp
