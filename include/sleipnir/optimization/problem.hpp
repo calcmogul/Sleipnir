@@ -203,6 +203,8 @@ class Problem {
                                    constraint.constraints.size());
     std::ranges::copy(constraint.constraints,
                       std::back_inserter(m_equality_constraints));
+
+    m_warm_startable = false;
   }
 
   /// Tells the solver to solve the problem while satisfying the given equality
@@ -214,6 +216,8 @@ class Problem {
                                    constraint.constraints.size());
     std::ranges::copy(constraint.constraints,
                       std::back_inserter(m_equality_constraints));
+
+    m_warm_startable = false;
   }
 
   /// Tells the solver to solve the problem while satisfying the given
@@ -225,6 +229,8 @@ class Problem {
                                      constraint.constraints.size());
     std::ranges::copy(constraint.constraints,
                       std::back_inserter(m_inequality_constraints));
+
+    m_warm_startable = false;
   }
 
   /// Tells the solver to solve the problem while satisfying the given
@@ -236,6 +242,8 @@ class Problem {
                                      constraint.constraints.size());
     std::ranges::copy(constraint.constraints,
                       std::back_inserter(m_inequality_constraints));
+
+    m_warm_startable = false;
   }
 
   /// Returns the cost function's type.
@@ -409,6 +417,28 @@ class Problem {
       m_iteration_callbacks;
   gch::small_vector<std::function<bool(const IterationInfo<Scalar>& info)>>
       m_persistent_iteration_callbacks;
+
+  // Warm start iterates from the previous solve. They're stored in unscaled
+  // form because the problem scaling depends on the initial guess, which can
+  // change between solves.
+  bool m_warm_startable = false;
+  DenseVector m_s_init;
+  DenseVector m_y_init;
+  DenseVector m_z_init;
+  Scalar m_μ_init;
+
+  /// Returns true if the solver's iterates are usable as a warm start for the
+  /// next solve.
+  ///
+  /// @param status The solver's exit status.
+  static bool is_warm_startable(ExitStatus status) {
+    // Failures can leave the iterates in an arbitrarily bad state (e.g.,
+    // diverged duals), but the "solution so far" exits are fine to resume from
+    return status == ExitStatus::SUCCESS ||
+           status == ExitStatus::CALLBACK_REQUESTED_STOP ||
+           status == ExitStatus::MAX_ITERATIONS_EXCEEDED ||
+           status == ExitStatus::TIMEOUT;
+  }
 
   ExitStatus solve_newton(const Options& options, [[maybe_unused]] bool spy,
                           DenseVector& x) {
@@ -608,8 +638,49 @@ class Problem {
         },
         scaling};
 
+    // Initialize the dual variables from the previous solve if possible
+    DenseVector y;
+    const bool warm_start = m_warm_startable;
+    if (warm_start) {
+      y = scaling.f * m_y_init.cwiseQuotient(scaling.c_e);
+    } else {
+      y = DenseVector::Zero(matrix_callbacks.num_equality_constraints);
+    }
+
+    // Keep the initial guess in case the warm start fails
+    DenseVector x_init;
+    if (warm_start) {
+      x_init = x;
+    }
+
     // Invoke SQP solver
-    return sqp<Scalar>(matrix_callbacks, iteration_callbacks, options, x);
+    int iterations = 0;
+    auto status = sqp<Scalar>(matrix_callbacks, iteration_callbacks, options, x,
+                              y, iterations);
+
+    // The previous solution's dual variables can be a poor guess for the new
+    // initial guess, which can make the solver fail where a cold start
+    // succeeds. If the warm start failed, retry from the same initial guess
+    // with a cold start. The iteration counter carries over so the iteration
+    // limit still bounds the total work.
+    if (warm_start && !is_warm_startable(status)) {
+      if (options.diagnostics) {
+        slp::println("\nWarm start failed ({}); retrying with cold start\n",
+                     status);
+      }
+
+      x = x_init;
+      y = DenseVector::Zero(matrix_callbacks.num_equality_constraints);
+      status = sqp<Scalar>(matrix_callbacks, iteration_callbacks, options, x, y,
+                           iterations);
+    }
+
+    m_warm_startable = is_warm_startable(status);
+    if (m_warm_startable) {
+      m_y_init = scaling.c_e.cwiseProduct(y) / scaling.f;
+    }
+
+    return status;
   }
 
   ExitStatus solve_ipm(const Options& options, [[maybe_unused]] bool spy,
@@ -770,12 +841,85 @@ class Problem {
         },
         scaling};
 
+    // Initialize the slack variables, dual variables, and barrier parameter
+    // from the previous solve if possible
+    DenseVector s;
+    DenseVector y;
+    DenseVector z;
+    Scalar μ;
+    auto cold_start = [&] {
+      s = DenseVector::Ones(matrix_callbacks.num_inequality_constraints);
+      y = DenseVector::Zero(matrix_callbacks.num_equality_constraints);
+      z = DenseVector::Ones(matrix_callbacks.num_inequality_constraints);
+      μ = Scalar(0.1) * scaling.f;
+    };
+    const bool warm_start = m_warm_startable;
+    if (warm_start) {
+      s = scaling.c_i.cwiseProduct(m_s_init);
+      y = scaling.f * m_y_init.cwiseQuotient(scaling.c_e);
+      z = scaling.f * m_z_init.cwiseQuotient(scaling.c_i);
+      μ = scaling.f * m_μ_init;
+
+      // The previous solution's slacks can be near zero for constraints that
+      // were active there but are inactive at the new initial guess. Slacks
+      // that close to the boundary make the fraction-to-the-boundary rule
+      // stall the solver, so push them toward the constraint values. A small
+      // push keeps most of the benefit of starting near the boundary.
+      DenseVector c_i = matrix_callbacks.c_i(x);
+      for (int row = 0; row < s.rows(); ++row) {
+        if (c_i[row] >= Scalar(1e-2)) {
+          s[row] = std::max(s[row], Scalar(1e-4) * c_i[row]);
+        }
+      }
+    } else {
+      cold_start();
+    }
+
+    // Keep the initial guess in case the warm start fails
+    DenseVector x_init;
+    if (warm_start) {
+      x_init = x;
+    }
+
     // Invoke interior-point method solver
-    return ipm<Scalar>(matrix_callbacks, iteration_callbacks, options,
+    int iterations = 0;
+    auto status =
+        ipm<Scalar>(matrix_callbacks, iteration_callbacks, options, false,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
-                       bound_constraint_mask,
+                    bound_constraint_mask,
 #endif
-                       x);
+                    x, s, y, z, μ, iterations);
+
+    // The previous solution's barrier parameter can be much smaller than the
+    // new initial guess warrants, which can make the solver fail where a cold
+    // start succeeds. If the warm start failed, retry from the same initial
+    // guess with a cold start. The iteration counter carries over so the
+    // iteration limit still bounds the total work.
+    if (warm_start && !is_warm_startable(status)) {
+      if (options.diagnostics) {
+        slp::println("\nWarm start failed ({}); retrying with cold start\n",
+                     status);
+      }
+
+      x = x_init;
+      cold_start();
+      status =
+          ipm<Scalar>(matrix_callbacks, iteration_callbacks, options, false,
+#ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
+                      bound_constraint_mask,
+#endif
+                      x, s, y, z, μ, iterations);
+    }
+
+    m_warm_startable = is_warm_startable(status);
+    if (m_warm_startable) {
+      m_s_init = s.cwiseQuotient(scaling.c_i);
+      m_y_init = scaling.c_e.cwiseProduct(y) / scaling.f;
+      m_z_init = scaling.c_i.cwiseProduct(z) / scaling.f;
+      m_μ_init = μ / scaling.f;
+    }
+
+    return status;
   }
 
   void print_exit_conditions(const Options& options) {

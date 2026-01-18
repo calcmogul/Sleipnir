@@ -66,8 +66,9 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
   using DenseVector = Eigen::Vector<Scalar, Eigen::Dynamic>;
 
   DenseVector y = DenseVector::Zero(matrix_callbacks.num_equality_constraints);
+  int iterations = 0;
 
-  return sqp(matrix_callbacks, iteration_callbacks, options, x, y);
+  return sqp(matrix_callbacks, iteration_callbacks, options, x, y, iterations);
 }
 
 /// Finds the optimal solution to a nonlinear program using Sequential Quadratic
@@ -91,13 +92,14 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
 ///     variables.
 /// @param[in,out] y The initial guess and output location for the equality
 ///     constraint dual variables.
+/// @param[in,out] iterations The iteration counter.
 /// @return The exit status.
 template <typename Scalar>
 ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
                std::span<std::function<bool(const IterationInfo<Scalar>& info)>>
                    iteration_callbacks,
                const Options& options, Eigen::Vector<Scalar, Eigen::Dynamic>& x,
-               Eigen::Vector<Scalar, Eigen::Dynamic>& y) {
+               Eigen::Vector<Scalar, Eigen::Dynamic>& y, int& iterations) {
   using DenseVector = Eigen::Vector<Scalar, Eigen::Dynamic>;
   using SparseMatrix = Eigen::SparseMatrix<Scalar>;
   using SparseVector = Eigen::SparseVector<Scalar>;
@@ -154,8 +156,6 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
   const auto solve_start_time = std::chrono::steady_clock::now();
 
   using enum SolveTimeTracerID;
-
-  int iterations = 0;
 
   // Prints final solver diagnostics when the solver exits
   SolveDiagnostics<sqp_time_trace> diagnostics{options.diagnostics,
