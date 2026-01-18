@@ -12,4 +12,5 @@ template slp::ExitStatus slp::interior_point(
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
     const Eigen::ArrayX<bool>& bound_constraint_mask,
 #endif
+    int num_equality_constraints, int num_inequality_constraints,
     Eigen::Vector<ExplicitDouble, Eigen::Dynamic>& x);

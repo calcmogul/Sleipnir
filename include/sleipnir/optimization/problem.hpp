@@ -191,6 +191,8 @@ class Problem {
                                    constraint.constraints.size());
     std::ranges::copy(constraint.constraints,
                       std::back_inserter(m_equality_constraints));
+
+    m_warm_startable = false;
   }
 
   /// Tells the solver to solve the problem while satisfying the given equality
@@ -202,6 +204,8 @@ class Problem {
                                    constraint.constraints.size());
     std::ranges::copy(constraint.constraints,
                       std::back_inserter(m_equality_constraints));
+
+    m_warm_startable = false;
   }
 
   /// Tells the solver to solve the problem while satisfying the given
@@ -213,6 +217,8 @@ class Problem {
                                      constraint.constraints.size());
     std::ranges::copy(constraint.constraints,
                       std::back_inserter(m_inequality_constraints));
+
+    m_warm_startable = false;
   }
 
   /// Tells the solver to solve the problem while satisfying the given
@@ -224,6 +230,8 @@ class Problem {
                                      constraint.constraints.size());
     std::ranges::copy(constraint.constraints,
                       std::back_inserter(m_inequality_constraints));
+
+    m_warm_startable = false;
   }
 
   /// Returns the cost function's type.
@@ -273,10 +281,6 @@ class Problem {
   /// @return The solver status.
   ExitStatus solve(const Options& options = Options{},
                    [[maybe_unused]] bool spy = false) {
-    using DenseVector = Eigen::Vector<Scalar, Eigen::Dynamic>;
-    using SparseMatrix = Eigen::SparseMatrix<Scalar>;
-    using SparseVector = Eigen::SparseVector<Scalar>;
-
     // Create the initial value column vector
     DenseVector x{m_decision_variables.size()};
     for (size_t i = 0; i < m_decision_variables.size(); ++i) {
@@ -515,9 +519,21 @@ class Problem {
         return ExitStatus::GLOBALLY_INFEASIBLE;
       }
 
+      if (!m_warm_startable) {
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
-      project_onto_bounds(x, bounds);
+        project_onto_bounds(x, bounds);
 #endif
+
+        m_s_init = DenseVector::Ones(num_inequality_constraints);
+        m_y_init = DenseVector::Zero(num_equality_constraints);
+        m_z_init = DenseVector::Ones(num_inequality_constraints);
+        m_μ_init = Scalar(0.1);
+
+        m_warm_startable = true;
+      } else {
+        m_μ_init = m_s_init.transpose() * m_z_init;
+      }
+
       // Invoke interior-point method solver
       status = interior_point<Scalar>(
           InteriorPointMatrixCallbacks<Scalar>{
@@ -556,7 +572,7 @@ class Problem {
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
           bound_constraint_mask,
 #endif
-          x);
+          x, m_y_init, m_s_init, m_z_init, m_μ_init);
     }
 
     if (options.diagnostics) {
@@ -622,6 +638,10 @@ class Problem {
   }
 
  private:
+  using DenseVector = Eigen::Vector<Scalar, Eigen::Dynamic>;
+  using SparseMatrix = Eigen::SparseMatrix<Scalar>;
+  using SparseVector = Eigen::SparseVector<Scalar>;
+
   // The list of decision variables, which are the root of the problem's
   // expression tree
   gch::small_vector<Variable<Scalar>> m_decision_variables;
@@ -640,6 +660,13 @@ class Problem {
       m_iteration_callbacks;
   gch::small_vector<std::function<bool(const IterationInfo<Scalar>& info)>>
       m_persistent_iteration_callbacks;
+
+  bool m_warm_startable = false;
+  DenseVector m_x_init;
+  DenseVector m_y_init;
+  DenseVector m_s_init;
+  DenseVector m_z_init;
+  Scalar m_μ_init;
 
   void print_exit_conditions([[maybe_unused]] const Options& options) {
     // Print possible exit conditions
