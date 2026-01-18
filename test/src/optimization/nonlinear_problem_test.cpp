@@ -1,6 +1,7 @@
 // Copyright (c) Sleipnir contributors
 
 #include <format>
+#include <numbers>
 
 #include <Eigen/Core>
 #include <catch2/catch_message.hpp>
@@ -103,6 +104,54 @@ TEMPLATE_TEST_CASE("Problem - Rosenbrock with disk constraint", "[Problem]",
       INFO(std::format("  (x₀, y₀) = ({}, {})", x0, y0));
       Eigen::Vector<T, 2> sol{x.value(), y.value()};
       CHECK_THAT(sol, WithinAbs(Eigen::Vector<T, 2>{T(1), T(1)}, T(1e-3)));
+    }
+  }
+}
+
+TEMPLATE_TEST_CASE("Problem - Gomez and Levy", "[Problem]",
+                   SCALAR_TYPES_UNDER_TEST) {
+  // https://en.wikipedia.org/wiki/Test_functions_for_optimization#Test_functions_for_constrained_optimization
+
+  using T = TestType;
+
+  slp::Problem<T> problem;
+
+  auto x = problem.decision_variable();
+  auto y = problem.decision_variable();
+
+  problem.minimize(T(4) * pow(x, T(2)) - T(2.1) * pow(x, T(4)) +
+                   pow(x, T(6)) / T(3) + x * y - T(4) * pow(y, T(2)) +
+                   T(4) * pow(y, T(4)));
+
+  auto c = -sin(T(4) * T(std::numbers::pi) * x) +
+           T(2) * pow(sin(T(2) * T(std::numbers::pi) * y), T(2));
+  problem.subject_to(c <= T(1.5));
+  problem.subject_to(-T(1) <= x);
+  problem.subject_to(x <= T(0.75));
+  problem.subject_to(-T(1) <= y);
+  problem.subject_to(y <= T(1));
+
+  CHECK(problem.cost_function_type() == slp::ExpressionType::NONLINEAR);
+  CHECK(problem.equality_constraint_type() == slp::ExpressionType::NONE);
+  CHECK(problem.inequality_constraint_type() == slp::ExpressionType::NONLINEAR);
+
+  // The feasible region is a set of disconnected islands, so each solve
+  // converges to one of many local minima. Solving from a grid of initial
+  // guesses with one Problem also exercises warm starts from a previous
+  // solution far from the new initial guess.
+  for (auto x0 : range(T(-0.95), T(0.75), T(0.1))) {
+    for (auto y0 : range(T(-0.95), T(1), T(0.1))) {
+      x.set_value(x0);
+      y.set_value(y0);
+
+      CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
+
+      INFO(std::format("  (x₀, y₀) = ({}, {})", x0, y0));
+      CHECK(c.value() <= T(1.5) + T(1e-8));
+      CHECK(x.value() >= -T(1) - T(1e-8));
+      CHECK(x.value() <= T(0.75) + T(1e-8));
+      CHECK(y.value() >= -T(1) - T(1e-8));
+      CHECK(y.value() <= T(1) + T(1e-8));
     }
   }
 }

@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pytest
 from sleipnir import autodiff
@@ -83,6 +85,55 @@ def test_rosenbrock_with_disk_constraint() -> None:
 
             sol = (x.value(), y.value())
             assert sol == pytest.approx((1.0, 1.0), abs=1e-3)
+
+
+def test_gomez_and_levy() -> None:
+    # https://en.wikipedia.org/wiki/Test_functions_for_optimization#Test_functions_for_constrained_optimization
+
+    problem = Problem()
+
+    x, y = problem.decision_variable(2)
+
+    problem.minimize(
+        4 * autodiff.pow(x, 2)
+        - 2.1 * autodiff.pow(x, 4)
+        + autodiff.pow(x, 6) / 3
+        + x * y
+        - 4 * autodiff.pow(y, 2)
+        + 4 * autodiff.pow(y, 4)
+    )
+
+    c = -autodiff.sin(4 * math.pi * x) + 2 * autodiff.pow(
+        autodiff.sin(2 * math.pi * y), 2
+    )
+    problem.subject_to(c <= 1.5)
+    problem.subject_to(-1 <= x)
+    problem.subject_to(x <= 0.75)
+    problem.subject_to(-1 <= y)
+    problem.subject_to(y <= 1)
+
+    assert problem.cost_function_type() == ExpressionType.NONLINEAR
+    assert problem.equality_constraint_type() == ExpressionType.NONE
+    assert problem.inequality_constraint_type() == ExpressionType.NONLINEAR
+
+    # The feasible region is a set of disconnected islands, so each solve
+    # converges to one of many local minima. Solving from a grid of initial
+    # guesses with one Problem also exercises warm starts from a previous
+    # solution far from the new initial guess.
+    for x0 in np.arange(-0.95, 0.75, 0.1):
+        for y0 in np.arange(-0.95, 1.0, 0.1):
+            x.set_value(x0)
+            y.set_value(y0)
+
+            assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS, (
+                f"(x₀, y₀) = ({x0}, {y0})"
+            )
+
+            assert c.value() <= 1.5 + 1e-8
+            assert x.value() >= -1 - 1e-8
+            assert x.value() <= 0.75 + 1e-8
+            assert y.value() >= -1 - 1e-8
+            assert y.value() <= 1 + 1e-8
 
 
 def test_minimum_2d_distance_with_linear_constraint() -> None:
