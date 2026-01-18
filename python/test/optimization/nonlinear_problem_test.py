@@ -1,8 +1,10 @@
+import math
+
 import numpy as np
 import pytest
 from sleipnir import autodiff
 from sleipnir.autodiff import ExpressionType
-from sleipnir.optimization import ExitStatus, Problem, bounds
+from sleipnir.optimization import ExitStatus, IterationInfo, Problem, bounds
 from tolerance import SolutionType, solution_tolerance
 
 
@@ -113,6 +115,51 @@ def test_rosenbrock_with_disk_constraint() -> None:
             assert sol == pytest.approx(
                 (1.0, 1.0), abs=solution_tolerance(20, SolutionType.DEGENERATE)
             )
+
+
+def test_gomez_and_levy() -> None:
+    problem = Problem()
+
+    x, y = problem.decision_variable(2)
+
+    problem.minimize(
+        4 * autodiff.pow(x, 2)
+        - 2.1 * autodiff.pow(x, 4)
+        + autodiff.pow(x, 6) / 3
+        + x * y
+        - 4 * autodiff.pow(y, 2)
+        + 4 * autodiff.pow(y, 4)
+    )
+
+    c = -autodiff.sin(4 * math.pi * x) + 2 * autodiff.pow(
+        autodiff.sin(2 * math.pi * y), 2
+    )
+    problem.subject_to(c <= 1.5)
+    problem.subject_to(-1 <= x)
+    problem.subject_to(x <= 0.75)
+    problem.subject_to(-1 <= y)
+    problem.subject_to(y <= 1)
+
+    assert problem.cost_function_type() == ExpressionType.NONLINEAR
+    assert problem.equality_constraint_type() == ExpressionType.NONE
+    assert problem.inequality_constraint_type() == ExpressionType.NONLINEAR
+
+    # The feasible region is a set of disconnected islands, so each solve
+    # converges to one of many local minima. Solving from a grid of initial
+    # guesses with one Problem also exercises warm starts from a previous
+    # solution far from the new initial guess.
+    for x0 in np.arange(-0.95, 0.75, 0.1):
+        for y0 in np.arange(-0.95, 1.0, 0.1):
+            x.set_value(x0)
+            y.set_value(y0)
+
+            assert problem.solve() == ExitStatus.SUCCESS, f"(x₀, y₀) = ({x0}, {y0})"
+
+            assert c.value() <= 1.5 + 1e-8
+            assert x.value() >= -1 - 1e-8
+            assert x.value() <= 0.75 + 1e-8
+            assert y.value() >= -1 - 1e-8
+            assert y.value() <= 1 + 1e-8
 
 
 def test_minimum_2d_distance_with_linear_constraint() -> None:
@@ -228,3 +275,86 @@ def test_hock_schittkowski_13() -> None:
         1.0, abs=solution_tolerance(10, SolutionType.DEGENERATE)
     )
     assert y.value() == pytest.approx(0.0, abs=solution_tolerance(1))
+
+
+def test_hock_schittkowski_13_warm_start() -> None:
+    problem = Problem()
+
+    x, y = problem.decision_variable(2)
+
+    problem.minimize((x - 2) ** 2 + y**2)
+
+    problem.subject_to((1 - x) ** 3 >= y)
+    problem.subject_to(x >= 0)
+    problem.subject_to(y >= 0)
+
+    # The solution has no finite Lagrange multipliers, so each solve leaves
+    # behind diverged dual variables and slack variables near zero. Solving from
+    # a grid of initial guesses with one Problem exercises warm starts from that
+    # iterate.
+    for x0 in np.arange(-2.0, 2.0, 0.5):
+        for y0 in np.arange(-2.0, 2.0, 0.5):
+            x.set_value(x0)
+            y.set_value(y0)
+
+            assert problem.solve() == ExitStatus.SUCCESS, f"(x₀, y₀) = ({x0}, {y0})"
+
+            assert x.value() == pytest.approx(
+                1.0, abs=solution_tolerance(10, SolutionType.DEGENERATE)
+            )
+            assert y.value() == pytest.approx(0.0, abs=solution_tolerance(1))
+
+
+def test_warm_start() -> None:
+    problem = Problem()
+
+    x, y = problem.decision_variable(2)
+    x.set_value(-1)
+    y.set_value(1)
+
+    # Rosenbrock function constrained to a disk with a variable radius
+    r_squared = problem.parameter()
+    problem.minimize(
+        autodiff.pow(1 - x, 2) + 100 * autodiff.pow(y - autodiff.pow(x, 2), 2)
+    )
+    problem.subject_to(autodiff.pow(x, 2) + autodiff.pow(y, 2) <= r_squared)
+
+    iterations = 0
+
+    def callback(info: IterationInfo) -> None:
+        nonlocal iterations
+        iterations += 1
+
+    problem.add_callback(callback)
+
+    # Cold start
+    r_squared.set_value(1)
+    assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS
+    cold_start_iterations = iterations
+    assert cold_start_iterations > 0
+
+    # The previous solution is still optimal, so no iterations are needed
+    iterations = 0
+    assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS
+    assert iterations == 0
+
+    # The previous solution is nearly optimal
+    r_squared.set_value(1.01)
+    iterations = 0
+    assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS
+    assert iterations < cold_start_iterations
+    assert x.value() ** 2 + y.value() ** 2 == pytest.approx(
+        1.01, abs=solution_tolerance(10)
+    )
+
+    # The previous solution is far from optimal and its active constraint is
+    # weakly active at the new solution (its Lagrange multiplier is zero), so
+    # the iterates only approach it to within the square root of the tolerance
+    r_squared.set_value(2)
+    assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS
+    assert x.value() == pytest.approx(
+        1.0, abs=solution_tolerance(20, SolutionType.DEGENERATE)
+    )
+    assert y.value() == pytest.approx(
+        1.0, abs=solution_tolerance(20, SolutionType.DEGENERATE)
+    )

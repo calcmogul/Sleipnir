@@ -1,6 +1,7 @@
 // Copyright (c) Sleipnir contributors
 
 #include <format>
+#include <numbers>
 
 #include <Eigen/Core>
 #include <catch2/catch_message.hpp>
@@ -10,6 +11,7 @@
 #include <sleipnir/autodiff/expression_type.hpp>
 #include <sleipnir/optimization/problem.hpp>
 #include <sleipnir/optimization/solver/exit_status.hpp>
+#include <sleipnir/optimization/solver/iteration_info.hpp>
 
 #include "catch_matchers.hpp"
 #include "catch_string_converters.hpp"
@@ -134,6 +136,51 @@ TEMPLATE_TEST_CASE("Problem - Rosenbrock with disk constraint", "[Problem]",
       CHECK_THAT(
           sol, WithinAbs(Eigen::Vector2<T>{T(1), T(1)},
                          solution_tolerance<T>(20, SolutionType::DEGENERATE)));
+    }
+  }
+}
+
+TEMPLATE_TEST_CASE("Problem - Gomez and Levy", "[Problem]", SCALAR_TYPES) {
+  using T = TestType;
+
+  slp::Problem<T> problem;
+
+  auto x = problem.decision_variable();
+  auto y = problem.decision_variable();
+
+  problem.minimize(T(4) * pow(x, T(2)) - T(2.1) * pow(x, T(4)) +
+                   pow(x, T(6)) / T(3) + x * y - T(4) * pow(y, T(2)) +
+                   T(4) * pow(y, T(4)));
+
+  auto c = -sin(T(4) * T(std::numbers::pi) * x) +
+           T(2) * pow(sin(T(2) * T(std::numbers::pi) * y), T(2));
+  problem.subject_to(c <= T(1.5));
+  problem.subject_to(-T(1) <= x);
+  problem.subject_to(x <= T(0.75));
+  problem.subject_to(-T(1) <= y);
+  problem.subject_to(y <= T(1));
+
+  CHECK(problem.cost_function_type() == slp::ExpressionType::NONLINEAR);
+  CHECK(problem.equality_constraint_type() == slp::ExpressionType::NONE);
+  CHECK(problem.inequality_constraint_type() == slp::ExpressionType::NONLINEAR);
+
+  // The feasible region is a set of disconnected islands, so each solve
+  // converges to one of many local minima. Solving from a grid of initial
+  // guesses with one Problem also exercises warm starts from a previous
+  // solution far from the new initial guess.
+  for (auto x0 : range(T(-0.95), T(0.75), T(0.1))) {
+    for (auto y0 : range(T(-0.95), T(1), T(0.1))) {
+      x.set_value(x0);
+      y.set_value(y0);
+
+      CHECK(problem.solve() == slp::ExitStatus::SUCCESS);
+
+      INFO(std::format("  (x₀, y₀) = ({}, {})", x0, y0));
+      CHECK(c.value() <= T(1.5) + T(1e-8));
+      CHECK(x.value() >= -T(1) - T(1e-8));
+      CHECK(x.value() <= T(0.75) + T(1e-8));
+      CHECK(y.value() >= -T(1) - T(1e-8));
+      CHECK(y.value() <= T(1) + T(1e-8));
     }
   }
 }
@@ -270,4 +317,122 @@ TEMPLATE_TEST_CASE("Problem - Hock-Schittkowski 13", "[Problem]",
   CHECK_THAT(x.value(), WithinAbs(T(1), solution_tolerance<T>(
                                             10, SolutionType::DEGENERATE)));
   CHECK_THAT(y.value(), WithinAbs(T(0), solution_tolerance<T>(1)));
+}
+
+TEMPLATE_TEST_CASE("Problem - Hock-Schittkowski 13 warm start", "[Problem]",
+                   SCALAR_TYPES) {
+  using T = TestType;
+
+  slp::Problem<T> problem;
+
+  auto x = problem.decision_variable();
+  auto y = problem.decision_variable();
+
+  problem.minimize(pow(x - T(2), 2) + pow(y, 2));
+
+  problem.subject_to(pow(T(1) - x, 3) >= y);
+  problem.subject_to(x >= T(0));
+  problem.subject_to(y >= T(0));
+
+  // The solution has no finite Lagrange multipliers, so each solve leaves
+  // behind diverged dual variables and slack variables near zero. Solving from
+  // a grid of initial guesses with one Problem exercises warm starts from that
+  // iterate.
+  for (auto x0 : range(T(-2), T(2), T(0.5))) {
+    for (auto y0 : range(T(-2), T(2), T(0.5))) {
+      x.set_value(x0);
+      y.set_value(y0);
+
+      INFO(std::format("  (x₀, y₀) = ({}, {})", x0, y0));
+      CHECK(problem.solve() == slp::ExitStatus::SUCCESS);
+
+      CHECK_THAT(x.value(), WithinAbs(T(1), solution_tolerance<T>(
+                                                10, SolutionType::DEGENERATE)));
+      CHECK_THAT(y.value(), WithinAbs(T(0), solution_tolerance<T>(1)));
+    }
+  }
+}
+
+TEMPLATE_TEST_CASE("Problem - Warm start", "[Problem]", SCALAR_TYPES) {
+  using T = TestType;
+
+  slp::Problem<T> problem;
+
+  auto x = problem.decision_variable();
+  auto y = problem.decision_variable();
+  x.set_value(T(-1));
+  y.set_value(T(1));
+
+  // Rosenbrock function constrained to a disk with a variable radius
+  auto r_squared = problem.parameter();
+  problem.minimize(pow(T(1) - x, T(2)) + T(100) * pow(y - pow(x, T(2)), T(2)));
+  problem.subject_to(pow(x, T(2)) + pow(y, T(2)) <= r_squared);
+
+  int iterations = 0;
+  problem.add_callback([&](const slp::IterationInfo<T>&) { ++iterations; });
+
+  // Cold start
+  r_squared.set_value(T(1));
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
+  const int cold_start_iterations = iterations;
+  CHECK(cold_start_iterations > 0);
+
+  // The previous solution is still optimal, so no iterations are needed
+  iterations = 0;
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
+  CHECK(iterations == 0);
+
+  // The previous solution is nearly optimal
+  r_squared.set_value(T(1.01));
+  iterations = 0;
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
+  CHECK(iterations < cold_start_iterations);
+  CHECK_THAT(x.value() * x.value() + y.value() * y.value(),
+             WithinAbs(T(1.01), solution_tolerance<T>(10)));
+
+  // The previous solution is far from optimal and its active constraint is
+  // weakly active at the new solution (its Lagrange multiplier is zero), so
+  // the iterates only approach it to within the square root of the tolerance
+  r_squared.set_value(T(2));
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
+  Eigen::Vector2<T> sol{x.value(), y.value()};
+  CHECK_THAT(sol,
+             WithinAbs(Eigen::Vector2<T>{T(1), T(1)},
+                       solution_tolerance<T>(20, SolutionType::DEGENERATE)));
+}
+
+TEMPLATE_TEST_CASE("Problem - Constraint added after solve", "[Problem]",
+                   SCALAR_TYPES) {
+  using T = TestType;
+
+  slp::Problem<T> problem;
+
+  auto x = problem.decision_variable();
+  auto y = problem.decision_variable();
+  x.set_value(T(-1));
+  y.set_value(T(1));
+
+  // Rosenbrock function constrained to a disk
+  problem.minimize(pow(T(1) - x, T(2)) + T(100) * pow(y - pow(x, T(2)), T(2)));
+  problem.subject_to(pow(x, T(2)) + pow(y, T(2)) <= T(1.5));
+
+  int iterations = 0;
+  problem.add_callback([&](const slp::IterationInfo<T>&) { ++iterations; });
+
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
+  const int first_solve_iterations = iterations;
+  CHECK(first_solve_iterations > 0);
+
+  // The new constraint is inactive at the previous solution, so the previous
+  // solution is still optimal
+  problem.subject_to(y >= T(-1));
+  iterations = 0;
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
+  CHECK(iterations < first_solve_iterations);
+
+  // The new constraint is active at the new solution
+  problem.subject_to(x <= T(0.8));
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
+  CHECK_THAT(x.value(), WithinAbs(T(0.8), solution_tolerance<T>(10)));
+  CHECK_THAT(y.value(), WithinAbs(T(0.64), solution_tolerance<T>(10)));
 }

@@ -823,6 +823,15 @@ Args:
 
 )doc";
 
+constexpr char mkd_doc_slp_Problem_append_unset_entries[] =
+R"doc(Appends unset entries to the next solve's initial iterate entries.
+
+Args:
+    entries: The initial iterate entries.
+    rows: The number of entries to append.
+
+)doc";
+
 constexpr char mkd_doc_slp_Problem_clear_callbacks[] = R"doc(Clears the registered callbacks.)doc";
 
 constexpr char mkd_doc_slp_Problem_cost_function_type[] =
@@ -873,6 +882,15 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_Problem_iterate_is_reusable[] =
+R"doc(Returns true if the solver's final iterate is usable as the initial
+iterate for the next solve.
+
+Args:
+    status: The solver's exit status.
+
+)doc";
+
 constexpr char mkd_doc_slp_Problem_m_decision_variables[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Problem_m_equality_constraints[] = R"doc()doc";
@@ -880,6 +898,12 @@ constexpr char mkd_doc_slp_Problem_m_equality_constraints[] = R"doc()doc";
 constexpr char mkd_doc_slp_Problem_m_f[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Problem_m_inequality_constraints[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Problem_m_initial_s[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Problem_m_initial_y[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Problem_m_initial_z[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Problem_m_iteration_callbacks[] = R"doc()doc";
 
