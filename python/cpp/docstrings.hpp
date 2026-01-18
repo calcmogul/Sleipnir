@@ -777,6 +777,8 @@ static const char *__doc_slp_Problem_m_iteration_callbacks = R"doc()doc";
 
 static const char *__doc_slp_Problem_m_persistent_iteration_callbacks = R"doc()doc";
 
+static const char *__doc_slp_Problem_m_warm_startable = R"doc()doc";
+
 static const char *__doc_slp_Problem_maximize =
 R"doc(Tells the solver to maximize the output of the given objective
 function.
