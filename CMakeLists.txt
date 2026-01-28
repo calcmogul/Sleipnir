@@ -396,3 +396,22 @@ if(BUILD_PYTHON)
         add_dependencies(_sleipnir _sleipnir_docstrings)
     endif()
 endif()
+
+if(EMSCRIPTEN)
+    file(GLOB_RECURSE js_ext_src js/cpp/*.cpp)
+
+    # Build Sleipnir dependency directly into the wheel to avoid having to
+    # configure RPATHs
+    add_library(_sleipnir ${js_ext_src} ${Sleipnir_src})
+    compiler_flags(_sleipnir)
+    target_include_directories(
+        _sleipnir
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/include
+            ${CMAKE_CURRENT_SOURCE_DIR}/js/cpp
+    )
+    target_link_libraries(
+        _sleipnir
+        PUBLIC Threads::Threads Eigen3::Eigen small_vector
+    )
+endif()
