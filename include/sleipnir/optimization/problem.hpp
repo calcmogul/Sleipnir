@@ -404,6 +404,7 @@ class Problem {
       // Set up Lagrangian Hessian autodiff
       ad_setup_profilers.emplace_back("  ↳ ∇²ₓₓL").start();
       Hessian<Scalar, Eigen::Lower> H{L, x_ad};
+      Hessian<Scalar, Eigen::Lower> H_c{-y_ad.T() * c_e_ad, x_ad};
       ad_setup_profilers.back().stop();
 
       ad_setup_profilers[0].stop();
@@ -446,6 +447,11 @@ class Problem {
             y_ad.set_value(y);
             return H.value();
           },
+          [&](const DenseVector& x, const DenseVector& y) -> SparseMatrix {
+            x_ad.set_value(x);
+            y_ad.set_value(y);
+            return H_c.value();
+          },
           [&](const DenseVector& x) -> DenseVector {
             x_ad.set_value(x);
             return c_e_ad.value();
@@ -483,6 +489,8 @@ class Problem {
       // Set up Lagrangian Hessian autodiff
       ad_setup_profilers.emplace_back("  ↳ ∇²ₓₓL").start();
       Hessian<Scalar, Eigen::Lower> H{L, x_ad};
+      Hessian<Scalar, Eigen::Lower> H_c{-y_ad.T() * c_e_ad - z_ad.T() * c_i_ad,
+                                        x_ad};
       ad_setup_profilers.back().stop();
 
       ad_setup_profilers[0].stop();
@@ -548,6 +556,13 @@ class Problem {
             y_ad.set_value(y);
             z_ad.set_value(z);
             return H.value();
+          },
+          [&](const DenseVector& x, const DenseVector& y,
+              const DenseVector& z) -> SparseMatrix {
+            x_ad.set_value(x);
+            y_ad.set_value(y);
+            z_ad.set_value(z);
+            return H_c.value();
           },
           [&](const DenseVector& x) -> DenseVector {
             x_ad.set_value(x);

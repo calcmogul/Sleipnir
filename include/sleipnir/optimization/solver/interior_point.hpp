@@ -19,6 +19,7 @@
 #include "sleipnir/optimization/solver/options.hpp"
 #include "sleipnir/optimization/solver/util/all_finite.hpp"
 #include "sleipnir/optimization/solver/util/append_as_triplets.hpp"
+#include "sleipnir/optimization/solver/util/feasibility_restoration.hpp"
 #include "sleipnir/optimization/solver/util/filter.hpp"
 #include "sleipnir/optimization/solver/util/fraction_to_the_boundary_rule.hpp"
 #include "sleipnir/optimization/solver/util/is_locally_infeasible.hpp"
@@ -78,7 +79,7 @@ ExitStatus interior_point(
       DenseVector::Ones(matrix_callbacks.num_inequality_constraints);
   Scalar μ(0.1);
 
-  return interior_point(matrix_callbacks, iteration_callbacks, options,
+  return interior_point(matrix_callbacks, iteration_callbacks, options, false,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
                         bound_constraint_mask,
 #endif
@@ -104,6 +105,8 @@ ExitStatus interior_point(
 /// @param[in] iteration_callbacks The list of callbacks to call at the
 ///     beginning of each iteration.
 /// @param[in] options Solver options.
+/// @param[in] in_feasibility_restoration Whether solver is in feasibility
+///     restoration mode.
 /// @param[in,out] x The initial guess and output location for the decision
 ///     variables.
 /// @param[in,out] s The initial guess and output location for the inequality
@@ -120,7 +123,7 @@ ExitStatus interior_point(
     const InteriorPointMatrixCallbacks<Scalar>& matrix_callbacks,
     std::span<std::function<bool(const IterationInfo<Scalar>& info)>>
         iteration_callbacks,
-    const Options& options,
+    const Options& options, bool in_feasibility_restoration,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
     const Eigen::ArrayX<bool>& bound_constraint_mask,
 #endif
@@ -163,6 +166,7 @@ ExitStatus interior_point(
   solve_profilers.emplace_back("    ↳ f(x)");
   solve_profilers.emplace_back("    ↳ ∇f(x)");
   solve_profilers.emplace_back("    ↳ ∇²ₓₓL");
+  solve_profilers.emplace_back("    ↳ ∇²ₓₓ(yᵀcₑ + zᵀcᵢ)");
   solve_profilers.emplace_back("    ↳ cₑ(x)");
   solve_profilers.emplace_back("    ↳ ∂cₑ/∂x");
   solve_profilers.emplace_back("    ↳ cᵢ(x)");
@@ -185,10 +189,11 @@ ExitStatus interior_point(
   auto& f_prof = solve_profilers[11];
   auto& g_prof = solve_profilers[12];
   auto& H_prof = solve_profilers[13];
-  auto& c_e_prof = solve_profilers[14];
-  auto& A_e_prof = solve_profilers[15];
-  auto& c_i_prof = solve_profilers[16];
-  auto& A_i_prof = solve_profilers[17];
+  auto& H_c_prof = solve_profilers[14];
+  auto& c_e_prof = solve_profilers[15];
+  auto& A_e_prof = solve_profilers[16];
+  auto& c_i_prof = solve_profilers[17];
+  auto& A_i_prof = solve_profilers[18];
 
   InteriorPointMatrixCallbacks<Scalar> matrices{
       matrix_callbacks.num_decision_variables,
@@ -206,6 +211,11 @@ ExitStatus interior_point(
           const DenseVector& z) -> SparseMatrix {
         ScopedProfiler prof{H_prof};
         return matrix_callbacks.H(x, y, z);
+      },
+      [&](const DenseVector& x, const DenseVector& y,
+          const DenseVector& z) -> SparseMatrix {
+        ScopedProfiler prof{H_c_prof};
+        return matrix_callbacks.H_c(x, y, z);
       },
       [&](const DenseVector& x) -> DenseVector {
         ScopedProfiler prof{c_e_prof};
@@ -314,8 +324,11 @@ ExitStatus interior_point(
   // Kept outside the loop so its storage can be reused
   gch::small_vector<Eigen::Triplet<Scalar>> triplets;
 
-  RegularizedLDLT<Scalar> solver{matrices.num_decision_variables,
-                                 matrices.num_equality_constraints};
+  // Constraint regularization is forced to zero in feasibility restoration
+  // because the equality constraint Jacobian cannot be rank-deficient
+  RegularizedLDLT<Scalar> solver{
+      matrices.num_decision_variables, matrices.num_equality_constraints,
+      in_feasibility_restoration ? Scalar(0) : Scalar(1e-10)};
 
   // Variables for determining when a step is acceptable
   constexpr Scalar α_reduction_factor(0.5);
@@ -332,6 +345,11 @@ ExitStatus interior_point(
   scope_exit exit{[&] {
     if (options.diagnostics) {
       solver_prof.stop();
+
+      if (in_feasibility_restoration) {
+        return;
+      }
+
       if (iterations > 0) {
         print_bottom_iteration_diagnostics();
       }
@@ -414,6 +432,7 @@ ExitStatus interior_point(
     Scalar α_max(1);
     Scalar α(1);
     Scalar α_z(1);
+    bool call_feasibility_restoration = false;
 
     // Solve the Newton-KKT system
     //
@@ -447,9 +466,9 @@ ExitStatus interior_point(
     α_max = fraction_to_the_boundary_rule<Scalar>(s, step.p_s, τ);
     α = α_max;
 
-    // If maximum step size is below minimum, report line search failure
+    // If maximum step size is below minimum, invoke feasibility restoration
     if (α < α_min) {
-      return ExitStatus::LINE_SEARCH_FAILED;
+      call_feasibility_restoration = true;
     }
 
     // αₖᶻ = max(α ∈ (0, 1] : zₖ + αpₖᶻ ≥ (1−τⱼ)zₖ)
@@ -473,7 +492,8 @@ ExitStatus interior_point(
         α *= α_reduction_factor;
 
         if (α < α_min) {
-          return ExitStatus::LINE_SEARCH_FAILED;
+          call_feasibility_restoration = true;
+          break;
         }
         continue;
       }
@@ -617,7 +637,7 @@ ExitStatus interior_point(
       α *= α_reduction_factor;
 
       // If step size hit a minimum, check if the KKT error was reduced. If it
-      // wasn't, report line search failure.
+      // wasn't, invoke feasibility restoration.
       if (α < α_min) {
         Scalar current_kkt_error = kkt_error<Scalar, KKTErrorType::ONE_NORM>(
             g, A_e, c_e, A_i, c_i, s, y, z, μ);
@@ -643,43 +663,89 @@ ExitStatus interior_point(
           break;
         }
 
-        return ExitStatus::LINE_SEARCH_FAILED;
+        call_feasibility_restoration = true;
+        break;
       }
     }
 
     line_search_profiler.stop();
 
-    // If full step was accepted, reset full-step rejected counter
-    if (α == α_max) {
-      full_step_rejected_counter = 0;
-    }
+    if (call_feasibility_restoration) {
+      // If already in feasibility restoration mode, running it again won't help
+      if (in_feasibility_restoration) {
+        return ExitStatus::FEASIBILITY_RESTORATION_FAILED;
+      }
 
-    // xₖ₊₁ = xₖ + αₖpₖˣ
-    // sₖ₊₁ = sₖ + αₖpₖˢ
-    // yₖ₊₁ = yₖ + αₖᶻpₖʸ
-    // zₖ₊₁ = zₖ + αₖᶻpₖᶻ
-    x += α * step.p_x;
-    s += α * step.p_s;
-    y += α_z * step.p_y;
-    z += α_z * step.p_z;
+      FilterEntry initial_entry{matrices.f(x), s, c_e, c_i, μ};
 
-    // A requirement for the convergence proof is that the primal-dual barrier
-    // term Hessian Σₖ₊₁ does not deviate arbitrarily much from the primal
-    // barrier term Hessian μSₖ₊₁⁻².
-    //
-    //   Σₖ₊₁ = μSₖ₊₁⁻²
-    //   Sₖ₊₁⁻¹Zₖ₊₁ = μSₖ₊₁⁻²
-    //   Zₖ₊₁ = μSₖ₊₁⁻¹
-    //
-    // We ensure this by resetting
-    //
-    //   zₖ₊₁ = clamp(zₖ₊₁, 1/κ_Σ μ/sₖ₊₁, κ_Σ μ/sₖ₊₁)
-    //
-    // for some fixed κ_Σ ≥ 1 after each step. See equation (16) of [2].
-    for (int row = 0; row < z.rows(); ++row) {
-      constexpr Scalar κ_Σ(1e10);
-      z[row] =
-          std::clamp(z[row], Scalar(1) / κ_Σ * μ / s[row], κ_Σ * μ / s[row]);
+      // Feasibility restoration phase
+      gch::small_vector<std::function<bool(const IterationInfo<Scalar>& info)>>
+          callbacks;
+      for (auto& callback : iteration_callbacks) {
+        callbacks.emplace_back(callback);
+      }
+      callbacks.emplace_back([&](const IterationInfo<Scalar>& info) {
+        DenseVector trial_x =
+            info.x.segment(0, matrices.num_decision_variables);
+        DenseVector trial_s =
+            info.s.segment(0, matrices.num_inequality_constraints);
+
+        DenseVector trial_c_e = matrices.c_e(trial_x);
+        DenseVector trial_c_i = matrices.c_i(trial_x);
+
+        // If current iterate is acceptable to normal filter and
+        // constraint violation has sufficiently reduced, stop
+        // feasibility restoration
+        FilterEntry entry{matrices.f(trial_x), trial_s, trial_c_e, trial_c_i,
+                          μ};
+        if (filter.is_acceptable(entry, α) &&
+            entry.constraint_violation <
+                Scalar(0.9) * initial_entry.constraint_violation) {
+          return true;
+        }
+
+        return false;
+      });
+      auto status = feasibility_restoration<Scalar>(matrices, callbacks,
+                                                    options, x, s, y, z, μ);
+
+      if (status != ExitStatus::SUCCESS) {
+        // Report failure
+        return status;
+      }
+    } else {
+      // If full step was accepted, reset full-step rejected counter
+      if (α == α_max) {
+        full_step_rejected_counter = 0;
+      }
+
+      // xₖ₊₁ = xₖ + αₖpₖˣ
+      // sₖ₊₁ = sₖ + αₖpₖˢ
+      // yₖ₊₁ = yₖ + αₖᶻpₖʸ
+      // zₖ₊₁ = zₖ + αₖᶻpₖᶻ
+      x += α * step.p_x;
+      s += α * step.p_s;
+      y += α_z * step.p_y;
+      z += α_z * step.p_z;
+
+      // A requirement for the convergence proof is that the primal-dual barrier
+      // term Hessian Σₖ₊₁ does not deviate arbitrarily much from the primal
+      // barrier term Hessian μSₖ₊₁⁻².
+      //
+      //   Σₖ₊₁ = μSₖ₊₁⁻²
+      //   Sₖ₊₁⁻¹Zₖ₊₁ = μSₖ₊₁⁻²
+      //   Zₖ₊₁ = μSₖ₊₁⁻¹
+      //
+      // We ensure this by resetting
+      //
+      //   zₖ₊₁ = clamp(zₖ₊₁, 1/κ_Σ μ/sₖ₊₁, κ_Σ μ/sₖ₊₁)
+      //
+      // for some fixed κ_Σ ≥ 1 after each step. See equation (16) of [2].
+      for (int row = 0; row < z.rows(); ++row) {
+        constexpr Scalar κ_Σ(1e10);
+        z[row] =
+            std::clamp(z[row], Scalar(1) / κ_Σ * μ / s[row], κ_Σ * μ / s[row]);
+      }
     }
 
     // Update autodiff for Jacobians and Hessian
@@ -719,7 +785,9 @@ ExitStatus interior_point(
 
     if (options.diagnostics) {
       print_iteration_diagnostics(
-          iterations, IterationType::NORMAL,
+          iterations,
+          in_feasibility_restoration ? IterationType::FEASIBILITY_RESTORATION
+                                     : IterationType::NORMAL,
           inner_iter_profiler.current_duration(), E_0, f,
           c_e.template lpNorm<1>() + (c_i - s).template lpNorm<1>(), s.dot(z),
           μ, solver.hessian_regularization(), α, α_max, α_reduction_factor,
