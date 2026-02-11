@@ -27,7 +27,9 @@ enum class IterationType : uint8_t {
   /// Accepted second-order correction iteration.
   ACCEPTED_SOC,
   /// Rejected second-order correction iteration.
-  REJECTED_SOC
+  REJECTED_SOC,
+  /// Feasibility restoration iteration.
+  FEASIBILITY_RESTORATION
 };
 
 /// Converts std::chrono::duration to a number of milliseconds rounded to three
@@ -233,7 +235,7 @@ void print_iteration_diagnostics(int iterations, IterationType type,
   int backtracks =
       static_cast<int>(log(primal_α / primal_α_max) / log(α_reduction_factor));
 
-  constexpr std::array ITERATION_TYPES = {"norm", "✓SOC", "XSOC"};
+  constexpr std::array ITERATION_TYPES = {"norm", "✓SOC", "XSOC", "rest"};
   slp::println(
       "│{:4} {:4} {:9.3f} {:12e} {:13e} {:12e} {:12e} {:.2e} {:<5} {:.2e} "
       "{:.2e} {:2d}│",

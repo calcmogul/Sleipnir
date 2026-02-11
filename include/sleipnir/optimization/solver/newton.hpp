@@ -206,7 +206,7 @@ ExitStatus newton(
         α *= α_reduction_factor;
 
         if (α < α_min) {
-          return ExitStatus::LINE_SEARCH_FAILED;
+          return ExitStatus::LOCALLY_INFEASIBLE;
         }
         continue;
       }
@@ -237,7 +237,7 @@ ExitStatus newton(
           break;
         }
 
-        return ExitStatus::LINE_SEARCH_FAILED;
+        return ExitStatus::LOCALLY_INFEASIBLE;
       }
     }
 

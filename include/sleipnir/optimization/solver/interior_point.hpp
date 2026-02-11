@@ -18,6 +18,7 @@
 #include "sleipnir/optimization/solver/iteration_info.hpp"
 #include "sleipnir/optimization/solver/options.hpp"
 #include "sleipnir/optimization/solver/util/error_estimate.hpp"
+#include "sleipnir/optimization/solver/util/feasibility_restoration.hpp"
 #include "sleipnir/optimization/solver/util/filter.hpp"
 #include "sleipnir/optimization/solver/util/fraction_to_the_boundary_rule.hpp"
 #include "sleipnir/optimization/solver/util/is_locally_infeasible.hpp"
@@ -55,19 +56,24 @@ namespace slp {
 /// @param[in] iteration_callbacks The list of callbacks to call at the
 ///     beginning of each iteration.
 /// @param[in] options Solver options.
+/// @param[in] use_feasibility_restoration Whether to use feasibility
+///     restoration instead of the normal algorithm.
 /// @param[in,out] x The initial guess and output location for the decision
 ///     variables.
+/// @param[in,out] s The initial guess and output location for the inequality
+///     constraint slack variables.
 /// @return The exit status.
 template <typename Scalar>
 ExitStatus interior_point(
     const InteriorPointMatrixCallbacks<Scalar>& matrix_callbacks,
     std::span<std::function<bool(const IterationInfo<Scalar>& info)>>
         iteration_callbacks,
-    const Options& options,
+    const Options& options, bool use_feasibility_restoration,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
     const Eigen::ArrayX<bool>& bound_constraint_mask,
 #endif
-    Eigen::Vector<Scalar, Eigen::Dynamic>& x) {
+    Eigen::Vector<Scalar, Eigen::Dynamic>& x,
+    Eigen::Vector<Scalar, Eigen::Dynamic>& s) {
   using DenseVector = Eigen::Vector<Scalar, Eigen::Dynamic>;
   using SparseMatrix = Eigen::SparseMatrix<Scalar>;
   using SparseVector = Eigen::SparseVector<Scalar>;
@@ -103,6 +109,7 @@ ExitStatus interior_point(
   solve_profilers.emplace_back("    ↳ f(x)");
   solve_profilers.emplace_back("    ↳ ∇f(x)");
   solve_profilers.emplace_back("    ↳ ∇²ₓₓL");
+  solve_profilers.emplace_back("    ↳ ∇²ₓₓ(yᵀcₑ + zᵀcᵢ)");
   solve_profilers.emplace_back("    ↳ cₑ(x)");
   solve_profilers.emplace_back("    ↳ ∂cₑ/∂x");
   solve_profilers.emplace_back("    ↳ cᵢ(x)");
@@ -125,10 +132,11 @@ ExitStatus interior_point(
   auto& f_prof = solve_profilers[11];
   auto& g_prof = solve_profilers[12];
   auto& H_prof = solve_profilers[13];
-  auto& c_e_prof = solve_profilers[14];
-  auto& A_e_prof = solve_profilers[15];
-  auto& c_i_prof = solve_profilers[16];
-  auto& A_i_prof = solve_profilers[17];
+  auto& H_c_prof = solve_profilers[14];
+  auto& c_e_prof = solve_profilers[15];
+  auto& A_e_prof = solve_profilers[16];
+  auto& c_i_prof = solve_profilers[17];
+  auto& A_i_prof = solve_profilers[18];
 
   InteriorPointMatrixCallbacks<Scalar> matrices{
       [&](const DenseVector& x) -> Scalar {
@@ -143,6 +151,11 @@ ExitStatus interior_point(
           const DenseVector& z) -> SparseMatrix {
         ScopedProfiler prof{H_prof};
         return matrix_callbacks.H(x, y, z);
+      },
+      [&](const DenseVector& x, const DenseVector& y,
+          const DenseVector& z) -> SparseMatrix {
+        ScopedProfiler prof{H_c_prof};
+        return matrix_callbacks.H_c(x, y, z);
       },
       [&](const DenseVector& x) -> DenseVector {
         ScopedProfiler prof{c_e_prof};
@@ -188,7 +201,6 @@ ExitStatus interior_point(
   SparseMatrix A_e = matrices.A_e(x);
   SparseMatrix A_i = matrices.A_i(x);
 
-  DenseVector s = DenseVector::Ones(num_inequality_constraints);
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
   // We set sʲ = cᵢʲ(x) for each bound inequality constraint index j
   s = bound_constraint_mask.select(c_i, s);
@@ -278,6 +290,11 @@ ExitStatus interior_point(
   scope_exit exit{[&] {
     if (options.diagnostics) {
       solver_prof.stop();
+
+      if (use_feasibility_restoration) {
+        return;
+      }
+
       if (iterations > 0) {
         print_bottom_iteration_diagnostics();
       }
@@ -368,6 +385,7 @@ ExitStatus interior_point(
     Scalar α_max(1);
     Scalar α(1);
     Scalar α_z(1);
+    bool call_feasibility_restoration = false;
 
     // Solve the Newton-KKT system
     //
@@ -401,9 +419,9 @@ ExitStatus interior_point(
     α_max = fraction_to_the_boundary_rule<Scalar>(s, step.p_s, τ);
     α = α_max;
 
-    // If maximum step size is below minimum, report line search failure
+    // If maximum step size is below minimum, invoke feasibility restoration
     if (α < α_min) {
-      return ExitStatus::LINE_SEARCH_FAILED;
+      call_feasibility_restoration = true;
     }
 
     // αₖᶻ = max(α ∈ (0, 1] : zₖ + αpₖᶻ ≥ (1−τⱼ)zₖ)
@@ -427,7 +445,8 @@ ExitStatus interior_point(
         α *= α_reduction_factor;
 
         if (α < α_min) {
-          return ExitStatus::LINE_SEARCH_FAILED;
+          call_feasibility_restoration = true;
+          break;
         }
         continue;
       }
@@ -596,11 +615,51 @@ ExitStatus interior_point(
           break;
         }
 
-        return ExitStatus::LINE_SEARCH_FAILED;
+        // If the step direction was bad and feasibility restoration is already
+        // running, running it again won't help
+        if (use_feasibility_restoration) {
+          return ExitStatus::LOCALLY_INFEASIBLE;
+        }
+
+        call_feasibility_restoration = true;
+        break;
       }
     }
 
     line_search_profiler.stop();
+
+    if (call_feasibility_restoration) {
+      FilterEntry initial_entry{matrices.f(x), s, c_e, c_i, μ};
+
+      // Feasibility restoration phase
+      gch::small_vector<std::function<bool(const IterationInfo<Scalar>& info)>>
+          callbacks;
+      callbacks.emplace_back([&](const IterationInfo<Scalar>& info) {
+        DenseVector trial_x = info.x.segment(0, num_decision_variables);
+
+        DenseVector trial_c_e = matrices.c_e(trial_x);
+        DenseVector trial_c_i = matrices.c_i(trial_x);
+
+        // If current iterate is acceptable to normal filter and
+        // constraint violation has sufficiently reduced, stop
+        // feasibility restoration
+        FilterEntry entry{matrices.f(trial_x), s, trial_c_e, trial_c_i, μ};
+        if (filter.is_acceptable(entry, α) &&
+            entry.constraint_violation <
+                Scalar(0.9) * initial_entry.constraint_violation) {
+          return true;
+        }
+
+        return false;
+      });
+      auto status = feasibility_restoration<Scalar>(matrices, μ, callbacks,
+                                                    options, x, s, y, z);
+
+      if (status != ExitStatus::SUCCESS) {
+        // Report failure
+        return status;
+      }
+    }
 
     // If full step was accepted, reset full-step rejected counter
     if (α == α_max) {
@@ -669,7 +728,9 @@ ExitStatus interior_point(
 
     if (options.diagnostics) {
       print_iteration_diagnostics(
-          iterations, IterationType::NORMAL,
+          iterations,
+          use_feasibility_restoration ? IterationType::FEASIBILITY_RESTORATION
+                                      : IterationType::NORMAL,
           inner_iter_profiler.current_duration(), E_0, f,
           c_e.template lpNorm<1>() + (c_i - s).template lpNorm<1>(), s.dot(z),
           μ, solver.hessian_regularization(), α, α_max, α_reduction_factor,
@@ -696,10 +757,11 @@ extern template SLEIPNIR_DLLEXPORT ExitStatus
 interior_point(const InteriorPointMatrixCallbacks<double>& matrix_callbacks,
                std::span<std::function<bool(const IterationInfo<double>& info)>>
                    iteration_callbacks,
-               const Options& options,
+               const Options& options, bool use_feasibility_restoration,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
                const Eigen::ArrayX<bool>& bound_constraint_mask,
 #endif
-               Eigen::Vector<double, Eigen::Dynamic>& x);
+               Eigen::Vector<double, Eigen::Dynamic>& x,
+               Eigen::Vector<double, Eigen::Dynamic>& s);
 
 }  // namespace slp

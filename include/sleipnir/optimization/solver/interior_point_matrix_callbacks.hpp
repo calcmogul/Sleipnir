@@ -98,6 +98,39 @@ struct InteriorPointMatrixCallbacks {
                              const DenseVector& z)>
       H;
 
+  /// Constraint part of Lagrangian Hessian ∇ₓₓ²(−yᵀcₑ(x) − zᵀcᵢ(x)) getter.
+  ///
+  /// <table>
+  ///   <tr>
+  ///     <th>Variable</th>
+  ///     <th>Rows</th>
+  ///     <th>Columns</th>
+  ///   </tr>
+  ///   <tr>
+  ///     <td>x</td>
+  ///     <td>num_decision_variables</td>
+  ///     <td>1</td>
+  ///   </tr>
+  ///   <tr>
+  ///     <td>y</td>
+  ///     <td>num_equality_constraints</td>
+  ///     <td>1</td>
+  ///   </tr>
+  ///   <tr>
+  ///     <td>z</td>
+  ///     <td>num_inequality_constraints</td>
+  ///     <td>1</td>
+  ///   </tr>
+  ///   <tr>
+  ///     <td>∇ₓₓ²(−yᵀcₑ(x) − zᵀcᵢ(x))</td>
+  ///     <td>num_decision_variables</td>
+  ///     <td>num_decision_variables</td>
+  ///   </tr>
+  /// </table>
+  std::function<SparseMatrix(const DenseVector& x, const DenseVector& y,
+                             const DenseVector& z)>
+      H_c;
+
   /// Equality constraint value cₑ(x) getter.
   ///
   /// <table>

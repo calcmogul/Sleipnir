@@ -17,6 +17,7 @@
 #include "sleipnir/optimization/solver/options.hpp"
 #include "sleipnir/optimization/solver/sqp_matrix_callbacks.hpp"
 #include "sleipnir/optimization/solver/util/error_estimate.hpp"
+#include "sleipnir/optimization/solver/util/feasibility_restoration.hpp"
 #include "sleipnir/optimization/solver/util/filter.hpp"
 #include "sleipnir/optimization/solver/util/is_locally_infeasible.hpp"
 #include "sleipnir/optimization/solver/util/kkt_error.hpp"
@@ -88,6 +89,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
   solve_profilers.emplace_back("    ↳ f(x)");
   solve_profilers.emplace_back("    ↳ ∇f(x)");
   solve_profilers.emplace_back("    ↳ ∇²ₓₓL");
+  solve_profilers.emplace_back("    ↳ ∇²ₓₓyᵀcₑ");
   solve_profilers.emplace_back("    ↳ cₑ(x)");
   solve_profilers.emplace_back("    ↳ ∂cₑ/∂x");
 
@@ -108,8 +110,9 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
   auto& f_prof = solve_profilers[11];
   auto& g_prof = solve_profilers[12];
   auto& H_prof = solve_profilers[13];
-  auto& c_e_prof = solve_profilers[14];
-  auto& A_e_prof = solve_profilers[15];
+  auto& H_c_prof = solve_profilers[14];
+  auto& c_e_prof = solve_profilers[15];
+  auto& A_e_prof = solve_profilers[16];
 
   SQPMatrixCallbacks<Scalar> matrices{
       [&](const DenseVector& x) -> Scalar {
@@ -123,6 +126,10 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
       [&](const DenseVector& x, const DenseVector& y) -> SparseMatrix {
         ScopedProfiler prof{H_prof};
         return matrix_callbacks.H(x, y);
+      },
+      [&](const DenseVector& x, const DenseVector& y) -> SparseMatrix {
+        ScopedProfiler prof{H_c_prof};
+        return matrix_callbacks.H_c(x, y);
       },
       [&](const DenseVector& x) -> DenseVector {
         ScopedProfiler prof{c_e_prof};
@@ -268,6 +275,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
     Step step;
     constexpr Scalar α_max(1);
     Scalar α(1);
+    bool call_feasibility_restoration = false;
 
     // Solve the Newton-KKT system
     //
@@ -309,7 +317,8 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
         α *= α_reduction_factor;
 
         if (α < α_min) {
-          return ExitStatus::LINE_SEARCH_FAILED;
+          call_feasibility_restoration = true;
+          break;
         }
         continue;
       }
@@ -441,11 +450,44 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
           break;
         }
 
-        return ExitStatus::LINE_SEARCH_FAILED;
+        call_feasibility_restoration = true;
+        break;
       }
     }
 
     line_search_profiler.stop();
+
+    if (call_feasibility_restoration) {
+      FilterEntry initial_entry{matrices.f(x), c_e};
+
+      // Feasibility restoration phase
+      gch::small_vector<std::function<bool(const IterationInfo<Scalar>& info)>>
+          callbacks;
+      callbacks.emplace_back([&](const IterationInfo<Scalar>& info) {
+        DenseVector trial_x = info.x.segment(0, num_decision_variables);
+
+        DenseVector trial_c_e = matrices.c_e(trial_x);
+
+        // If current iterate is acceptable to normal filter and
+        // constraint violation has sufficiently reduced, stop
+        // feasibility restoration
+        FilterEntry entry{matrices.f(trial_x), trial_c_e};
+        if (filter.is_acceptable(entry, α) &&
+            entry.constraint_violation <
+                Scalar(0.9) * initial_entry.constraint_violation) {
+          return true;
+        }
+
+        return false;
+      });
+      auto status =
+          feasibility_restoration<Scalar>(matrices, callbacks, options, x, y);
+
+      if (status != ExitStatus::SUCCESS) {
+        // Report failure
+        return status;
+      }
+    }
 
     // If full step was accepted, reset full-step rejected counter
     if (α == α_max) {
