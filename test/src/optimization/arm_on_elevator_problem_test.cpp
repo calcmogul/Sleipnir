@@ -92,11 +92,9 @@ TEMPLATE_TEST_CASE("Problem - Arm on elevator", "[Problem]",
       slp::bounds(-ARM_MAX_ACCELERATION, arm_accel, ARM_MAX_ACCELERATION));
 
   // Height limit
-#if 0
   auto heights =
       elevator.row(0) + ARM_LENGTH * arm.row(0).cwise_transform(slp::sin<T>);
   problem.subject_to(heights <= END_EFFECTOR_MAX_HEIGHT);
-#endif
 
   // Cost function
   slp::Variable J = T(0);
@@ -108,7 +106,7 @@ TEMPLATE_TEST_CASE("Problem - Arm on elevator", "[Problem]",
 
   CHECK(problem.cost_function_type() == slp::ExpressionType::QUADRATIC);
   CHECK(problem.equality_constraint_type() == slp::ExpressionType::LINEAR);
-  CHECK(problem.inequality_constraint_type() == slp::ExpressionType::LINEAR);
+  CHECK(problem.inequality_constraint_type() == slp::ExpressionType::NONLINEAR);
 
   REQUIRE(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
 }

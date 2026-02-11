@@ -78,9 +78,8 @@ def test_arm_on_elevator_problem():
     problem.subject_to(bounds(-ARM_MAX_ACCELERATION, arm_accel, ARM_MAX_ACCELERATION))
 
     # Height limit
-    if 0:
-        heights = elevator[:1, :] + ARM_LENGTH * arm[:1, :].cwise_map(autodiff.sin)
-        problem.subject_to(heights <= END_EFFECTOR_MAX_HEIGHT)
+    heights = elevator[:1, :] + ARM_LENGTH * arm[:1, :].cwise_map(autodiff.sin)
+    problem.subject_to(heights <= END_EFFECTOR_MAX_HEIGHT)
 
     # Cost function
     problem.minimize(
@@ -93,6 +92,6 @@ def test_arm_on_elevator_problem():
 
     assert problem.cost_function_type() == ExpressionType.QUADRATIC
     assert problem.equality_constraint_type() == ExpressionType.LINEAR
-    assert problem.inequality_constraint_type() == ExpressionType.LINEAR
+    assert problem.inequality_constraint_type() == ExpressionType.NONLINEAR
 
     assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS

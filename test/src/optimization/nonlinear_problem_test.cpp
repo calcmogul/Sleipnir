@@ -133,6 +133,34 @@ TEMPLATE_TEST_CASE("Problem - Minimum 2D distance with linear constraint",
   CHECK(problem.equality_constraint_type() == slp::ExpressionType::LINEAR);
   CHECK(problem.inequality_constraint_type() == slp::ExpressionType::NONE);
 
+  problem.add_callback([](const auto& info) {
+    slp::print("x = [");
+    for (int row = 0; row < info.x.rows(); ++row) {
+      slp::print("{}", info.x[row]);
+      if (row < info.x.rows() - 1) {
+        slp::print(", ");
+      }
+    }
+    slp::println("]");
+
+    slp::print("y = [");
+    for (int row = 0; row < info.y.rows(); ++row) {
+      slp::print("{}", info.y[row]);
+      if (row < info.y.rows() - 1) {
+        slp::print(", ");
+      }
+    }
+    slp::println("]");
+
+    slp::print("z = [");
+    for (int row = 0; row < info.z.rows(); ++row) {
+      slp::print("{}", info.z[row]);
+      if (row < info.z.rows() - 1) {
+        slp::print(", ");
+      }
+    }
+    slp::println("]");
+  });
   CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
 
   CHECK_THAT(x.value(), WithinAbs(T(2.5), T(1e-2)));
@@ -190,10 +218,7 @@ TEMPLATE_TEST_CASE("Problem - Wachter and Biegler line search failure",
   CHECK(problem.equality_constraint_type() == slp::ExpressionType::QUADRATIC);
   CHECK(problem.inequality_constraint_type() == slp::ExpressionType::LINEAR);
 
-  // FIXME: Fails with "line search failed"
-  CHECK(problem.solve({.diagnostics = true}) ==
-        slp::ExitStatus::LINE_SEARCH_FAILED);
-  SKIP("Fails with \"line search failed\"");
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
 
   CHECK_THAT(x.value(), WithinAbs(T(1), T(1e-6)));
   CHECK_THAT(s1.value(), WithinAbs(T(0), T(1e-6)));
