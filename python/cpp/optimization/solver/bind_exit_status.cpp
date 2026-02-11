@@ -22,8 +22,9 @@ void bind_exit_status(nb::enum_<ExitStatus>& e) {
           DOC(slp, ExitStatus, GLOBALLY_INFEASIBLE));
   e.value("FACTORIZATION_FAILED", ExitStatus::FACTORIZATION_FAILED,
           DOC(slp, ExitStatus, FACTORIZATION_FAILED));
-  e.value("LINE_SEARCH_FAILED", ExitStatus::LINE_SEARCH_FAILED,
-          DOC(slp, ExitStatus, LINE_SEARCH_FAILED));
+  e.value("FEASIBILITY_RESTORATION_FAILED",
+          ExitStatus::FEASIBILITY_RESTORATION_FAILED,
+          DOC(slp, ExitStatus, FEASIBILITY_RESTORATION_FAILED));
   e.value("NONFINITE_INITIAL_COST_OR_CONSTRAINTS",
           ExitStatus::NONFINITE_INITIAL_COST_OR_CONSTRAINTS,
           DOC(slp, ExitStatus, NONFINITE_INITIAL_COST_OR_CONSTRAINTS));

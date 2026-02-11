@@ -17,6 +17,7 @@
 #include "sleipnir/optimization/solver/options.hpp"
 #include "sleipnir/optimization/solver/sqp_matrix_callbacks.hpp"
 #include "sleipnir/optimization/solver/util/error_estimate.hpp"
+#include "sleipnir/optimization/solver/util/feasibility_restoration.hpp"
 #include "sleipnir/optimization/solver/util/filter.hpp"
 #include "sleipnir/optimization/solver/util/is_locally_infeasible.hpp"
 #include "sleipnir/optimization/solver/util/kkt_error.hpp"
@@ -268,6 +269,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
     Step step;
     constexpr Scalar α_max(1);
     Scalar α(1);
+    bool call_feasibility_restoration = false;
 
     // Solve the Newton-KKT system
     //
@@ -309,7 +311,8 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
         α *= α_reduction_factor;
 
         if (α < α_min) {
-          return ExitStatus::LINE_SEARCH_FAILED;
+          call_feasibility_restoration = true;
+          break;
         }
         continue;
       }
@@ -441,21 +444,78 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
           break;
         }
 
-        return ExitStatus::LINE_SEARCH_FAILED;
+        call_feasibility_restoration = true;
+        break;
       }
     }
 
     line_search_profiler.stop();
 
-    // If full step was accepted, reset full-step rejected counter
-    if (α == α_max) {
-      full_step_rejected_counter = 0;
-    }
+    if (call_feasibility_restoration) {
+      FilterEntry initial_entry{c_e};
 
-    // xₖ₊₁ = xₖ + αₖpₖˣ
-    // yₖ₊₁ = yₖ + αₖpₖʸ
-    x += α * step.p_x;
-    y += α * step.p_y;
+      // Feasibility restoration phase
+      DenseVector fr_x = x;
+      auto fr_status = feasibility_restoration<Scalar>(
+          matrices,
+          [&](const IterationInfo<Scalar>& info) {
+            DenseVector trial_x = info.x.segment(0, num_decision_variables);
+
+            DenseVector trial_c_e = matrices.c_e(trial_x);
+
+            // If current iterate is acceptable to normal filter and
+            // constraint violation has sufficiently reduced, stop
+            // feasibility restoration
+            FilterEntry entry{trial_c_e};
+            if (filter.is_acceptable(entry, α) &&
+                entry.constraint_violation <
+                    0.9 * initial_entry.constraint_violation) {
+              return true;
+            }
+
+            return false;
+          },
+          options, fr_x);
+
+      if (fr_status == ExitStatus::CALLBACK_REQUESTED_STOP) {
+        // Accept step
+        x = fr_x;
+
+        // Lagrange multiplier estimates
+        //
+        //   y = (AₑAₑᵀ)⁻¹Aₑ∇f
+        //
+        // See equation (19.37) of [1].
+
+        A_e = matrices.A_e(x);
+        g = matrices.g(x);
+
+        // lhs = AₑAₑᵀ
+        SparseMatrix lhs = A_e * A_e.transpose();
+
+        // rhs = Aₑ∇f
+        DenseVector rhs = A_e * g;
+
+        Eigen::SimplicialLDLT<SparseMatrix> yEstimator{lhs};
+        y = yEstimator.solve(rhs);
+      } else if (fr_status == ExitStatus::SUCCESS) {
+        x = fr_x;
+        return ExitStatus::LOCALLY_INFEASIBLE;
+      } else {
+        x = fr_x;
+        return ExitStatus::FEASIBILITY_RESTORATION_FAILED;
+      }
+    } else {
+      // If full step was accepted, reset full-step rejected counter
+      if (α == α_max) {
+        full_step_rejected_counter = 0;
+      }
+
+      // xₖ₊₁ = xₖ + αₖpₖˣ
+      // yₖ₊₁ = yₖ + αₖpₖʸ
+      x += α * step.p_x;
+      y += α * step.p_y;
+    }
 
     // Update autodiff for Jacobians and Hessian
     f = matrices.f(x);

@@ -18,6 +18,7 @@
 #include "sleipnir/optimization/solver/iteration_info.hpp"
 #include "sleipnir/optimization/solver/options.hpp"
 #include "sleipnir/optimization/solver/util/error_estimate.hpp"
+#include "sleipnir/optimization/solver/util/feasibility_restoration.hpp"
 #include "sleipnir/optimization/solver/util/filter.hpp"
 #include "sleipnir/optimization/solver/util/fraction_to_the_boundary_rule.hpp"
 #include "sleipnir/optimization/solver/util/is_locally_infeasible.hpp"
@@ -55,19 +56,24 @@ namespace slp {
 /// @param[in] iteration_callbacks The list of callbacks to call at the
 ///     beginning of each iteration.
 /// @param[in] options Solver options.
+/// @param[in] feasibility_restoration Whether to use feasibility restoration
+///   instead of the normal algorithm.
 /// @param[in,out] x The initial guess and output location for the decision
 ///     variables.
+/// @param[in,out] s The initial guess and output location for the inequality
+///     constraint slack variables.
 /// @return The exit status.
 template <typename Scalar>
 ExitStatus interior_point(
     const InteriorPointMatrixCallbacks<Scalar>& matrix_callbacks,
     std::span<std::function<bool(const IterationInfo<Scalar>& info)>>
         iteration_callbacks,
-    const Options& options,
+    const Options& options, bool feasibility_restoration,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
     const Eigen::ArrayX<bool>& bound_constraint_mask,
 #endif
-    Eigen::Vector<Scalar, Eigen::Dynamic>& x) {
+    Eigen::Vector<Scalar, Eigen::Dynamic>& x,
+    Eigen::Vector<Scalar, Eigen::Dynamic>& s) {
   using DenseVector = Eigen::Vector<Scalar, Eigen::Dynamic>;
   using SparseMatrix = Eigen::SparseMatrix<Scalar>;
   using SparseVector = Eigen::SparseVector<Scalar>;
@@ -188,7 +194,6 @@ ExitStatus interior_point(
   SparseMatrix A_e = matrices.A_e(x);
   SparseMatrix A_i = matrices.A_i(x);
 
-  DenseVector s = DenseVector::Ones(num_inequality_constraints);
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
   // We set sʲ = cᵢʲ(x) for each bound inequality constraint index j
   s = bound_constraint_mask.select(c_i, s);
@@ -368,6 +373,7 @@ ExitStatus interior_point(
     Scalar α_max(1);
     Scalar α(1);
     Scalar α_z(1);
+    bool call_feasibility_restoration = false;
 
     // Solve the Newton-KKT system
     //
@@ -401,16 +407,16 @@ ExitStatus interior_point(
     α_max = fraction_to_the_boundary_rule<Scalar>(s, step.p_s, τ);
     α = α_max;
 
-    // If maximum step size is below minimum, report line search failure
+    // If maximum step size is below minimum, invoke feasibility restoration
     if (α < α_min) {
-      return ExitStatus::LINE_SEARCH_FAILED;
+      call_feasibility_restoration = true;
     }
 
     // αₖᶻ = max(α ∈ (0, 1] : zₖ + αpₖᶻ ≥ (1−τⱼ)zₖ)
     α_z = fraction_to_the_boundary_rule<Scalar>(z, step.p_z, τ);
 
     // Loop until a step is accepted
-    while (1) {
+    while (!call_feasibility_restoration) {
       DenseVector trial_x = x + α * step.p_x;
       DenseVector trial_y = y + α_z * step.p_y;
       DenseVector trial_z = z + α_z * step.p_z;
@@ -427,7 +433,8 @@ ExitStatus interior_point(
         α *= α_reduction_factor;
 
         if (α < α_min) {
-          return ExitStatus::LINE_SEARCH_FAILED;
+          call_feasibility_restoration = true;
+          break;
         }
         continue;
       }
@@ -596,43 +603,145 @@ ExitStatus interior_point(
           break;
         }
 
-        return ExitStatus::LINE_SEARCH_FAILED;
+        // If the step direction was bad and feasibility restoration is already
+        // running, running it again won't help
+        if (feasibility_restoration) {
+          return ExitStatus::LOCALLY_INFEASIBLE;
+        }
+
+        call_feasibility_restoration = true;
+        break;
       }
     }
 
     line_search_profiler.stop();
 
-    // If full step was accepted, reset full-step rejected counter
-    if (α == α_max) {
-      full_step_rejected_counter = 0;
-    }
+    if (call_feasibility_restoration) {
+      FilterEntry initial_entry{s, c_e, c_i, μ};
 
-    // xₖ₊₁ = xₖ + αₖpₖˣ
-    // sₖ₊₁ = sₖ + αₖpₖˢ
-    // yₖ₊₁ = yₖ + αₖᶻpₖʸ
-    // zₖ₊₁ = zₖ + αₖᶻpₖᶻ
-    x += α * step.p_x;
-    s += α * step.p_s;
-    y += α_z * step.p_y;
-    z += α_z * step.p_z;
+      // Feasibility restoration phase
+      DenseVector fr_x = x;
+      DenseVector fr_s = s;
+      auto fr_status = feasibility_restoration<Scalar>(
+          matrices, μ,
+          [&](const IterationInfo<Scalar>& info) {
+            DenseVector trial_x = info.x.segment(0, num_decision_variables);
 
-    // A requirement for the convergence proof is that the primal-dual barrier
-    // term Hessian Σₖ₊₁ does not deviate arbitrarily much from the primal
-    // barrier term Hessian μSₖ₊₁⁻².
-    //
-    //   Σₖ₊₁ = μSₖ₊₁⁻²
-    //   Sₖ₊₁⁻¹Zₖ₊₁ = μSₖ₊₁⁻²
-    //   Zₖ₊₁ = μSₖ₊₁⁻¹
-    //
-    // We ensure this by resetting
-    //
-    //   zₖ₊₁ = clamp(zₖ₊₁, 1/κ_Σ μ/sₖ₊₁, κ_Σ μ/sₖ₊₁)
-    //
-    // for some fixed κ_Σ ≥ 1 after each step. See equation (16) of [2].
-    for (int row = 0; row < z.rows(); ++row) {
-      constexpr Scalar κ_Σ(1e10);
-      z[row] =
-          std::clamp(z[row], Scalar(1) / κ_Σ * μ / s[row], κ_Σ * μ / s[row]);
+            DenseVector trial_c_e = matrices.c_e(trial_x);
+            DenseVector trial_c_i = matrices.c_i(trial_x);
+
+            // If current iterate is acceptable to normal filter and
+            // constraint violation has sufficiently reduced, stop
+            // feasibility restoration
+            FilterEntry entry{fr_s, trial_c_e, trial_c_i, μ};
+            if (filter.is_acceptable(entry, α) &&
+                entry.constraint_violation <
+                    0.9 * initial_entry.constraint_violation) {
+              return true;
+            }
+
+            return false;
+          },
+          options, fr_x, fr_s);
+
+      if (fr_status == ExitStatus::CALLBACK_REQUESTED_STOP) {
+        // Accept step
+        x = fr_x;
+        s = fr_s;
+
+        // Lagrange multiplier estimates
+        //
+        //   [y] = (ÂÂᵀ)⁻¹Â[ ∇f]
+        //   [z]           [−μe]
+        //
+        //   where Â = [Aₑ   0]
+        //             [Aᵢ  −S]
+        //
+        // See equation (19.37) of [1].
+
+        A_e = matrices.A_e(x);
+        A_i = matrices.A_i(x);
+        g = matrices.g(x);
+
+        // Â = [Aₑ   0]
+        //     [Aᵢ  −S]
+        triplets.clear();
+        triplets.reserve(A_e.nonZeros() + A_i.nonZeros() + s.rows());
+        for (int col = 0; col < A_e.cols(); ++col) {
+          // Append column of Aₑ in top-left quadrant
+          for (typename SparseMatrix::InnerIterator it{A_e, col}; it; ++it) {
+            triplets.emplace_back(it.row(), it.col(), it.value());
+          }
+          // Append column of Aᵢ in bottom-left quadrant
+          for (typename SparseMatrix::InnerIterator it{A_i, col}; it; ++it) {
+            triplets.emplace_back(A_e.rows() + it.row(), it.col(), it.value());
+          }
+        }
+        // Append −S in bottom-right quadrant
+        for (int i = 0; i < s.rows(); ++i) {
+          triplets.emplace_back(A_e.rows() + i, A_e.cols() + i, -s(i));
+        }
+        SparseMatrix Ahat{A_e.rows() + A_i.rows(), A_e.cols() + s.rows()};
+        Ahat.setFromSortedTriplets(
+            triplets.begin(), triplets.end(),
+            [](const auto&, const auto& b) { return b; });
+
+        // lhs = ÂÂᵀ
+        SparseMatrix lhs = Ahat * Ahat.transpose();
+
+        // rhs = Â[ ∇f]
+        //        [−μe]
+        DenseVector rhsTemp{g.rows() + s.rows()};
+        rhsTemp.block(0, 0, g.rows(), 1) = g;
+        rhsTemp.block(g.rows(), 0, s.rows(), 1) =
+            -μ * DenseVector::Ones(s.rows());
+        DenseVector rhs = Ahat * rhsTemp;
+
+        Eigen::SimplicialLDLT<SparseMatrix> yzEstimator{lhs};
+        DenseVector sol = yzEstimator.solve(rhs);
+
+        y = sol.block(0, 0, y.rows(), 1);
+        z = sol.block(y.rows(), 0, z.rows(), 1);
+      } else if (fr_status == ExitStatus::SUCCESS) {
+        x = fr_x;
+        return ExitStatus::LOCALLY_INFEASIBLE;
+      } else {
+        x = fr_x;
+        return ExitStatus::FEASIBILITY_RESTORATION_FAILED;
+      }
+    } else {
+      // If full step was accepted, reset full-step rejected counter
+      if (α == α_max) {
+        full_step_rejected_counter = 0;
+      }
+
+      // xₖ₊₁ = xₖ + αₖpₖˣ
+      // sₖ₊₁ = sₖ + αₖpₖˢ
+      // yₖ₊₁ = yₖ + αₖᶻpₖʸ
+      // zₖ₊₁ = zₖ + αₖᶻpₖᶻ
+      x += α * step.p_x;
+      s += α * step.p_s;
+      y += α_z * step.p_y;
+      z += α_z * step.p_z;
+
+      // A requirement for the convergence proof is that the primal-dual barrier
+      // term Hessian Σₖ₊₁ does not deviate arbitrarily much from the primal
+      // barrier term Hessian μSₖ₊₁⁻².
+      //
+      //   Σₖ₊₁ = μSₖ₊₁⁻²
+      //   Sₖ₊₁⁻¹Zₖ₊₁ = μSₖ₊₁⁻²
+      //   Zₖ₊₁ = μSₖ₊₁⁻¹
+      //
+      // We ensure this by resetting
+      //
+      //   zₖ₊₁ = clamp(zₖ₊₁, 1/κ_Σ μ/sₖ₊₁, κ_Σ μ/sₖ₊₁)
+      //
+      // for some fixed κ_Σ ≥ 1 after each step. See equation (16) of [2].
+      for (int row = 0; row < z.rows(); ++row) {
+        constexpr Scalar κ_Σ(1e10);
+        z[row] =
+            std::clamp(z[row], Scalar(1) / κ_Σ * μ / s[row], κ_Σ * μ / s[row]);
+      }
     }
 
     // Update autodiff for Jacobians and Hessian
@@ -696,10 +805,11 @@ extern template SLEIPNIR_DLLEXPORT ExitStatus
 interior_point(const InteriorPointMatrixCallbacks<double>& matrix_callbacks,
                std::span<std::function<bool(const IterationInfo<double>& info)>>
                    iteration_callbacks,
-               const Options& options,
+               const Options& options, bool feasibility_restoration,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
                const Eigen::ArrayX<bool>& bound_constraint_mask,
 #endif
-               Eigen::Vector<double, Eigen::Dynamic>& x);
+               Eigen::Vector<double, Eigen::Dynamic>& x,
+               Eigen::Vector<double, Eigen::Dynamic>& s);
 
 }  // namespace slp

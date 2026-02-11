@@ -519,6 +519,7 @@ class Problem {
       project_onto_bounds(x, bounds);
 #endif
       // Invoke interior-point method solver
+      DenseVector s = DenseVector::Ones(num_inequality_constraints);
       status = interior_point<Scalar>(
           InteriorPointMatrixCallbacks<Scalar>{
               [&](const DenseVector& x) -> Scalar {
@@ -552,11 +553,11 @@ class Problem {
                 x_ad.set_value(x);
                 return A_i.value();
               }},
-          callbacks, options,
+          callbacks, options, false,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
           bound_constraint_mask,
 #endif
-          x);
+          x, s);
     }
 
     if (options.diagnostics) {
