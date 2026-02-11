@@ -36,6 +36,19 @@ class RegularizedLDLT {
       : m_num_decision_variables{num_decision_variables},
         m_num_equality_constraints{num_equality_constraints} {}
 
+  /// Constructs a RegularizedLDLT instance.
+  ///
+  /// @param num_decision_variables The number of decision variables in the
+  ///     system.
+  /// @param num_equality_constraints The number of equality constraints in the
+  ///     system.
+  /// @param γ_min The minimum constraint regularization.
+  RegularizedLDLT(int num_decision_variables, int num_equality_constraints,
+                  Scalar γ_min)
+      : m_num_decision_variables{num_decision_variables},
+        m_num_equality_constraints{num_equality_constraints},
+        m_γ_min{γ_min} {}
+
   /// Reports whether previous computation was successful.
   ///
   /// @return Whether previous computation was successful.
@@ -73,7 +86,7 @@ class RegularizedLDLT {
     // attempt a δ and γ half as big as the previous run so δ and γ can trend
     // downwards over time.
     Scalar δ = m_prev_δ == Scalar(0) ? Scalar(1e-4) : m_prev_δ / Scalar(2);
-    Scalar γ(1e-10);
+    Scalar γ = m_γ_min;
 
     while (true) {
       // Regularize lhs by adding a multiple of the identity matrix
@@ -109,7 +122,7 @@ class RegularizedLDLT {
         } else if (inertia.positive > ideal_inertia.positive) {
           // If there's too many positive eigenvalues, increase γ by an order of
           // magnitude and try again
-          γ *= Scalar(10);
+          γ = γ == Scalar(0) ? Scalar(1e-10) : γ * Scalar(10);
         }
       } else {
         // If the decomposition failed, increase δ and γ by an order of
@@ -173,6 +186,9 @@ class RegularizedLDLT {
 
   /// The number of equality constraints in the system.
   int m_num_equality_constraints = 0;
+
+  /// The minimum constraint regularization.
+  Scalar m_γ_min{1e-10};
 
   /// The ideal system inertia.
   Inertia ideal_inertia{m_num_decision_variables, m_num_equality_constraints,

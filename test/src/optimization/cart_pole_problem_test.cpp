@@ -83,17 +83,7 @@ TEMPLATE_TEST_CASE("Problem - Cart-pole", "[Problem]",
   CHECK(problem.equality_constraint_type() == slp::ExpressionType::NONLINEAR);
   CHECK(problem.inequality_constraint_type() == slp::ExpressionType::LINEAR);
 
-#if defined(__APPLE__) && defined(__aarch64__)
-  if constexpr (std::same_as<T, ExplicitDouble>) {
-    REQUIRE(problem.solve({.diagnostics = true}) ==
-            slp::ExitStatus::LINE_SEARCH_FAILED);
-    SKIP("Fails with \"line search failed\"");
-  } else {
-    REQUIRE(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
-  }
-#else
   REQUIRE(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
-#endif
 
   // Verify initial state
   CHECK_THAT(X.value(0, 0), WithinAbs(x_initial[0], T(1e-8)));

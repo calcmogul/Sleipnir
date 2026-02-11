@@ -10,6 +10,8 @@
 #include <Eigen/Core>
 #include <gch/small_vector.hpp>
 
+#include "sleipnir/util/print.hpp"
+
 // See docs/algorithms.md#Works_cited for citation definitions.
 
 namespace slp {
@@ -137,6 +139,8 @@ class Filter {
   /// @return True if the given iterate is accepted by the filter.
   bool try_add(FilterEntry<Scalar>&& entry, Scalar α) {
     if (is_acceptable(entry, α)) {
+      slp::println("accepted cost = {}, infeas = {}", entry.cost,
+                   entry.constraint_violation);
       add(std::move(entry));
       return true;
     } else {
