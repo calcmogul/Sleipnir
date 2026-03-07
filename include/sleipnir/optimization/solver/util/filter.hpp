@@ -152,6 +152,17 @@ class Filter {
     }
   }
 
+  /// Returns true if the given entry is in the filter.
+  ///
+  /// @param entry The entry.
+  /// @return True if the given entry is in the filter.
+  bool in_filter(const FilterEntry<Scalar>& entry) const {
+    // An entry is in the filter if it's dominated by any filter entry
+    return std::any_of(m_filter.begin(), m_filter.end(), [&](const auto& elem) {
+      return entry.dominated_by(elem);
+    });
+  }
+
   /// Returns true if the given entry is acceptable to the filter.
   ///
   /// @param entry The entry to check.
