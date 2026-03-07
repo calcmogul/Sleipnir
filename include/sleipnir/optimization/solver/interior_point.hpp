@@ -491,7 +491,7 @@ ExitStatus interior_point(
 
       // Check whether filter accepts trial iterate
       if (filter.try_add(FilterEntry{trial_f, trial_s, trial_c_e, trial_c_i, μ},
-                         α)) {
+                         step.p_x, g, α)) {
         // Accept step
         break;
       }
@@ -580,7 +580,8 @@ ExitStatus interior_point(
 
           // Check whether filter accepts trial iterate
           if (filter.try_add(
-                  FilterEntry{trial_f, trial_s, trial_c_e, trial_c_i, μ}, α)) {
+                  FilterEntry{trial_f, trial_s, trial_c_e, trial_c_i, μ},
+                  step.p_x, g, α)) {
             step = soc_step;
             α = α_soc;
             α_z = α_z_soc;

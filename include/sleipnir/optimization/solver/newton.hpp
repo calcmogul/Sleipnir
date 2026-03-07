@@ -210,7 +210,7 @@ ExitStatus newton(
       }
 
       // Check whether filter accepts trial iterate
-      if (filter.try_add(FilterEntry{trial_f}, α)) {
+      if (filter.try_add(FilterEntry{trial_f}, p_x, g, α)) {
         // Accept step
         break;
       }

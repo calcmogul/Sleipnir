@@ -340,7 +340,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
       }
 
       // Check whether filter accepts trial iterate
-      if (filter.try_add(FilterEntry{trial_f, trial_c_e}, α)) {
+      if (filter.try_add(FilterEntry{trial_f, trial_c_e}, step.p_x, g, α)) {
         // Accept step
         break;
       }
@@ -411,7 +411,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
           }
 
           // Check whether filter accepts trial iterate
-          if (filter.try_add(FilterEntry{trial_f, trial_c_e}, α)) {
+          if (filter.try_add(FilterEntry{trial_f, trial_c_e}, step.p_x, g, α)) {
             step = soc_step;
             α = α_soc;
             step_acceptable = true;

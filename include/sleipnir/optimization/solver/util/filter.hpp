@@ -7,6 +7,7 @@
 #include <limits>
 
 #include <Eigen/Core>
+#include <Eigen/SparseCore>
 #include <gch/small_vector.hpp>
 
 // See docs/algorithms.md#Works_cited for citation definitions.
@@ -75,6 +76,12 @@ struct FilterEntry {
 template <typename Scalar>
 class Filter {
  public:
+  /// Type alias for dense vector.
+  using DenseVector = Eigen::Vector<Scalar, Eigen::Dynamic>;
+
+  /// Type alias for sparse vector.
+  using SparseVector = Eigen::SparseVector<Scalar>;
+
   /// The minimum constraint violation
   static constexpr Scalar min_constraint_violation{1e-4};
 
@@ -97,18 +104,77 @@ class Filter {
                           max_constraint_violation);
   }
 
-  /// Returns true if the given iterate is accepted by the filter.
+  /// Returns true if the given trial entry is acceptable to the filter.
   ///
-  /// @param entry The entry to attempt adding to the filter.
+  /// @param trial_entry The entry corresponding to the trial iterate.
+  /// @param p_x Decision variable primal step.
+  /// @param g Cost function gradient.
   /// @param α The step size (0, 1].
-  /// @return True if the given iterate is accepted by the filter.
-  bool try_add(const FilterEntry<Scalar>& entry, Scalar α) {
-    if (is_acceptable(entry, α)) {
-      add(entry);
-      return true;
-    } else {
+  /// @return True if the given entry is acceptable to the filter.
+  bool try_add(const FilterEntry<Scalar>& trial_entry, const DenseVector& p_x,
+               const SparseVector& g, Scalar α) {
+    using std::isfinite;
+    using std::pow;
+
+    if (!isfinite(trial_entry.cost) ||
+        !isfinite(trial_entry.constraint_violation)) {
       return false;
     }
+
+    if (in_filter(trial_entry)) {
+      return false;
+    }
+
+    // The entry corresponding to the current iterate
+    const auto& current_entry = m_filter.back();
+
+    Scalar g_p_x = g.transpose() * p_x;
+
+    // Switching condition
+    constexpr Scalar s_ϕ(2.3);
+    constexpr Scalar s_θ(1.1);
+    bool switching_condition =
+        g_p_x < Scalar(0) &&
+        α * pow(-g_p_x, s_ϕ) > pow(current_entry.constraint_violation, s_θ);
+
+    // Armijo condition
+    constexpr Scalar η_ϕ(1e-8);
+    bool armijo_condition =
+        trial_entry.cost <= current_entry.cost + η_ϕ * α * g_p_x;
+
+    // Sufficient decrease condition
+    //
+    // See equation (2.13) of [4].
+    Scalar ϕ = pow(α, Scalar(1.5));
+    bool sufficient_decrease =
+        trial_entry.cost <=
+            current_entry.cost -
+                ϕ * γ_cost * current_entry.constraint_violation ||
+        trial_entry.constraint_violation <=
+            (Scalar(1) - ϕ * γ_constraint) * current_entry.constraint_violation;
+
+    // A trial point is acceptable if it leads to a sufficient decrease in cost
+    // or constraint violation. However, if constraint violation is less than
+    // some minimum, require Armijo condition and switching condition to be
+    // true.
+    //
+    // Augment the filter with an accepted iterate if the switching condition or
+    // Armijo condition are false.
+    if (current_entry.constraint_violation > min_constraint_violation) {
+      if (sufficient_decrease) {
+        if (!switching_condition || !armijo_condition) {
+          add(trial_entry);
+        }
+        return true;
+      }
+    } else if (switching_condition && armijo_condition) {
+      if (!switching_condition || !armijo_condition) {
+        add(trial_entry);
+      }
+      return true;
+    }
+
+    return false;
   }
 
   /// Returns the most recently added filter entry.
@@ -133,38 +199,15 @@ class Filter {
     m_filter.push_back(entry);
   }
 
-  /// Returns true if the given entry is acceptable to the filter.
+  /// Returns true if the given entry is in the filter.
   ///
-  /// @param entry The entry to check.
-  /// @param α The step size (0, 1].
-  /// @return True if the given entry is acceptable to the filter.
-  bool is_acceptable(const FilterEntry<Scalar>& entry, Scalar α) {
-    using std::isfinite;
-    using std::pow;
-
-    if (!isfinite(entry.cost) || !isfinite(entry.constraint_violation)) {
-      return false;
-    }
-
-    // If current filter entry is better than all prior ones in some respect,
-    // accept it.
-    //
-    // See equation (2.13) of [4].
-    Scalar ϕ = pow(α, Scalar(1.5));
-    if (entry.constraint_violation <= min_constraint_violation) {
-      // Accept only optimality improvement when constraint violation is low
-      return std::ranges::all_of(m_filter, [&](const auto& elem) {
-        return entry.cost <= elem.cost - ϕ * γ_cost * elem.constraint_violation;
-      });
-    } else {
-      // Accept either optimality or constraint violation improvement
-      return std::ranges::all_of(m_filter, [&](const auto& elem) {
-        return entry.cost <=
-                   elem.cost - ϕ * γ_cost * elem.constraint_violation ||
-               entry.constraint_violation <=
-                   (Scalar(1) - ϕ * γ_constraint) * elem.constraint_violation;
-      });
-    }
+  /// @param entry The entry.
+  /// @return True if the given entry is in the filter.
+  bool in_filter(const FilterEntry<Scalar>& entry) const {
+    // An entry is in the filter if it's dominated by any filter entry
+    return std::any_of(m_filter.begin(), m_filter.end(), [&](const auto& elem) {
+      return entry.dominated_by(elem);
+    });
   }
 };
 
