@@ -154,7 +154,7 @@ class VariableMatrix : public SleipnirBase {
     m_storage.reserve(values.rows() * values.cols());
     for (int row = 0; row < values.rows(); ++row) {
       for (int col = 0; col < values.cols(); ++col) {
-        m_storage.emplace_back(values[row, col]);
+        m_storage.emplace_back(values(row, col));
       }
     }
   }
@@ -293,7 +293,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < values.rows(); ++row) {
       for (int col = 0; col < values.cols(); ++col) {
-        (*this)[row, col].set_value(values[row, col]);
+        (*this)[row, col].set_value(values(row, col));
       }
     }
   }
@@ -750,7 +750,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result[row, col] = lhs[row, col] + rhs[row, col];
+        result[row, col] = lhs(row, col) + rhs[row, col];
       }
     }
 
@@ -770,7 +770,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result[row, col] = lhs[row, col] + rhs[row, col];
+        result[row, col] = lhs[row, col] + rhs(row, col);
       }
     }
 
@@ -842,7 +842,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result[row, col] = lhs[row, col] - rhs[row, col];
+        result[row, col] = lhs(row, col) - rhs[row, col];
       }
     }
 
@@ -862,7 +862,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < result.rows(); ++row) {
       for (int col = 0; col < result.cols(); ++col) {
-        result[row, col] = lhs[row, col] - rhs[row, col];
+        result[row, col] = lhs[row, col] - rhs(row, col);
       }
     }
 
@@ -991,7 +991,7 @@ class VariableMatrix : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        result[row, col] = value(row, col);
+        result(row, col) = value(row, col);
       }
     }
 
@@ -1616,14 +1616,14 @@ VariableMatrix<Scalar> solve(const VariableMatrix<Scalar>& A,
     MatrixXv eigen_A{A.rows(), A.cols()};
     for (int row = 0; row < A.rows(); ++row) {
       for (int col = 0; col < A.cols(); ++col) {
-        eigen_A[row, col] = A[row, col];
+        eigen_A(row, col) = A[row, col];
       }
     }
 
     MatrixXv eigen_B{B.rows(), B.cols()};
     for (int row = 0; row < B.rows(); ++row) {
       for (int col = 0; col < B.cols(); ++col) {
-        eigen_B[row, col] = B[row, col];
+        eigen_B(row, col) = B[row, col];
       }
     }
 
@@ -1632,7 +1632,7 @@ VariableMatrix<Scalar> solve(const VariableMatrix<Scalar>& A,
     VariableMatrix<Scalar> X{detail::empty, A.cols(), B.cols()};
     for (int row = 0; row < X.rows(); ++row) {
       for (int col = 0; col < X.cols(); ++col) {
-        X[row, col] = eigen_X[row, col];
+        X[row, col] = eigen_X(row, col);
       }
     }
 

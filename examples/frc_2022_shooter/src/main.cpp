@@ -199,9 +199,9 @@ int main() {
   //
   //   max((x - x_c)² + (y - y_c)² - r_t²,
   //       (z - z_c)² tan²(γ) - (x - x_c)² - (y - y_c)²) ≥ 0
-  auto& x_c = target_wrt_field[0, 0];
-  auto& y_c = target_wrt_field[1, 0];
-  auto z_c = target_wrt_field[2, 0] - target_radius / std::tan(cone_angle);
+  auto& x_c = target_wrt_field(0, 0);
+  auto& y_c = target_wrt_field(1, 0);
+  auto z_c = target_wrt_field(2, 0) - target_radius / std::tan(cone_angle);
   for (int k = 0; k < N; ++k) {
     auto& x = p_x[k];
     auto& y = p_y[k];
