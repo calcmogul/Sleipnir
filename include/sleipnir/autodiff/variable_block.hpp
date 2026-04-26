@@ -161,7 +161,7 @@ class VariableBlock : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)[row, col] = values[row, col];
+        (*this)[row, col] = values(row, col);
       }
     }
 
@@ -178,7 +178,7 @@ class VariableBlock : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)[row, col].set_value(values[row, col]);
+        (*this)[row, col].set_value(values(row, col));
       }
     }
   }
@@ -438,7 +438,11 @@ class VariableBlock : public SleipnirBase {
       for (int j = 0; j < rhs.cols(); ++j) {
         Variable sum{Scalar(0)};
         for (int k = 0; k < cols(); ++k) {
-          sum += lhs_old_row[k] * rhs[k, j];
+          if constexpr (EigenMatrixLike<decltype(rhs)>) {
+            sum += lhs_old_row[k] * rhs(k, j);
+          } else {
+            sum += lhs_old_row[k] * rhs[k, j];
+          }
         }
         (*this)[i, j] = sum;
       }
@@ -470,7 +474,11 @@ class VariableBlock : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)[row, col] /= rhs[0, 0];
+        if constexpr (EigenMatrixLike<decltype(rhs)>) {
+          (*this)[row, col] /= rhs(0, 0);
+        } else {
+          (*this)[row, col] /= rhs[0, 0];
+        }
       }
     }
 
@@ -500,7 +508,11 @@ class VariableBlock : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)[row, col] += rhs[row, col];
+        if constexpr (EigenMatrixLike<decltype(rhs)>) {
+          (*this)[row, col] += rhs(row, col);
+        } else {
+          (*this)[row, col] += rhs[row, col];
+        }
       }
     }
 
@@ -532,7 +544,11 @@ class VariableBlock : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)[row, col] -= rhs[row, col];
+        if constexpr (EigenMatrixLike<decltype(rhs)>) {
+          (*this)[row, col] -= rhs(row, col);
+        } else {
+          (*this)[row, col] -= rhs[row, col];
+        }
       }
     }
 
@@ -612,7 +628,7 @@ class VariableBlock : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        result[row, col] = value(row, col);
+        result(row, col) = value(row, col);
       }
     }
 
