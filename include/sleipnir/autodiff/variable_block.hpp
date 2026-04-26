@@ -161,7 +161,7 @@ class VariableBlock : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)[row, col] = values[row, col];
+        (*this)[row, col] = values(row, col);
       }
     }
 
@@ -178,7 +178,7 @@ class VariableBlock : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        (*this)[row, col].set_value(values[row, col]);
+        (*this)[row, col].set_value(values(row, col));
       }
     }
   }
@@ -611,7 +611,7 @@ class VariableBlock : public SleipnirBase {
 
     for (int row = 0; row < rows(); ++row) {
       for (int col = 0; col < cols(); ++col) {
-        result[row, col] = value(row, col);
+        result(row, col) = value(row, col);
       }
     }
 
