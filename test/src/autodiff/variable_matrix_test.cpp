@@ -431,7 +431,7 @@ TEMPLATE_TEST_CASE("VariableMatrix - to_eigen()", "[VariableMatrix]",
 
   for (int row = 0; row < A.rows(); ++row) {
     for (int col = 0; col < A.cols(); ++col) {
-      CHECK(A[row, col] == eigen_A[row, col]);
+      CHECK(A[row, col] == eigen_A(row, col));
     }
   }
 }
@@ -583,8 +583,8 @@ TEMPLATE_TEST_CASE("VariableMatrix - exp()", "[VariableMatrix]", SCALAR_TYPES) {
   expected_pascal.col(0).setConstant(T(1));
   for (int col = 1; col < 7; ++col) {
     for (int row = col; row < 7; ++row) {
-      expected_pascal[row, col] =
-          expected_pascal[row - 1, col - 1] + expected_pascal[row - 1, col];
+      expected_pascal(row, col) =
+          expected_pascal(row - 1, col - 1) + expected_pascal(row - 1, col);
     }
   }
   CHECK_THAT(pascal.exp().value(), WithinAbs(expected_pascal, T(1e-14)));
