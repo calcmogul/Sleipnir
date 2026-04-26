@@ -725,7 +725,11 @@ auto make_constraints(LHS&& lhs, RHS&& rhs) {
   for (int row = 0; row < rhs.rows(); ++row) {
     for (int col = 0; col < rhs.cols(); ++col) {
       // Make right-hand side zero
-      constraints.emplace_back(lhs - rhs[row, col]);
+      if constexpr (EigenMatrixLike<RHS>) {
+        constraints.emplace_back(lhs - rhs(row, col));
+      } else {
+        constraints.emplace_back(lhs - rhs[row, col]);
+      }
     }
   }
 
@@ -741,7 +745,11 @@ auto make_constraints(LHS&& lhs, RHS&& rhs) {
   for (int row = 0; row < lhs.rows(); ++row) {
     for (int col = 0; col < lhs.cols(); ++col) {
       // Make right-hand side zero
-      constraints.emplace_back(lhs[row, col] - rhs);
+      if constexpr (EigenMatrixLike<LHS>) {
+        constraints.emplace_back(lhs(row, col) - rhs);
+      } else {
+        constraints.emplace_back(lhs[row, col] - rhs);
+      }
     }
   }
 
@@ -759,7 +767,13 @@ auto make_constraints(LHS&& lhs, RHS&& rhs) {
   for (int row = 0; row < lhs.rows(); ++row) {
     for (int col = 0; col < lhs.cols(); ++col) {
       // Make right-hand side zero
-      constraints.emplace_back(lhs[row, col] - rhs[row, col]);
+      if constexpr (!EigenMatrixLike<LHS> && !EigenMatrixLike<RHS>) {
+        constraints.emplace_back(lhs[row, col] - rhs[row, col]);
+      } else if constexpr (!EigenMatrixLike<LHS> && EigenMatrixLike<RHS>) {
+        constraints.emplace_back(lhs[row, col] - rhs(row, col));
+      } else if constexpr (EigenMatrixLike<LHS> && !EigenMatrixLike<RHS>) {
+        constraints.emplace_back(lhs(row, col) - rhs[row, col]);
+      }
     }
   }
 
