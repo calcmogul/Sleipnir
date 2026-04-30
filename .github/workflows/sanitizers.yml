@@ -39,7 +39,7 @@ jobs:
           echo "CXXFLAGS=-stdlib=libc++" >> $GITHUB_ENV
 
       - name: Set up sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@v0.0.10
         # sccache doesn't work with MSBuild
         if: runner.os != 'Windows'
 

@@ -44,7 +44,7 @@ jobs:
         run: git diff HEAD > pybind11_mkdoc-fixes.patch
         if: ${{ failure() }}
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: pybind11_mkdoc fixes
           path: pybind11_mkdoc-fixes.patch
@@ -86,7 +86,7 @@ jobs:
         run: git diff HEAD > wpiformat-fixes.patch
         if: ${{ failure() }}
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: wpiformat fixes
           path: wpiformat-fixes.patch

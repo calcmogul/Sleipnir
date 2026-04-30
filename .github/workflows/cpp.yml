@@ -48,7 +48,7 @@ jobs:
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 200
 
       - name: Set up sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@v0.0.10
         # sccache doesn't work with MSBuild
         if: runner.os != 'Windows'
 
@@ -58,7 +58,7 @@ jobs:
         if: ${{ !(matrix.skip-tests || false) }}
       - run: cmake --install build --config RelWithDebInfo --prefix pkg
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.name }}
           path: pkg
@@ -101,13 +101,13 @@ jobs:
           echo "CXXFLAGS=-stdlib=libc++" >> $GITHUB_ENV
 
       - name: Set up sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@v0.0.10
         # sccache doesn't work with MSBuild
         if: runner.os != 'Windows'
 
       - run: ./tools/generate-coverage.sh sleipnir_test
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: Coverage report
           path: ./build-coverage/coverage-line-by-line-sleipnir_test.html
