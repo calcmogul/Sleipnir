@@ -73,7 +73,7 @@ int run_benchmarks_and_log(
       if (diagnostics) {
         problem.solver("ipopt");
       } else {
-        problem.solver("ipopt", {{"print_time", 0}},
+        problem.solver("ipopt", {{"expand", true}, {"print_time", 0}},
                        {{"print_level", 0}, {"sb", "yes"}});
       }
       problem.solve();

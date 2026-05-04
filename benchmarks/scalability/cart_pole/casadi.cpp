@@ -74,7 +74,8 @@ casadi::MX cart_pole_dynamics(const casadi::MX& x, const casadi::MX& u) {
   // q̈ = M⁻¹(q)(τ_g(q) − C(q, q̇)q̇ + Bu)
   casadi::MX qddot{4, 1};
   qddot(casadi::Slice{0, 2}) = qdot;
-  qddot(casadi::Slice{2, 4}) = solve(M, tau_g - mtimes(C, qdot) + mtimes(B, u));
+  qddot(casadi::Slice{2, 4}) =
+      solve(M, tau_g - mtimes(C, qdot) + mtimes(B, u), "symbolicqr");
   return qddot;
 }
 
