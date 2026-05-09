@@ -920,7 +920,7 @@ Parameter ``rows``:
     Number of matrix rows.
 
 Returns:
-    A symmetric matrix of decision varaibles in the optimization
+    A symmetric matrix of decision variables in the optimization
     problem.)doc";
 
 static const char *__doc_slp_TimestepMethod = R"doc(Enum describing the type of system timestep.)doc";

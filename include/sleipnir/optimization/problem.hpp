@@ -111,7 +111,7 @@ class Problem {
   /// Decision variables have an initial value of zero.
   ///
   /// @param rows Number of matrix rows.
-  /// @return A symmetric matrix of decision varaibles in the optimization
+  /// @return A symmetric matrix of decision variables in the optimization
   ///     problem.
   [[nodiscard]]
   VariableMatrix<Scalar> symmetric_decision_variable(int rows) {
