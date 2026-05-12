@@ -43,7 +43,7 @@ def plot_poly_fit(ax, x, y, func, bases, color):
             label += f"{coeffs[i]:.4g}{bases[i]}"
     label = "Fit: y = " + label
 
-    resampled_x = np.arange(x[0], x[-1] + 100, 100)
+    resampled_x = np.arange(x[0], x[-1] + 10, 10)
     ax.plot(
         resampled_x,
         func(resampled_x, *coeffs),

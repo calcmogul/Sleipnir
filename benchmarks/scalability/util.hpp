@@ -32,6 +32,7 @@ constexpr double to_ms(const std::chrono::duration<Rep, Period>& duration) {
 ///
 /// @tparam Problem The optimization problem's type (casadi::Opti or
 ///     slp::Problem).
+/// @tparam IsQuadratic Whether the problem is quadratic.
 /// @param filename Results CSV filename.
 /// @param diagnostics Whether to enable diagnostic prints.
 /// @param T The time horizon of the optimization problem.
@@ -43,7 +44,7 @@ constexpr double to_ms(const std::chrono::duration<Rep, Period>& duration) {
 ///     problem.
 /// @param setup A function that takes a time horizon and number of samples and
 ///     returns an optimization problem instance.
-template <typename Problem>
+template <typename Problem, bool IsQuadratic = false>
 int run_benchmarks_and_log(
     std::string_view filename, bool diagnostics,
     std::chrono::duration<double> T, std::span<int> sample_sizes_to_test,
@@ -70,12 +71,22 @@ int run_benchmarks_and_log(
     bool success = true;
     auto solve_start_time = std::chrono::steady_clock::now();
     if constexpr (std::same_as<Problem, casadi::Opti>) {
-      if (diagnostics) {
-        problem.solver("ipopt");
-      } else {
-        problem.solver("ipopt", {{"expand", true}, {"print_time", 0}},
-                       {{"print_level", 0}, {"sb", "yes"}});
+      casadi::Dict plugin_options{{"expand", true}};
+      casadi::Dict solver_options;
+
+      if constexpr (IsQuadratic) {
+        solver_options["hessian_constant"] = "yes";
+        solver_options["jac_c_constant"] = "yes";
+        solver_options["jac_d_constant"] = "yes";
       }
+
+      if (!diagnostics) {
+        plugin_options["print_time"] = 0;
+        solver_options["print_level"] = 0;
+        solver_options["sb"] = "yes";
+      }
+
+      problem.solver("ipopt", plugin_options, solver_options);
       problem.solve();
     } else {
       success = problem.solve({.diagnostics = diagnostics}) ==
