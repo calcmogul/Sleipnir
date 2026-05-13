@@ -63,8 +63,8 @@ Next, we'll apply Newton's method to the optimality conditions. Let H be ∂²L/
 ```
   ∇ₓL(x + pˣ) ≈ ∇ₓL(x) + ∂²L/∂x²pˣ
   ∇ₓL(x) + Hpˣ = 0
-  Hpˣ = −∇ₓL(x, y)
-  Hpˣ = −(∇f)
+  Hpˣ = −∇ₓL(x)
+  Hpˣ = −∇f
 ```
 
 ### Final results
