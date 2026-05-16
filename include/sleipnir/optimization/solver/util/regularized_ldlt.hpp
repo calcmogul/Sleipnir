@@ -56,6 +56,9 @@ class RegularizedLDLT {
 
   /// Computes the regularized LDLT factorization of a matrix.
   ///
+  /// The matrix's symbolic decomposition is reused in subsequent calls, so
+  /// subsequent calls must be given a matrix with the same sparsity pattern.
+  ///
   /// @param lhs Left-hand side of the system.
   /// @return The factorization.
   RegularizedLDLT& compute(const SparseMatrix& lhs) {
