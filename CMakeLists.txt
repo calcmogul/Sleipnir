@@ -167,7 +167,7 @@ if(SLEIPNIR_BUILD_BENCHMARKS)
                 ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks
                 ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/perf
         )
-        target_link_libraries(${benchmark}_perf_benchmark Sleipnir)
+        target_link_libraries(${benchmark}_perf_benchmark PUBLIC Sleipnir)
     endforeach()
 
     # Scalability benchmark (if CasADi exists)
@@ -192,8 +192,7 @@ if(SLEIPNIR_BUILD_BENCHMARKS)
             )
             target_link_libraries(
                 ${benchmark}_scalability_benchmark
-                Sleipnir
-                casadi
+                PUBLIC Sleipnir casadi
             )
         endforeach()
     endif()
@@ -212,7 +211,7 @@ if(PROJECT_IS_TOP_LEVEL AND BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
         sleipnir_test
         PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/test/include
     )
-    target_link_libraries(sleipnir_test Sleipnir Catch2::Catch2WithMain)
+    target_link_libraries(sleipnir_test PUBLIC Sleipnir Catch2::Catch2WithMain)
     if(NOT CMAKE_TOOLCHAIN_FILE)
         catch_discover_tests(sleipnir_test)
     endif()
@@ -231,7 +230,7 @@ if(SLEIPNIR_BUILD_EXAMPLES)
             ${example}
             PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/examples/${example}/include
         )
-        target_link_libraries(${example} Sleipnir)
+        target_link_libraries(${example} PUBLIC Sleipnir)
 
         # Build example test if files exist for it
         if(
@@ -251,8 +250,7 @@ if(SLEIPNIR_BUILD_EXAMPLES)
             )
             target_link_libraries(
                 ${example}_test
-                Sleipnir
-                Catch2::Catch2WithMain
+                PUBLIC Sleipnir Catch2::Catch2WithMain
             )
             if(NOT CMAKE_TOOLCHAIN_FILE)
                 catch_discover_tests(${example}_test)
