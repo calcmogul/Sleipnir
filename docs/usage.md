@@ -64,29 +64,49 @@ Available solvers include:
 
 Then, Sleipnir prints a time trace of its autodiff setup.
 ```
-┏━━━━━━━━━━━━━━━━━━━━━┯━━━━━━━━━━━━━━━━━━┯━━━━━━━━━━┯━━━━━━━━━┯━━━━┓
-┃     setup trace     │     percent      │total (ms)│each (ms)│runs┃
-┡━━━━━━━━━━━━━━━━━━━━━┷━━━━━━━━━━━━━━━━━━┷━━━━━━━━━━┷━━━━━━━━━┷━━━━┩
-│setup                 100.00%▕█████████▏      0.011     0.011    1│
-│↳ ∇f(x)                 9.09%▕▊        ▏      0.001     0.001    1│
-│↳ ∇²ₓₓL                81.82%▕███████▎ ▏      0.009     0.009    1│
-│  ↳ ∇²ₓₓL_f            36.36%▕███▎     ▏      0.004     0.004    1│
-│  ↳ ∇²ₓₓL_c            36.36%▕███▎     ▏      0.004     0.004    1│
-│↳ ∂cₑ/∂x                9.09%▕▊        ▏      0.001     0.001    1│
-└──────────────────────────────────────────────────────────────────┘
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃     time trace           percentage     duration ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│setup                 100.00%▕█████████▏     0.011│
+│↳ ∇f(x)                 0.00%▕         ▏     0.000│
+│↳ ∇²ₓₓL                81.82%▕███████▎ ▏     0.009│
+│  ↳ ∇²ₓₓL_f            36.36%▕███▎     ▏     0.004│
+│  ↳ ∇²ₓₓL_c            36.36%▕███▎     ▏     0.004│
+│↳ ∂cₑ/∂x                9.09%▕▊        ▏     0.001│
+└──────────────────────────────────────────────────┘
 ```
+
+The headings are defined as follows:
+<table>
+  <tr>
+    <th>Heading</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td>time trace</td>
+    <td>Tree of setup steps</td>
+  </tr>
+  <tr>
+    <td>percentage</td>
+    <td>Percentage of setup time</td>
+  </tr>
+  <tr>
+    <td>duration</td>
+    <td>Duration of setup step in milliseconds</td>
+  </tr>
+</table>
 
 ### Iterations
 
 After the solver takes each step, it prints a row of iteration diagnostics in a table format.
 ```
-┏━━━━┯━━━━┯━━━━━━━━━┯━━━━━━━━━━━━┯━━━━━━━━━━━━━┯━━━━━━━━━━━━┯━━━━━━━━━━━━┯━━━━━━━━┯━━━━━┯━━━━━━━━┯━━━━━━━━┯━━┓
-┃iter│type│time (ms)│   error    │    cost     │  infeas.   │complement. │   μ    │ reg │primal α│ dual α │↩ ┃
-┡━━━━┷━━━━┷━━━━━━━━━┷━━━━━━━━━━━━┷━━━━━━━━━━━━━┷━━━━━━━━━━━━┷━━━━━━━━━━━━┷━━━━━━━━┷━━━━━┷━━━━━━━━┷━━━━━━━━┷━━┩
-│   0 norm     0.014 1.799760e-03 -1.080000e+02 6.016734e-10 0.000000e+00 0.00e+00 10⁻⁴  1.00e+00 1.00e+00  0│
-│   1 norm     0.006 1.199700e-07 -1.080000e+02 9.947598e-14 0.000000e+00 0.00e+00 10⁻⁴  1.00e+00 1.00e+00  0│
-│   2 norm     0.003 4.998668e-12 -1.080000e+02 0.000000e+00 0.000000e+00 0.00e+00 10⁻⁴  1.00e+00 1.00e+00  0│
-└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃iter type duration    error       cost      infeas.   complem.    μ       δ    |p_pr|   |p_du|    α_pr     α_du   ↩ ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│   0 norm     0.016 1.7998e-03 -1.0800e+02 6.0167e-10 0.00e+00 0.00e+00 10⁻⁴  1.80e+01 6.00e+00 1.00e+00 1.00e+00  0│
+│   1 norm     0.003 1.1997e-07 -1.0800e+02 9.9476e-14 0.00e+00 0.00e+00 10⁻⁴  2.40e-03 1.00e-03 1.00e+00 1.00e+00  0│
+│   2 norm     0.002 4.9987e-12 -1.0800e+02 0.0000e+00 0.00e+00 0.00e+00 10⁻⁴  2.00e-07 5.33e-08 1.00e+00 1.00e+00  0│
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 The headings are defined as follows:
@@ -111,7 +131,7 @@ The headings are defined as follows:
     </td>
   </tr>
   <tr>
-    <td>time (ms)</td>
+    <td>duration</td>
     <td>Duration of iteration in milliseconds</td>
   </tr>
   <tr>
@@ -127,7 +147,7 @@ The headings are defined as follows:
     <td>Constraint infeasibility at current iterate</td>
   </tr>
   <tr>
-    <td>complement.</td>
+    <td>complem.</td>
     <td>Complementary slackness at current iterate (sᵀz)</td>
   </tr>
   <tr>
@@ -135,16 +155,24 @@ The headings are defined as follows:
     <td>Barrier parameter</td>
   </tr>
   <tr>
-    <td>reg</td>
-    <td>Iteration matrix regularization</td>
+    <td>δ</td>
+    <td>Iteration matrix regularization magnitude (δ in lhs + δI)</td>
   </tr>
   <tr>
-    <td>primal α</td>
-    <td>Primal step size</td>
+    <td>|p_pr|</td>
+    <td>Infinity norm of full primal step</td>
   </tr>
   <tr>
-    <td>dual α</td>
-    <td>Dual step size</td>
+    <td>|p_du|</td>
+    <td>Infinity norm of full dual step</td>
+  </tr>
+  <tr>
+    <td>α_pr</td>
+    <td>Primal step size α_pr ∈ [0, 1] that scales down the full primal step</td>
+  </tr>
+  <tr>
+    <td>α_du</td>
+    <td>Dual step size α_du ∈ [0, 1] that scales down the full dual step</td>
   </tr>
   <tr>
     <td>↩</td>
@@ -156,28 +184,56 @@ The headings are defined as follows:
 
 At the end of the solve, the solver prints a time trace of itself.
 ```
-┏━━━━━━━━━━━━━━━━━━━━━┯━━━━━━━━━━━━━━━━━━┯━━━━━━━━━━┯━━━━━━━━━┯━━━━┓
-┃    solver trace     │     percent      │total (ms)│each (ms)│runs┃
-┡━━━━━━━━━━━━━━━━━━━━━┷━━━━━━━━━━━━━━━━━━┷━━━━━━━━━━┷━━━━━━━━━┷━━━━┩
-│solver                100.00%▕█████████▏      0.058     0.058    1│
-│↳ setup                 5.17%▕▍        ▏      0.003     0.003    1│
-│↳ iteration            39.66%▕███▌     ▏      0.023     0.007    3│
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃     time trace           percentage       total      each    runs┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│solver                100.00%▕█████████▏      0.055     0.055    1│
+│↳ setup                 9.09%▕▊        ▏      0.005     0.005    1│
+│↳ iteration            38.18%▕███▍     ▏      0.021     0.007    3│
 │  ↳ feasibility check   0.00%▕         ▏      0.000     0.000    3│
 │  ↳ callbacks           0.00%▕         ▏      0.000     0.000    3│
-│  ↳ KKT matrix build    3.45%▕▎        ▏      0.002     0.000    3│
-│  ↳ KKT matrix decomp   6.90%▕▌        ▏      0.004     0.001    3│
-│  ↳ KKT system solve    1.72%▕▏        ▏      0.001     0.000    3│
-│  ↳ line search        13.79%▕█▏       ▏      0.008     0.002    3│
+│  ↳ KKT matrix build    3.64%▕▎        ▏      0.002     0.000    3│
+│  ↳ KKT matrix decomp   7.27%▕▋        ▏      0.004     0.001    3│
+│  ↳ KKT system solve    1.82%▕▏        ▏      0.001     0.000    3│
+│  ↳ line search        14.55%▕█▎       ▏      0.008     0.002    3│
 │    ↳ SOC               0.00%▕         ▏      0.000     0.000    0│
 │  ↳ feas. restoration   0.00%▕         ▏      0.000     0.000    0│
-│  ↳ f(x)                0.00%▕         ▏      0.000     0.000    7│
-│  ↳ ∇f(x)               3.45%▕▎        ▏      0.002     0.000    4│
-│  ↳ ∇²ₓₓL               1.72%▕▏        ▏      0.001     0.000    4│
+│  ↳ f(x)                0.00%▕         ▏      0.000     0.000    4│
+│  ↳ ∇f(x)               5.45%▕▍        ▏      0.003     0.000    4│
+│  ↳ ∇²ₓₓL               1.82%▕▏        ▏      0.001     0.000    4│
 │  ↳ ∇²ₓₓL_c             0.00%▕         ▏      0.000     0.000    0│
-│  ↳ cₑ(x)               1.72%▕▏        ▏      0.001     0.000    7│
+│  ↳ cₑ(x)               1.82%▕▏        ▏      0.001     0.000    4│
 │  ↳ ∂cₑ/∂x              0.00%▕         ▏      0.000     0.000    4│
 └──────────────────────────────────────────────────────────────────┘
 ```
+
+The headings are defined as follows:
+<table>
+  <tr>
+    <th>Heading</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td>time trace</td>
+    <td>Tree of solver steps</td>
+  </tr>
+  <tr>
+    <td>percentage</td>
+    <td>Percentage of solve time</td>
+  </tr>
+  <tr>
+    <td>total</td>
+    <td>Total time across all runs in milliseconds</td>
+  </tr>
+  <tr>
+    <td>each</td>
+    <td>Average time for each run in milliseconds</td>
+  </tr>
+  <tr>
+    <td>runs</td>
+    <td>Number of runs</td>
+  </tr>
+</table>
 
 The function evaluations are defined as follows:
 <table>

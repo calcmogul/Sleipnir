@@ -258,11 +258,12 @@ ExitStatus newton(
     inner_iter_profiler.stop();
 
     if (options.diagnostics) {
-      print_iteration_diagnostics(iterations, IterationType::NORMAL,
-                                  inner_iter_profiler.current_duration(), E_0,
-                                  f, Scalar(0), Scalar(0), Scalar(0),
-                                  solver.hessian_regularization(), α, α_max,
-                                  α_reduction_factor, Scalar(1));
+      print_iteration_diagnostics(
+          iterations, IterationType::NORMAL,
+          inner_iter_profiler.current_duration(), E_0, f, Scalar(0), Scalar(0),
+          Scalar(0), solver.hessian_regularization(),
+          p_x.template lpNorm<Eigen::Infinity>(), Scalar(1), α, α_max,
+          α_reduction_factor, Scalar(1));
     }
 
     ++iterations;

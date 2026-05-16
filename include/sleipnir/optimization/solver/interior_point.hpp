@@ -566,6 +566,10 @@ ExitStatus interior_point(
                   trial_c_e.template lpNorm<1>() +
                       (trial_c_i - trial_s).template lpNorm<1>(),
                   trial_s.dot(trial_z), μ, solver.hessian_regularization(),
+                  std::max(soc_step.p_x.template lpNorm<Eigen::Infinity>(),
+                           soc_step.p_s.template lpNorm<Eigen::Infinity>()),
+                  std::max(soc_step.p_y.template lpNorm<Eigen::Infinity>(),
+                           soc_step.p_z.template lpNorm<Eigen::Infinity>()),
                   α_soc, Scalar(1), α_reduction_factor, α_z_soc);
             }
           }};
@@ -795,8 +799,12 @@ ExitStatus interior_point(
                                      : IterationType::NORMAL,
           inner_iter_profiler.current_duration(), E_0, f,
           c_e.template lpNorm<1>() + (c_i - s).template lpNorm<1>(), s.dot(z),
-          μ, solver.hessian_regularization(), α, α_max, α_reduction_factor,
-          α_z);
+          μ, solver.hessian_regularization(),
+          std::max(step.p_x.template lpNorm<Eigen::Infinity>(),
+                   step.p_s.template lpNorm<Eigen::Infinity>()),
+          std::max(step.p_y.template lpNorm<Eigen::Infinity>(),
+                   step.p_z.template lpNorm<Eigen::Infinity>()),
+          α, α_max, α_reduction_factor, α_z);
     }
 
     ++iterations;
