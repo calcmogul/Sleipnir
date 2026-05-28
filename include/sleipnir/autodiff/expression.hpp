@@ -5,7 +5,6 @@
 #include <stdint.h>
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <memory>
 #include <numbers>
@@ -15,6 +14,7 @@
 #include <gch/small_vector.hpp>
 
 #include "sleipnir/autodiff/expression_type.hpp"
+#include "sleipnir/util/function_ref.hpp"
 #include "sleipnir/util/intrusive_shared_ptr.hpp"
 #include "sleipnir/util/pool.hpp"
 
@@ -25,7 +25,7 @@ namespace slp::detail {
 #ifdef _WIN32
 inline constexpr bool USE_POOL_ALLOCATOR = false;
 #else
-inline constexpr bool USE_POOL_ALLOCATOR = true;
+inline constexpr bool USE_POOL_ALLOCATOR = false;
 #endif
 
 template <typename Scalar>
@@ -49,6 +49,13 @@ using ExpressionPtr = IntrusiveSharedPtr<Expression<Scalar>>;
 /// @param args Constructor arguments for Expression.
 template <typename T, typename... Args>
 static ExpressionPtr<typename T::Scalar> make_expression_ptr(Args&&... args) {
+  // FIXME: Custom pool allocator is probably giving blocks of wrong size.
+  //
+  // Options to fix it:
+  //
+  // 1. Increase block size to fit binary expression
+  // 2. Make separate custom pools for nullary, unary, and binary expressions
+  // 3. Use polymorphic allocator to implement (2)
   if constexpr (USE_POOL_ALLOCATOR) {
     return allocate_intrusive_shared<T>(global_pool_allocator<T>(),
                                         std::forward<Args>(args)...);
@@ -100,9 +107,6 @@ struct Expression {
   /// generation.
   ExpressionPtr<Scalar> adjoint_expr;
 
-  /// Expression arguments.
-  std::array<ExpressionPtr<Scalar>, 2> args{nullptr, nullptr};
-
   /// Scratch space for various graph algorithms.
   ///
   /// In expression_graph.hpp's topological_sort(), scratch counts incoming
@@ -124,19 +128,6 @@ struct Expression {
   ///
   /// @param value The expression value.
   explicit constexpr Expression(Scalar value) : val{value} {}
-
-  /// Constructs an unary expression (an operator with one argument).
-  ///
-  /// @param lhs Unary operator's operand.
-  explicit constexpr Expression(ExpressionPtr<Scalar> lhs)
-      : args{std::move(lhs), nullptr} {}
-
-  /// Constructs a binary expression (an operator with two arguments).
-  ///
-  /// @param lhs Binary operator's left operand.
-  /// @param rhs Binary operator's right operand.
-  constexpr Expression(ExpressionPtr<Scalar> lhs, ExpressionPtr<Scalar> rhs)
-      : args{std::move(lhs), std::move(rhs)} {}
 
   virtual ~Expression() = default;
 
@@ -354,15 +345,19 @@ struct Expression {
     return lhs;
   }
 
+  /// Runs a function on each argument.
+  ///
+  /// @param func The function to run.
+  virtual void visit_args(
+      [[maybe_unused]] function_ref<void(Expression<Scalar>* arg)> func) const {
+  }
+
   /// Either nullary operator with no arguments, unary operator with one
   /// argument, or binary operator with two arguments. This operator is used to
   /// update the node's value.
   ///
-  /// @param lhs Left argument to binary operator.
-  /// @param rhs Right argument to binary operator.
   /// @return The node's value.
-  virtual Scalar value([[maybe_unused]] Scalar lhs,
-                       [[maybe_unused]] Scalar rhs) const = 0;
+  virtual Scalar value() const = 0;
 
   /// Returns the type of this expression (constant, linear, quadratic, or
   /// nonlinear).
@@ -375,47 +370,11 @@ struct Expression {
   /// @return The name of this expression.
   virtual std::string_view name() const = 0;
 
-  /// Returns ∂/∂l as a Scalar.
-  ///
-  /// @param lhs Left argument to binary operator.
-  /// @param rhs Right argument to binary operator.
-  /// @return ∂/∂l as a Scalar.
-  virtual Scalar grad_l([[maybe_unused]] Scalar lhs,
-                        [[maybe_unused]] Scalar rhs) const {
-    return Scalar(0);
-  }
+  /// Accumulates the child adjoints as Scalars.
+  virtual void accumulate_adjoints() const {}
 
-  /// Returns ∂/∂r as a Scalar.
-  ///
-  /// @param lhs Left argument to binary operator.
-  /// @param rhs Right argument to binary operator.
-  /// @return ∂/∂r as a Scalar.
-  virtual Scalar grad_r([[maybe_unused]] Scalar lhs,
-                        [[maybe_unused]] Scalar rhs) const {
-    return Scalar(0);
-  }
-
-  /// Returns ∂/∂l as an Expression.
-  ///
-  /// @param lhs Left argument to binary operator.
-  /// @param rhs Right argument to binary operator.
-  /// @return ∂/∂l as an Expression.
-  virtual ExpressionPtr<Scalar> grad_expr_l(
-      [[maybe_unused]] const ExpressionPtr<Scalar>& lhs,
-      [[maybe_unused]] const ExpressionPtr<Scalar>& rhs) const {
-    return constant_ptr(Scalar(0));
-  }
-
-  /// Returns ∂/∂r as an Expression.
-  ///
-  /// @param lhs Left argument to binary operator.
-  /// @param rhs Right argument to binary operator.
-  /// @return ∂/∂r as an Expression.
-  virtual ExpressionPtr<Scalar> grad_expr_r(
-      [[maybe_unused]] const ExpressionPtr<Scalar>& lhs,
-      [[maybe_unused]] const ExpressionPtr<Scalar>& rhs) const {
-    return constant_ptr(Scalar(0));
-  }
+  /// Accumulates the child adjoints as Expressions.
+  virtual void accumulate_adjoints_expr() const {}
 };
 
 template <typename Scalar>
@@ -440,35 +399,62 @@ ExpressionPtr<Scalar> sqrt(const ExpressionPtr<Scalar>& x);
 /// @tparam T Expression type.
 template <typename Scalar, ExpressionType T>
 struct BinaryMinusExpression final : Expression<Scalar> {
+  /// Binary operator's left operand.
+  ExpressionPtr<Scalar> lhs;
+
+  /// Binary operator's right operand.
+  ExpressionPtr<Scalar> rhs;
+
   /// Constructs a binary expression (an operator with two arguments).
   ///
   /// @param lhs Binary operator's left operand.
   /// @param rhs Binary operator's right operand.
   constexpr BinaryMinusExpression(ExpressionPtr<Scalar> lhs,
                                   ExpressionPtr<Scalar> rhs)
-      : Expression<Scalar>{std::move(lhs), std::move(rhs)} {}
+      : lhs{std::move(lhs)}, rhs{std::move(rhs)} {}
 
-  Scalar value(Scalar lhs, Scalar rhs) const override { return lhs - rhs; }
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(lhs.get());
+    func(rhs.get());
+  }
+
+  Scalar value() const override { return lhs->val - rhs->val; }
 
   ExpressionType type() const override { return T; }
 
   std::string_view name() const override { return "binary minus"; }
 
-  Scalar grad_l(Scalar, Scalar) const override { return this->adjoint; }
-
-  Scalar grad_r(Scalar, Scalar) const override { return -this->adjoint; }
-
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>&,
-      const ExpressionPtr<Scalar>&) const override {
-    return this->adjoint_expr;
+  void accumulate_adjoints() const override {
+    lhs->adjoint += grad_l();
+    rhs->adjoint += grad_r();
   }
 
-  ExpressionPtr<Scalar> grad_expr_r(
-      const ExpressionPtr<Scalar>&,
-      const ExpressionPtr<Scalar>&) const override {
-    return -this->adjoint_expr;
+  void accumulate_adjoints_expr() const override {
+    lhs->adjoint_expr += grad_expr_l();
+    rhs->adjoint_expr += grad_expr_r();
   }
+
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const { return this->adjoint; }
+
+  /// Returns ∂/∂r as a Scalar.
+  ///
+  /// @return ∂/∂r as a Scalar.
+  Scalar grad_r() const { return -this->adjoint; }
+
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const { return this->adjoint_expr; }
+
+  /// Returns ∂/∂r as an Expression.
+  ///
+  /// @return ∂/∂r as an Expression.
+  ExpressionPtr<Scalar> grad_expr_r() const { return -this->adjoint_expr; }
 };
 
 /// Derived expression type for binary plus operator.
@@ -477,35 +463,62 @@ struct BinaryMinusExpression final : Expression<Scalar> {
 /// @tparam T Expression type.
 template <typename Scalar, ExpressionType T>
 struct BinaryPlusExpression final : Expression<Scalar> {
+  /// @param lhs Binary operator's left operand.
+  ExpressionPtr<Scalar> lhs;
+
+  /// @param rhs Binary operator's right operand.
+  ExpressionPtr<Scalar> rhs;
+
   /// Constructs a binary expression (an operator with two arguments).
   ///
   /// @param lhs Binary operator's left operand.
   /// @param rhs Binary operator's right operand.
   constexpr BinaryPlusExpression(ExpressionPtr<Scalar> lhs,
                                  ExpressionPtr<Scalar> rhs)
-      : Expression<Scalar>{std::move(lhs), std::move(rhs)} {}
+      : lhs{std::move(lhs)}, rhs{std::move(rhs)} {}
 
-  Scalar value(Scalar lhs, Scalar rhs) const override { return lhs + rhs; }
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(lhs.get());
+    func(rhs.get());
+  }
+
+  Scalar value() const override { return lhs->val + rhs->val; }
 
   ExpressionType type() const override { return T; }
 
   std::string_view name() const override { return "binary plus"; }
 
-  Scalar grad_l(Scalar, Scalar) const override { return this->adjoint; }
-
-  Scalar grad_r(Scalar, Scalar) const override { return this->adjoint; }
-
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>&,
-      const ExpressionPtr<Scalar>&) const override {
-    return this->adjoint_expr;
+  void accumulate_adjoints() const override {
+    lhs->adjoint += grad_l();
+    rhs->adjoint += grad_r();
   }
 
-  ExpressionPtr<Scalar> grad_expr_r(
-      const ExpressionPtr<Scalar>&,
-      const ExpressionPtr<Scalar>&) const override {
-    return this->adjoint_expr;
+  void accumulate_adjoints_expr() const override {
+    lhs->adjoint_expr += grad_expr_l();
+    rhs->adjoint_expr += grad_expr_r();
   }
+
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const { return this->adjoint; }
+
+  /// Returns ∂/∂r as a Scalar.
+  ///
+  /// @return ∂/∂r as a Scalar.
+  Scalar grad_r() const { return this->adjoint; }
+
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const { return this->adjoint_expr; }
+
+  /// Returns ∂/∂r as an Expression.
+  ///
+  /// @return ∂/∂r as an Expression.
+  ExpressionPtr<Scalar> grad_expr_r() const { return this->adjoint_expr; }
 };
 
 /// Derived expression type for cbrt().
@@ -513,31 +526,50 @@ struct BinaryPlusExpression final : Expression<Scalar> {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct CbrtExpression final : Expression<Scalar> {
+  /// Unary operator's operand.
+  ExpressionPtr<Scalar> x;
+
   /// Constructs an unary expression (an operator with one argument).
   ///
-  /// @param lhs Unary operator's operand.
-  explicit constexpr CbrtExpression(ExpressionPtr<Scalar> lhs)
-      : Expression<Scalar>{std::move(lhs)} {}
+  /// @param x Unary operator's operand.
+  explicit constexpr CbrtExpression(ExpressionPtr<Scalar> x)
+      : x{std::move(x)} {}
 
-  Scalar value(Scalar x, Scalar) const override {
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(x.get());
+  }
+
+  Scalar value() const override {
     using std::cbrt;
-    return cbrt(x);
+    return cbrt(x->val);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "cbrt"; }
 
-  Scalar grad_l(Scalar x, Scalar) const override {
+  void accumulate_adjoints() const override { x->adjoint += grad_l(); }
+
+  void accumulate_adjoints_expr() const override {
+    x->adjoint_expr += grad_expr_l();
+  }
+
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const {
     using std::cbrt;
 
-    Scalar c = cbrt(x);
+    Scalar c = cbrt(x->val);
     return this->adjoint / (Scalar(3) * c * c);
   }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>& x,
-      const ExpressionPtr<Scalar>&) const override {
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const {
     auto c = cbrt(x);
     return this->adjoint_expr / (constant_ptr(Scalar(3)) * c * c);
   }
@@ -578,7 +610,7 @@ struct ConstantExpression final : Expression<Scalar> {
   explicit constexpr ConstantExpression(Scalar value)
       : Expression<Scalar>{value} {}
 
-  Scalar value(Scalar, Scalar) const override { return this->val; }
+  Scalar value() const override { return this->val; }
 
   ExpressionType type() const override { return ExpressionType::CONSTANT; }
 
@@ -599,7 +631,7 @@ struct DecisionVariableExpression final : Expression<Scalar> {
   explicit constexpr DecisionVariableExpression(Scalar value)
       : Expression<Scalar>{value} {}
 
-  Scalar value(Scalar, Scalar) const override { return this->val; }
+  Scalar value() const override { return this->val; }
 
   ExpressionType type() const override { return ExpressionType::LINEAR; }
 
@@ -612,36 +644,63 @@ struct DecisionVariableExpression final : Expression<Scalar> {
 /// @tparam T Expression type.
 template <typename Scalar, ExpressionType T>
 struct DivExpression final : Expression<Scalar> {
+  /// @param lhs Binary operator's left operand.
+  ExpressionPtr<Scalar> lhs;
+
+  /// @param rhs Binary operator's right operand.
+  ExpressionPtr<Scalar> rhs;
+
   /// Constructs a binary expression (an operator with two arguments).
   ///
   /// @param lhs Binary operator's left operand.
   /// @param rhs Binary operator's right operand.
   constexpr DivExpression(ExpressionPtr<Scalar> lhs, ExpressionPtr<Scalar> rhs)
-      : Expression<Scalar>{std::move(lhs), std::move(rhs)} {}
+      : lhs{std::move(lhs)}, rhs{std::move(rhs)} {}
 
-  Scalar value(Scalar lhs, Scalar rhs) const override { return lhs / rhs; }
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(lhs.get());
+    func(rhs.get());
+  }
+
+  Scalar value() const override { return lhs->val / rhs->val; }
 
   ExpressionType type() const override { return T; }
 
   std::string_view name() const override { return "division"; }
 
-  Scalar grad_l(Scalar, Scalar rhs) const override {
-    return this->adjoint / rhs;
-  };
-
-  Scalar grad_r(Scalar lhs, Scalar rhs) const override {
-    return this->adjoint * -lhs / (rhs * rhs);
+  void accumulate_adjoints() const override {
+    lhs->adjoint += grad_l();
+    rhs->adjoint += grad_r();
   }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>&,
-      const ExpressionPtr<Scalar>& rhs) const override {
-    return this->adjoint_expr / rhs;
+  void accumulate_adjoints_expr() const override {
+    lhs->adjoint_expr += grad_expr_l();
+    rhs->adjoint_expr += grad_expr_r();
   }
 
-  ExpressionPtr<Scalar> grad_expr_r(
-      const ExpressionPtr<Scalar>& lhs,
-      const ExpressionPtr<Scalar>& rhs) const override {
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const { return this->adjoint / rhs->val; };
+
+  /// Returns ∂/∂r as a Scalar.
+  ///
+  /// @return ∂/∂r as a Scalar.
+  Scalar grad_r() const {
+    return this->adjoint * -lhs->val / (rhs->val * rhs->val);
+  }
+
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const { return this->adjoint_expr / rhs; }
+
+  /// Returns ∂/∂r as an Expression.
+  ///
+  /// @return ∂/∂r as an Expression.
+  ExpressionPtr<Scalar> grad_expr_r() const {
     return this->adjoint_expr * -lhs / (rhs * rhs);
   }
 };
@@ -652,38 +711,61 @@ struct DivExpression final : Expression<Scalar> {
 /// @tparam T Expression type.
 template <typename Scalar, ExpressionType T>
 struct MultExpression final : Expression<Scalar> {
+  /// @param lhs Binary operator's left operand.
+  ExpressionPtr<Scalar> lhs;
+
+  /// @param rhs Binary operator's right operand.
+  ExpressionPtr<Scalar> rhs;
+
   /// Constructs a binary expression (an operator with two arguments).
   ///
   /// @param lhs Binary operator's left operand.
   /// @param rhs Binary operator's right operand.
   constexpr MultExpression(ExpressionPtr<Scalar> lhs, ExpressionPtr<Scalar> rhs)
-      : Expression<Scalar>{std::move(lhs), std::move(rhs)} {}
+      : lhs{std::move(lhs)}, rhs{std::move(rhs)} {}
 
-  Scalar value(Scalar lhs, Scalar rhs) const override { return lhs * rhs; }
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(lhs.get());
+    func(rhs.get());
+  }
+
+  Scalar value() const override { return lhs->val * rhs->val; }
 
   ExpressionType type() const override { return T; }
 
   std::string_view name() const override { return "multiplication"; }
 
-  Scalar grad_l([[maybe_unused]] Scalar lhs, Scalar rhs) const override {
-    return this->adjoint * rhs;
+  void accumulate_adjoints() const override {
+    lhs->adjoint += grad_l();
+    rhs->adjoint += grad_r();
   }
 
-  Scalar grad_r(Scalar lhs, [[maybe_unused]] Scalar rhs) const override {
-    return this->adjoint * lhs;
+  void accumulate_adjoints_expr() const override {
+    lhs->adjoint_expr += grad_expr_l();
+    rhs->adjoint_expr += grad_expr_r();
   }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      [[maybe_unused]] const ExpressionPtr<Scalar>& lhs,
-      const ExpressionPtr<Scalar>& rhs) const override {
-    return this->adjoint_expr * rhs;
-  }
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const { return this->adjoint * rhs->val; }
 
-  ExpressionPtr<Scalar> grad_expr_r(
-      const ExpressionPtr<Scalar>& lhs,
-      [[maybe_unused]] const ExpressionPtr<Scalar>& rhs) const override {
-    return this->adjoint_expr * lhs;
-  }
+  /// Returns ∂/∂r as a Scalar.
+  ///
+  /// @return ∂/∂r as a Scalar.
+  Scalar grad_r() const { return this->adjoint * lhs->val; }
+
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const { return this->adjoint_expr * rhs; }
+
+  /// Returns ∂/∂r as an Expression.
+  ///
+  /// @return ∂/∂r as an Expression.
+  ExpressionPtr<Scalar> grad_expr_r() const { return this->adjoint_expr * lhs; }
 };
 
 /// Derived expression type for unary minus operator.
@@ -692,25 +774,42 @@ struct MultExpression final : Expression<Scalar> {
 /// @tparam T Expression type.
 template <typename Scalar, ExpressionType T>
 struct UnaryMinusExpression final : Expression<Scalar> {
+  /// Unary operator's operand.
+  ExpressionPtr<Scalar> lhs;
+
   /// Constructs an unary expression (an operator with one argument).
   ///
   /// @param lhs Unary operator's operand.
   explicit constexpr UnaryMinusExpression(ExpressionPtr<Scalar> lhs)
-      : Expression<Scalar>{std::move(lhs)} {}
+      : lhs{std::move(lhs)} {}
 
-  Scalar value(Scalar lhs, Scalar) const override { return -lhs; }
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(lhs.get());
+  }
+
+  Scalar value() const override { return -lhs->val; }
 
   ExpressionType type() const override { return T; }
 
   std::string_view name() const override { return "unary minus"; }
 
-  Scalar grad_l(Scalar, Scalar) const override { return -this->adjoint; }
+  void accumulate_adjoints() const override { lhs->adjoint += grad_l(); }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>&,
-      const ExpressionPtr<Scalar>&) const override {
-    return -this->adjoint_expr;
+  void accumulate_adjoints_expr() const override {
+    lhs->adjoint_expr += grad_expr_l();
   }
+
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const { return -this->adjoint; }
+
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const { return -this->adjoint_expr; }
 };
 
 /// Refcount increment for intrusive shared pointer.
@@ -745,11 +844,7 @@ constexpr void dec_ref_count(Expression<Scalar>* expr) {
       if (elem->adjoint_expr != nullptr) {
         stack.emplace_back(elem->adjoint_expr.get());
       }
-      for (auto& arg : elem->args) {
-        if (arg != nullptr) {
-          stack.emplace_back(arg.get());
-        }
-      }
+      elem->visit_args([&stack](const auto& arg) { stack.emplace_back(arg); });
 
       // Not calling the destructor here is safe because it only decrements
       // refcounts, which was already done above.
@@ -769,34 +864,52 @@ constexpr void dec_ref_count(Expression<Scalar>* expr) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct AbsExpression final : Expression<Scalar> {
+  /// Unary operator's operand.
+  ExpressionPtr<Scalar> x;
+
   /// Constructs an unary expression (an operator with one argument).
   ///
-  /// @param lhs Unary operator's operand.
-  explicit constexpr AbsExpression(ExpressionPtr<Scalar> lhs)
-      : Expression<Scalar>{std::move(lhs)} {}
+  /// @param x Unary operator's operand.
+  explicit constexpr AbsExpression(ExpressionPtr<Scalar> x) : x{std::move(x)} {}
 
-  Scalar value(Scalar x, Scalar) const override {
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(x.get());
+  }
+
+  Scalar value() const override {
     using std::abs;
-    return abs(x);
+    return abs(x->val);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "abs"; }
 
-  Scalar grad_l(Scalar x, Scalar) const override {
-    if (x < Scalar(0)) {
+  void accumulate_adjoints() const override { x->adjoint += grad_l(); }
+
+  void accumulate_adjoints_expr() const override {
+    x->adjoint_expr += grad_expr_l();
+  }
+
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const {
+    if (x->val < Scalar(0)) {
       return -this->adjoint;
-    } else if (x > Scalar(0)) {
+    } else if (x->val > Scalar(0)) {
       return this->adjoint;
     } else {
       return Scalar(0);
     }
   }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>& x,
-      const ExpressionPtr<Scalar>&) const override {
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const {
     if (x->val < Scalar(0)) {
       return -this->adjoint_expr;
     } else if (x->val > Scalar(0)) {
@@ -835,29 +948,48 @@ ExpressionPtr<Scalar> abs(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct AcosExpression final : Expression<Scalar> {
+  /// Unary operator's operand.
+  ExpressionPtr<Scalar> x;
+
   /// Constructs an unary expression (an operator with one argument).
   ///
-  /// @param lhs Unary operator's operand.
-  explicit constexpr AcosExpression(ExpressionPtr<Scalar> lhs)
-      : Expression<Scalar>{std::move(lhs)} {}
+  /// @param x Unary operator's operand.
+  explicit constexpr AcosExpression(ExpressionPtr<Scalar> x)
+      : x{std::move(x)} {}
 
-  Scalar value(Scalar x, Scalar) const override {
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(x.get());
+  }
+
+  Scalar value() const override {
     using std::acos;
-    return acos(x);
+    return acos(x->val);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "acos"; }
 
-  Scalar grad_l(Scalar x, Scalar) const override {
-    using std::sqrt;
-    return -this->adjoint / sqrt(Scalar(1) - x * x);
+  void accumulate_adjoints() const override { x->adjoint += grad_l(); }
+
+  void accumulate_adjoints_expr() const override {
+    x->adjoint_expr += grad_expr_l();
   }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>& x,
-      const ExpressionPtr<Scalar>&) const override {
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const {
+    using std::sqrt;
+    return -this->adjoint / sqrt(Scalar(1) - x->val * x->val);
+  }
+
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const {
     return -this->adjoint_expr / sqrt(constant_ptr(Scalar(1)) - x * x);
   }
 };
@@ -889,29 +1021,48 @@ ExpressionPtr<Scalar> acos(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct AsinExpression final : Expression<Scalar> {
+  /// Unary operator's operand.
+  ExpressionPtr<Scalar> x;
+
   /// Constructs an unary expression (an operator with one argument).
   ///
-  /// @param lhs Unary operator's operand.
-  explicit constexpr AsinExpression(ExpressionPtr<Scalar> lhs)
-      : Expression<Scalar>{std::move(lhs)} {}
+  /// @param x Unary operator's operand.
+  explicit constexpr AsinExpression(ExpressionPtr<Scalar> x)
+      : x{std::move(x)} {}
 
-  Scalar value(Scalar x, Scalar) const override {
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(x.get());
+  }
+
+  Scalar value() const override {
     using std::asin;
-    return asin(x);
+    return asin(x->val);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "asin"; }
 
-  Scalar grad_l(Scalar x, Scalar) const override {
-    using std::sqrt;
-    return this->adjoint / sqrt(Scalar(1) - x * x);
+  void accumulate_adjoints() const override { x->adjoint += grad_l(); }
+
+  void accumulate_adjoints_expr() const override {
+    x->adjoint_expr += grad_expr_l();
   }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>& x,
-      const ExpressionPtr<Scalar>&) const override {
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const {
+    using std::sqrt;
+    return this->adjoint / sqrt(Scalar(1) - x->val * x->val);
+  }
+
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const {
     return this->adjoint_expr / sqrt(constant_ptr(Scalar(1)) - x * x);
   }
 };
@@ -944,28 +1095,47 @@ ExpressionPtr<Scalar> asin(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct AtanExpression final : Expression<Scalar> {
+  /// Unary operator's operand.
+  ExpressionPtr<Scalar> x;
+
   /// Constructs an unary expression (an operator with one argument).
   ///
-  /// @param lhs Unary operator's operand.
-  explicit constexpr AtanExpression(ExpressionPtr<Scalar> lhs)
-      : Expression<Scalar>{std::move(lhs)} {}
+  /// @param x Unary operator's operand.
+  explicit constexpr AtanExpression(ExpressionPtr<Scalar> x)
+      : x{std::move(x)} {}
 
-  Scalar value(Scalar x, Scalar) const override {
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(x.get());
+  }
+
+  Scalar value() const override {
     using std::atan;
-    return atan(x);
+    return atan(x->val);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "atan"; }
 
-  Scalar grad_l(Scalar x, Scalar) const override {
-    return this->adjoint / (Scalar(1) + x * x);
+  void accumulate_adjoints() const override { x->adjoint += grad_l(); }
+
+  void accumulate_adjoints_expr() const override {
+    x->adjoint_expr += grad_expr_l();
   }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>& x,
-      const ExpressionPtr<Scalar>&) const override {
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const {
+    return this->adjoint / (Scalar(1) + x->val * x->val);
+  }
+
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const {
     return this->adjoint_expr / (constant_ptr(Scalar(1)) + x * x);
   }
 };
@@ -998,40 +1168,70 @@ ExpressionPtr<Scalar> atan(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct Atan2Expression final : Expression<Scalar> {
+  /// Binary operator's left operand.
+  ExpressionPtr<Scalar> y;
+
+  /// Binary operator's right operand.
+  ExpressionPtr<Scalar> x;
+
   /// Constructs a binary expression (an operator with two arguments).
   ///
-  /// @param lhs Binary operator's left operand.
-  /// @param rhs Binary operator's right operand.
-  constexpr Atan2Expression(ExpressionPtr<Scalar> lhs,
-                            ExpressionPtr<Scalar> rhs)
-      : Expression<Scalar>{std::move(lhs), std::move(rhs)} {}
+  /// @param y Binary operator's left operand.
+  /// @param x Binary operator's right operand.
+  constexpr Atan2Expression(ExpressionPtr<Scalar> y, ExpressionPtr<Scalar> x)
+      : y{std::move(y)}, x{std::move(x)} {}
 
-  Scalar value(Scalar y, Scalar x) const override {
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(y.get());
+    func(x.get());
+  }
+
+  Scalar value() const override {
     using std::atan2;
-    return atan2(y, x);
+    return atan2(y->val, x->val);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "atan2"; }
 
-  Scalar grad_l(Scalar y, Scalar x) const override {
-    return this->adjoint * x / (y * y + x * x);
+  void accumulate_adjoints() const override {
+    y->adjoint += grad_l();
+    x->adjoint += grad_r();
   }
 
-  Scalar grad_r(Scalar y, Scalar x) const override {
-    return this->adjoint * -y / (y * y + x * x);
+  void accumulate_adjoints_expr() const override {
+    y->adjoint_expr += grad_expr_l();
+    x->adjoint_expr += grad_expr_r();
   }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>& y,
-      const ExpressionPtr<Scalar>& x) const override {
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const {
+    return this->adjoint * x->val / (y->val * y->val + x->val * x->val);
+  }
+
+  /// Returns ∂/∂r as a Scalar.
+  ///
+  /// @return ∂/∂r as a Scalar.
+  Scalar grad_r() const {
+    return this->adjoint * -y->val / (y->val * y->val + x->val * x->val);
+  }
+
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const {
     return this->adjoint_expr * x / (y * y + x * x);
   }
 
-  ExpressionPtr<Scalar> grad_expr_r(
-      const ExpressionPtr<Scalar>& y,
-      const ExpressionPtr<Scalar>& x) const override {
+  /// Returns ∂/∂r as an Expression.
+  ///
+  /// @return ∂/∂r as an Expression.
+  ExpressionPtr<Scalar> grad_expr_r() const {
     return this->adjoint_expr * -y / (y * y + x * x);
   }
 };
@@ -1068,29 +1268,47 @@ ExpressionPtr<Scalar> atan2(const ExpressionPtr<Scalar>& y,
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct CosExpression final : Expression<Scalar> {
+  /// Unary operator's operand.
+  ExpressionPtr<Scalar> x;
+
   /// Constructs an unary expression (an operator with one argument).
   ///
-  /// @param lhs Unary operator's operand.
-  explicit constexpr CosExpression(ExpressionPtr<Scalar> lhs)
-      : Expression<Scalar>{std::move(lhs)} {}
+  /// @param x Unary operator's operand.
+  explicit constexpr CosExpression(ExpressionPtr<Scalar> x) : x{std::move(x)} {}
 
-  Scalar value(Scalar x, Scalar) const override {
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(x.get());
+  }
+
+  Scalar value() const override {
     using std::cos;
-    return cos(x);
+    return cos(x->val);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "cos"; }
 
-  Scalar grad_l(Scalar x, Scalar) const override {
-    using std::sin;
-    return this->adjoint * -sin(x);
+  void accumulate_adjoints() const override { x->adjoint += grad_l(); }
+
+  void accumulate_adjoints_expr() const override {
+    x->adjoint_expr += grad_expr_l();
   }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>& x,
-      const ExpressionPtr<Scalar>&) const override {
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const {
+    using std::sin;
+    return this->adjoint * -sin(x->val);
+  }
+
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const {
     return this->adjoint_expr * -sin(x);
   }
 };
@@ -1122,29 +1340,48 @@ ExpressionPtr<Scalar> cos(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct CoshExpression final : Expression<Scalar> {
+  /// Unary operator's operand.
+  ExpressionPtr<Scalar> x;
+
   /// Constructs an unary expression (an operator with one argument).
   ///
-  /// @param lhs Unary operator's operand.
-  explicit constexpr CoshExpression(ExpressionPtr<Scalar> lhs)
-      : Expression<Scalar>{std::move(lhs)} {}
+  /// @param x Unary operator's operand.
+  explicit constexpr CoshExpression(ExpressionPtr<Scalar> x)
+      : x{std::move(x)} {}
 
-  Scalar value(Scalar x, Scalar) const override {
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(x.get());
+  }
+
+  Scalar value() const override {
     using std::cosh;
-    return cosh(x);
+    return cosh(x->val);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "cosh"; }
 
-  Scalar grad_l(Scalar x, Scalar) const override {
-    using std::sinh;
-    return this->adjoint * sinh(x);
+  void accumulate_adjoints() const override { x->adjoint += grad_l(); }
+
+  void accumulate_adjoints_expr() const override {
+    x->adjoint_expr += grad_expr_l();
   }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>& x,
-      const ExpressionPtr<Scalar>&) const override {
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const {
+    using std::sinh;
+    return this->adjoint * sinh(x->val);
+  }
+
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const {
     return this->adjoint_expr * sinh(x);
   }
 };
@@ -1176,29 +1413,48 @@ ExpressionPtr<Scalar> cosh(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct ErfExpression final : Expression<Scalar> {
+  /// Unary operator's operand.
+  ExpressionPtr<Scalar> x;
+
   /// Constructs an unary expression (an operator with one argument).
   ///
-  /// @param lhs Unary operator's operand.
-  explicit constexpr ErfExpression(ExpressionPtr<Scalar> lhs)
-      : Expression<Scalar>{std::move(lhs)} {}
+  /// @param x Unary operator's operand.
+  explicit constexpr ErfExpression(ExpressionPtr<Scalar> x) : x{std::move(x)} {}
 
-  Scalar value(Scalar x, Scalar) const override {
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(x.get());
+  }
+
+  Scalar value() const override {
     using std::erf;
-    return erf(x);
+    return erf(x->val);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "erf"; }
 
-  Scalar grad_l(Scalar x, Scalar) const override {
-    using std::exp;
-    return this->adjoint * Scalar(2.0 * std::numbers::inv_sqrtpi) * exp(-x * x);
+  void accumulate_adjoints() const override { x->adjoint += grad_l(); }
+
+  void accumulate_adjoints_expr() const override {
+    x->adjoint_expr += grad_expr_l();
   }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>& x,
-      const ExpressionPtr<Scalar>&) const override {
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const {
+    using std::exp;
+    return this->adjoint * Scalar(2.0 * std::numbers::inv_sqrtpi) *
+           exp(-x->val * x->val);
+  }
+
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const {
     return this->adjoint_expr *
            constant_ptr(Scalar(2.0 * std::numbers::inv_sqrtpi)) * exp(-x * x);
   }
@@ -1232,29 +1488,47 @@ ExpressionPtr<Scalar> erf(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct ExpExpression final : Expression<Scalar> {
+  /// Unary operator's operand.
+  ExpressionPtr<Scalar> x;
+
   /// Constructs an unary expression (an operator with one argument).
   ///
-  /// @param lhs Unary operator's operand.
-  explicit constexpr ExpExpression(ExpressionPtr<Scalar> lhs)
-      : Expression<Scalar>{std::move(lhs)} {}
+  /// @param x Unary operator's operand.
+  explicit constexpr ExpExpression(ExpressionPtr<Scalar> x) : x{std::move(x)} {}
 
-  Scalar value(Scalar x, Scalar) const override {
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(x.get());
+  }
+
+  Scalar value() const override {
     using std::exp;
-    return exp(x);
+    return exp(x->val);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "exp"; }
 
-  Scalar grad_l(Scalar x, Scalar) const override {
-    using std::exp;
-    return this->adjoint * exp(x);
+  void accumulate_adjoints() const override { x->adjoint += grad_l(); }
+
+  void accumulate_adjoints_expr() const override {
+    x->adjoint_expr += grad_expr_l();
   }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>& x,
-      const ExpressionPtr<Scalar>&) const override {
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const {
+    using std::exp;
+    return this->adjoint * exp(x->val);
+  }
+
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const {
     return this->adjoint_expr * exp(x);
   }
 };
@@ -1290,42 +1564,72 @@ ExpressionPtr<Scalar> hypot(const ExpressionPtr<Scalar>& x,
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct HypotExpression final : Expression<Scalar> {
+  /// Binary operator's left operand.
+  ExpressionPtr<Scalar> x;
+
+  /// Binary operator's right operand.
+  ExpressionPtr<Scalar> y;
+
   /// Constructs a binary expression (an operator with two arguments).
   ///
-  /// @param lhs Binary operator's left operand.
-  /// @param rhs Binary operator's right operand.
-  constexpr HypotExpression(ExpressionPtr<Scalar> lhs,
-                            ExpressionPtr<Scalar> rhs)
-      : Expression<Scalar>{std::move(lhs), std::move(rhs)} {}
+  /// @param x Binary operator's left operand.
+  /// @param y Binary operator's right operand.
+  constexpr HypotExpression(ExpressionPtr<Scalar> x, ExpressionPtr<Scalar> y)
+      : x{std::move(x)}, y{std::move(y)} {}
 
-  Scalar value(Scalar x, Scalar y) const override {
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(x.get());
+    func(y.get());
+  }
+
+  Scalar value() const override {
     using std::hypot;
-    return hypot(x, y);
+    return hypot(x->val, y->val);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "hypot"; }
 
-  Scalar grad_l(Scalar x, Scalar y) const override {
-    using std::hypot;
-    return this->adjoint * x / hypot(x, y);
+  void accumulate_adjoints() const override {
+    x->adjoint += grad_l();
+    y->adjoint += grad_r();
   }
 
-  Scalar grad_r(Scalar x, Scalar y) const override {
-    using std::hypot;
-    return this->adjoint * y / hypot(x, y);
+  void accumulate_adjoints_expr() const override {
+    x->adjoint_expr += grad_expr_l();
+    y->adjoint_expr += grad_expr_r();
   }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>& x,
-      const ExpressionPtr<Scalar>& y) const override {
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const {
+    using std::hypot;
+    return this->adjoint * x->val / hypot(x->val, y->val);
+  }
+
+  /// Returns ∂/∂r as a Scalar.
+  ///
+  /// @return ∂/∂r as a Scalar.
+  Scalar grad_r() const {
+    using std::hypot;
+    return this->adjoint * y->val / hypot(x->val, y->val);
+  }
+
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const {
     return this->adjoint_expr * x / hypot(x, y);
   }
 
-  ExpressionPtr<Scalar> grad_expr_r(
-      const ExpressionPtr<Scalar>& x,
-      const ExpressionPtr<Scalar>& y) const override {
+  /// Returns ∂/∂r as an Expression.
+  ///
+  /// @return ∂/∂r as an Expression.
+  ExpressionPtr<Scalar> grad_expr_r() const {
     return this->adjoint_expr * y / hypot(x, y);
   }
 };
@@ -1361,28 +1665,44 @@ ExpressionPtr<Scalar> hypot(const ExpressionPtr<Scalar>& x,
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct LogExpression final : Expression<Scalar> {
+  /// Unary operator's operand.
+  ExpressionPtr<Scalar> x;
+
   /// Constructs an unary expression (an operator with one argument).
   ///
-  /// @param lhs Unary operator's operand.
-  explicit constexpr LogExpression(ExpressionPtr<Scalar> lhs)
-      : Expression<Scalar>{std::move(lhs)} {}
+  /// @param x Unary operator's operand.
+  explicit constexpr LogExpression(ExpressionPtr<Scalar> x) : x{std::move(x)} {}
 
-  Scalar value(Scalar x, Scalar) const override {
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(x.get());
+  }
+
+  Scalar value() const override {
     using std::log;
-    return log(x);
+    return log(x->val);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "log"; }
 
-  Scalar grad_l(Scalar x, Scalar) const override { return this->adjoint / x; }
+  void accumulate_adjoints() const override { x->adjoint += grad_l(); }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>& x,
-      const ExpressionPtr<Scalar>&) const override {
-    return this->adjoint_expr / x;
+  void accumulate_adjoints_expr() const override {
+    x->adjoint_expr += grad_expr_l();
   }
+
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const { return this->adjoint / x->val; }
+
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const { return this->adjoint_expr / x; }
 };
 
 /// log() for Expressions.
@@ -1413,28 +1733,47 @@ ExpressionPtr<Scalar> log(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct Log10Expression final : Expression<Scalar> {
+  /// Unary operator's operand.
+  ExpressionPtr<Scalar> x;
+
   /// Constructs an unary expression (an operator with one argument).
   ///
-  /// @param lhs Unary operator's operand.
-  explicit constexpr Log10Expression(ExpressionPtr<Scalar> lhs)
-      : Expression<Scalar>{std::move(lhs)} {}
+  /// @param x Unary operator's operand.
+  explicit constexpr Log10Expression(ExpressionPtr<Scalar> x)
+      : x{std::move(x)} {}
 
-  Scalar value(Scalar x, Scalar) const override {
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(x.get());
+  }
+
+  Scalar value() const override {
     using std::log10;
-    return log10(x);
+    return log10(x->val);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "log10"; }
 
-  Scalar grad_l(Scalar x, Scalar) const override {
-    return this->adjoint / (Scalar(std::numbers::ln10) * x);
+  void accumulate_adjoints() const override { x->adjoint += grad_l(); }
+
+  void accumulate_adjoints_expr() const override {
+    x->adjoint_expr += grad_expr_l();
   }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>& x,
-      const ExpressionPtr<Scalar>&) const override {
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const {
+    return this->adjoint / (Scalar(std::numbers::ln10) * x->val);
+  }
+
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const {
     return this->adjoint_expr / (constant_ptr(Scalar(std::numbers::ln10)) * x);
   }
 };
@@ -1469,41 +1808,71 @@ ExpressionPtr<Scalar> log10(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct MaxExpression final : Expression<Scalar> {
+  /// Binary operator's left operand.
+  ExpressionPtr<Scalar> a;
+
+  /// Binary operator's right operand.
+  ExpressionPtr<Scalar> b;
+
   /// Constructs a binary expression (an operator with two arguments).
   ///
-  /// @param lhs Binary operator's left operand.
-  /// @param rhs Binary operator's right operand.
-  constexpr MaxExpression(ExpressionPtr<Scalar> lhs, ExpressionPtr<Scalar> rhs)
-      : Expression<Scalar>{std::move(lhs), std::move(rhs)} {}
+  /// @param a Binary operator's left operand.
+  /// @param b Binary operator's right operand.
+  constexpr MaxExpression(ExpressionPtr<Scalar> a, ExpressionPtr<Scalar> b)
+      : a{std::move(a)}, b{std::move(b)} {}
 
-  Scalar value(Scalar a, Scalar b) const override {
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(a.get());
+    func(b.get());
+  }
+
+  Scalar value() const override {
     using std::max;
-    return max(a, b);
+    return max(a->val, b->val);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "max"; }
 
-  Scalar grad_l(Scalar a, Scalar b) const override {
-    if (a >= b) {
+  void accumulate_adjoints() const override {
+    a->adjoint += grad_l();
+    b->adjoint += grad_r();
+  }
+
+  void accumulate_adjoints_expr() const override {
+    a->adjoint_expr += grad_expr_l();
+    b->adjoint_expr += grad_expr_r();
+  }
+
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const {
+    if (a->val >= b->val) {
       return this->adjoint;
     } else {
       return Scalar(0);
     }
   }
 
-  Scalar grad_r(Scalar a, Scalar b) const override {
-    if (b > a) {
+  /// Returns ∂/∂r as a Scalar.
+  ///
+  /// @return ∂/∂r as a Scalar.
+  Scalar grad_r() const {
+    if (b->val > a->val) {
       return this->adjoint;
     } else {
       return Scalar(0);
     }
   }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>& a,
-      const ExpressionPtr<Scalar>& b) const override {
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const {
     if (a->val >= b->val) {
       return this->adjoint_expr;
     } else {
@@ -1511,9 +1880,10 @@ struct MaxExpression final : Expression<Scalar> {
     }
   }
 
-  ExpressionPtr<Scalar> grad_expr_r(
-      const ExpressionPtr<Scalar>& a,
-      const ExpressionPtr<Scalar>& b) const override {
+  /// Returns ∂/∂r as an Expression.
+  ///
+  /// @return ∂/∂r as an Expression.
+  ExpressionPtr<Scalar> grad_expr_r() const {
     if (b->val > a->val) {
       return this->adjoint_expr;
     } else {
@@ -1548,42 +1918,71 @@ ExpressionPtr<Scalar> max(const ExpressionPtr<Scalar>& a,
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct MinExpression final : Expression<Scalar> {
+  /// Binary operator's left operand.
+  ExpressionPtr<Scalar> a;
+
+  /// Binary operator's right operand.
+  ExpressionPtr<Scalar> b;
+
   /// Constructs a binary expression (an operator with two arguments).
   ///
-  /// @param lhs Binary operator's left operand.
-  /// @param rhs Binary operator's right operand.
-  constexpr MinExpression(ExpressionPtr<Scalar> lhs, ExpressionPtr<Scalar> rhs)
-      : Expression<Scalar>{std::move(lhs), std::move(rhs)} {}
+  /// @param a Binary operator's left operand.
+  /// @param b Binary operator's right operand.
+  constexpr MinExpression(ExpressionPtr<Scalar> a, ExpressionPtr<Scalar> b)
+      : a{std::move(a)}, b{std::move(b)} {}
 
-  Scalar value(Scalar a, Scalar b) const override {
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(a.get());
+    func(b.get());
+  }
+
+  Scalar value() const override {
     using std::min;
-    return min(a, b);
+    return min(a->val, b->val);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "min"; }
 
-  Scalar grad_l(Scalar a, Scalar b) const override {
-    if (a <= b) {
+  void accumulate_adjoints() const override {
+    a->adjoint += grad_l();
+    b->adjoint += grad_r();
+  }
+
+  void accumulate_adjoints_expr() const override {
+    a->adjoint_expr += grad_expr_l();
+    b->adjoint_expr += grad_expr_r();
+  }
+
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const {
+    if (a->val <= b->val) {
       return this->adjoint;
     } else {
       return Scalar(0);
     }
   }
 
-  Scalar grad_r([[maybe_unused]] Scalar a,
-                [[maybe_unused]] Scalar b) const override {
-    if (b < a) {
+  /// Returns ∂/∂r as a Scalar.
+  ///
+  /// @return ∂/∂r as a Scalar.
+  Scalar grad_r() const {
+    if (b->val < a->val) {
       return this->adjoint;
     } else {
       return Scalar(0);
     }
   }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>& a,
-      const ExpressionPtr<Scalar>& b) const override {
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const {
     if (a->val <= b->val) {
       return this->adjoint_expr;
     } else {
@@ -1591,9 +1990,10 @@ struct MinExpression final : Expression<Scalar> {
     }
   }
 
-  ExpressionPtr<Scalar> grad_expr_r(
-      const ExpressionPtr<Scalar>& a,
-      const ExpressionPtr<Scalar>& b) const override {
+  /// Returns ∂/∂r as an Expression.
+  ///
+  /// @return ∂/∂r as an Expression.
+  ExpressionPtr<Scalar> grad_expr_r() const {
     if (b->val < a->val) {
       return this->adjoint_expr;
     } else {
@@ -1631,49 +2031,81 @@ ExpressionPtr<Scalar> pow(const ExpressionPtr<Scalar>& base,
 /// @tparam T Expression type.
 template <typename Scalar, ExpressionType T>
 struct PowExpression final : Expression<Scalar> {
+  /// Binary operator's left operand.
+  ExpressionPtr<Scalar> base;
+
+  /// Binary operator's right operand.
+  ExpressionPtr<Scalar> power;
+
   /// Constructs a binary expression (an operator with two arguments).
   ///
-  /// @param lhs Binary operator's left operand.
-  /// @param rhs Binary operator's right operand.
-  constexpr PowExpression(ExpressionPtr<Scalar> lhs, ExpressionPtr<Scalar> rhs)
-      : Expression<Scalar>{std::move(lhs), std::move(rhs)} {}
+  /// @param base Binary operator's left operand.
+  /// @param power Binary operator's right operand.
+  constexpr PowExpression(ExpressionPtr<Scalar> base,
+                          ExpressionPtr<Scalar> power)
+      : base{std::move(base)}, power{std::move(power)} {}
 
-  Scalar value(Scalar base, Scalar power) const override {
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(base.get());
+    func(power.get());
+  }
+
+  Scalar value() const override {
     using std::pow;
-    return pow(base, power);
+    return pow(base->val, power->val);
   }
 
   ExpressionType type() const override { return T; }
 
   std::string_view name() const override { return "pow"; }
 
-  Scalar grad_l(Scalar base, Scalar power) const override {
-    using std::pow;
-    return this->adjoint * pow(base, power - Scalar(1)) * power;
+  void accumulate_adjoints() const override {
+    base->adjoint += grad_l();
+    power->adjoint += grad_r();
   }
 
-  Scalar grad_r(Scalar base, Scalar power) const override {
+  void accumulate_adjoints_expr() const override {
+    base->adjoint_expr += grad_expr_l();
+    power->adjoint_expr += grad_expr_r();
+  }
+
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const {
+    using std::pow;
+    return this->adjoint * pow(base->val, power->val - Scalar(1)) * power->val;
+  }
+
+  /// Returns ∂/∂r as a Scalar.
+  ///
+  /// @return ∂/∂r as a Scalar.
+  Scalar grad_r() const {
     using std::log;
     using std::pow;
 
     // Since x log(x) -> 0 as x -> 0
-    if (base == Scalar(0)) {
+    if (base->val == Scalar(0)) {
       return Scalar(0);
     } else {
-      return this->adjoint * pow(base, power) * log(base);
+      return this->adjoint * pow(base->val, power->val) * log(base->val);
     }
   }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>& base,
-      const ExpressionPtr<Scalar>& power) const override {
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const {
     return this->adjoint_expr * pow(base, power - constant_ptr(Scalar(1))) *
            power;
   }
 
-  ExpressionPtr<Scalar> grad_expr_r(
-      const ExpressionPtr<Scalar>& base,
-      const ExpressionPtr<Scalar>& power) const override {
+  /// Returns ∂/∂r as an Expression.
+  ///
+  /// @return ∂/∂r as an Expression.
+  ExpressionPtr<Scalar> grad_expr_r() const {
     // Since x log(x) -> 0 as x -> 0
     if (base->val == Scalar(0)) {
       // Return zero
@@ -1731,16 +2163,24 @@ ExpressionPtr<Scalar> pow(const ExpressionPtr<Scalar>& base,
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct SignExpression final : Expression<Scalar> {
+  /// Unary operator's operand.
+  ExpressionPtr<Scalar> x;
+
   /// Constructs an unary expression (an operator with one argument).
   ///
-  /// @param lhs Unary operator's operand.
-  explicit constexpr SignExpression(ExpressionPtr<Scalar> lhs)
-      : Expression<Scalar>{std::move(lhs)} {}
+  /// @param x Unary operator's operand.
+  explicit constexpr SignExpression(ExpressionPtr<Scalar> x)
+      : x{std::move(x)} {}
 
-  Scalar value(Scalar x, Scalar) const override {
-    if (x < Scalar(0)) {
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(x.get());
+  }
+
+  Scalar value() const override {
+    if (x->val < Scalar(0)) {
       return Scalar(-1);
-    } else if (x == Scalar(0)) {
+    } else if (x->val == Scalar(0)) {
       return Scalar(0);
     } else {
       return Scalar(1);
@@ -1780,29 +2220,47 @@ ExpressionPtr<Scalar> sign(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct SinExpression final : Expression<Scalar> {
+  /// Unary operator's operand.
+  ExpressionPtr<Scalar> x;
+
   /// Constructs an unary expression (an operator with one argument).
   ///
-  /// @param lhs Unary operator's operand.
-  explicit constexpr SinExpression(ExpressionPtr<Scalar> lhs)
-      : Expression<Scalar>{std::move(lhs)} {}
+  /// @param x Unary operator's operand.
+  explicit constexpr SinExpression(ExpressionPtr<Scalar> x) : x{std::move(x)} {}
 
-  Scalar value(Scalar x, Scalar) const override {
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(x.get());
+  }
+
+  Scalar value() const override {
     using std::sin;
-    return sin(x);
+    return sin(x->val);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "sin"; }
 
-  Scalar grad_l(Scalar x, Scalar) const override {
-    using std::cos;
-    return this->adjoint * cos(x);
+  void accumulate_adjoints() const override { x->adjoint += grad_l(); }
+
+  void accumulate_adjoints_expr() const override {
+    x->adjoint_expr += grad_expr_l();
   }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>& x,
-      const ExpressionPtr<Scalar>&) const override {
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const {
+    using std::cos;
+    return this->adjoint * cos(x->val);
+  }
+
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const {
     return this->adjoint_expr * cos(x);
   }
 };
@@ -1835,29 +2293,48 @@ ExpressionPtr<Scalar> sin(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct SinhExpression final : Expression<Scalar> {
+  /// Unary operator's operand.
+  ExpressionPtr<Scalar> x;
+
   /// Constructs an unary expression (an operator with one argument).
   ///
-  /// @param lhs Unary operator's operand.
-  explicit constexpr SinhExpression(ExpressionPtr<Scalar> lhs)
-      : Expression<Scalar>{std::move(lhs)} {}
+  /// @param x Unary operator's operand.
+  explicit constexpr SinhExpression(ExpressionPtr<Scalar> x)
+      : x{std::move(x)} {}
 
-  Scalar value(Scalar x, Scalar) const override {
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(x.get());
+  }
+
+  Scalar value() const override {
     using std::sinh;
-    return sinh(x);
+    return sinh(x->val);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "sinh"; }
 
-  Scalar grad_l(Scalar x, Scalar) const override {
-    using std::cosh;
-    return this->adjoint * cosh(x);
+  void accumulate_adjoints() const override { x->adjoint += grad_l(); }
+
+  void accumulate_adjoints_expr() const override {
+    x->adjoint_expr += grad_expr_l();
   }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>& x,
-      const ExpressionPtr<Scalar>&) const override {
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const {
+    using std::cosh;
+    return this->adjoint * cosh(x->val);
+  }
+
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const {
     return this->adjoint_expr * cosh(x);
   }
 };
@@ -1890,29 +2367,48 @@ ExpressionPtr<Scalar> sinh(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct SqrtExpression final : Expression<Scalar> {
+  /// Unary operator's operand.
+  ExpressionPtr<Scalar> x;
+
   /// Constructs an unary expression (an operator with one argument).
   ///
-  /// @param lhs Unary operator's operand.
-  explicit constexpr SqrtExpression(ExpressionPtr<Scalar> lhs)
-      : Expression<Scalar>{std::move(lhs)} {}
+  /// @param x Unary operator's operand.
+  explicit constexpr SqrtExpression(ExpressionPtr<Scalar> x)
+      : x{std::move(x)} {}
 
-  Scalar value(Scalar x, Scalar) const override {
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(x.get());
+  }
+
+  Scalar value() const override {
     using std::sqrt;
-    return sqrt(x);
+    return sqrt(x->val);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "sqrt"; }
 
-  Scalar grad_l(Scalar x, Scalar) const override {
-    using std::sqrt;
-    return this->adjoint / (Scalar(2) * sqrt(x));
+  void accumulate_adjoints() const override { x->adjoint += grad_l(); }
+
+  void accumulate_adjoints_expr() const override {
+    x->adjoint_expr += grad_expr_l();
   }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>& x,
-      const ExpressionPtr<Scalar>&) const override {
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const {
+    using std::sqrt;
+    return this->adjoint / (Scalar(2) * sqrt(x->val));
+  }
+
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const {
     return this->adjoint_expr / (constant_ptr(Scalar(2)) * sqrt(x));
   }
 };
@@ -1946,31 +2442,49 @@ ExpressionPtr<Scalar> sqrt(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct TanExpression final : Expression<Scalar> {
+  /// Unary operator's operand.
+  ExpressionPtr<Scalar> x;
+
   /// Constructs an unary expression (an operator with one argument).
   ///
-  /// @param lhs Unary operator's operand.
-  explicit constexpr TanExpression(ExpressionPtr<Scalar> lhs)
-      : Expression<Scalar>{std::move(lhs)} {}
+  /// @param x Unary operator's operand.
+  explicit constexpr TanExpression(ExpressionPtr<Scalar> x) : x{std::move(x)} {}
 
-  Scalar value(Scalar x, Scalar) const override {
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(x.get());
+  }
+
+  Scalar value() const override {
     using std::tan;
-    return tan(x);
+    return tan(x->val);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "tan"; }
 
-  Scalar grad_l(Scalar x, Scalar) const override {
+  void accumulate_adjoints() const override { x->adjoint += grad_l(); }
+
+  void accumulate_adjoints_expr() const override {
+    x->adjoint_expr += grad_expr_l();
+  }
+
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const {
     using std::cos;
 
-    auto c = cos(x);
+    auto c = cos(x->val);
     return this->adjoint / (c * c);
   }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>& x,
-      const ExpressionPtr<Scalar>&) const override {
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const {
     auto c = cos(x);
     return this->adjoint_expr / (c * c);
   }
@@ -2004,31 +2518,50 @@ ExpressionPtr<Scalar> tan(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct TanhExpression final : Expression<Scalar> {
+  /// Unary operator's operand.
+  ExpressionPtr<Scalar> x;
+
   /// Constructs an unary expression (an operator with one argument).
   ///
-  /// @param lhs Unary operator's operand.
-  explicit constexpr TanhExpression(ExpressionPtr<Scalar> lhs)
-      : Expression<Scalar>{std::move(lhs)} {}
+  /// @param x Unary operator's operand.
+  explicit constexpr TanhExpression(ExpressionPtr<Scalar> x)
+      : x{std::move(x)} {}
 
-  Scalar value(Scalar x, Scalar) const override {
+  void visit_args(
+      function_ref<void(Expression<Scalar>* arg)> func) const override {
+    func(x.get());
+  }
+
+  Scalar value() const override {
     using std::tanh;
-    return tanh(x);
+    return tanh(x->val);
   }
 
   ExpressionType type() const override { return ExpressionType::NONLINEAR; }
 
   std::string_view name() const override { return "tanh"; }
 
-  Scalar grad_l(Scalar x, Scalar) const override {
+  void accumulate_adjoints() const override { x->adjoint += grad_l(); }
+
+  void accumulate_adjoints_expr() const override {
+    x->adjoint_expr += grad_expr_l();
+  }
+
+ private:
+  /// Returns ∂/∂l as a Scalar.
+  ///
+  /// @return ∂/∂l as a Scalar.
+  Scalar grad_l() const {
     using std::cosh;
 
-    auto c = cosh(x);
+    auto c = cosh(x->val);
     return this->adjoint / (c * c);
   }
 
-  ExpressionPtr<Scalar> grad_expr_l(
-      const ExpressionPtr<Scalar>& x,
-      const ExpressionPtr<Scalar>&) const override {
+  /// Returns ∂/∂l as an Expression.
+  ///
+  /// @return ∂/∂l as an Expression.
+  ExpressionPtr<Scalar> grad_expr_l() const {
     auto c = cosh(x);
     return this->adjoint_expr / (c * c);
   }
