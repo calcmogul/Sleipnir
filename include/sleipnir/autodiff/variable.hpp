@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <concepts>
 #include <initializer_list>
-#include <source_location>
 #include <utility>
 #include <vector>
 
@@ -17,10 +16,6 @@
 #include "sleipnir/autodiff/sleipnir_base.hpp"
 #include "sleipnir/util/assert.hpp"
 #include "sleipnir/util/concepts.hpp"
-
-#ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
-#include "sleipnir/util/print.hpp"
-#endif
 
 namespace slp {
 
@@ -119,20 +114,7 @@ class Variable : public SleipnirBase {
   /// Sets Variable's internal value.
   ///
   /// @param value The value of the Variable.
-  void set_value(Scalar value) {
-#ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
-    // We only need to check the first argument since unary and binary operators
-    // both use it
-    if (expr->args[0] != nullptr) {
-      auto location = std::source_location::current();
-      slp::println(
-          stderr,
-          "WARNING: {}:{}: {}: Modified the value of a dependent variable",
-          location.file_name(), location.line(), location.function_name());
-    }
-#endif
-    expr->val = Scalar(value);
-  }
+  void set_value(Scalar value) { expr->val = Scalar(value); }
 
   /// Returns the value of this variable.
   ///
