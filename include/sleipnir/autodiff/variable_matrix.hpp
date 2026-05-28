@@ -1673,19 +1673,7 @@ VariableMatrix<Scalar> gradient_tree(const ExpressionGraph<Scalar>& top_list,
   // variable; the variable's adjoint is the sum of each path's adjoint
   // contribution.
   for (auto& node : top_list) {
-    auto& lhs = node->args[0];
-    auto& rhs = node->args[1];
-
-    if (lhs != nullptr) {
-      if (rhs != nullptr) {
-        // Binary operator
-        lhs->adjoint_expr += node->grad_expr_l(lhs, rhs);
-        rhs->adjoint_expr += node->grad_expr_r(lhs, rhs);
-      } else {
-        // Unary operator
-        lhs->adjoint_expr += node->grad_expr_l(lhs, rhs);
-      }
-    }
+    node->accumulate_adjoints_expr();
   }
 
   // Move gradient tree to return value

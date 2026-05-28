@@ -43,12 +43,12 @@ ExpressionGraph<Scalar> topological_sort(const ExpressionPtr<Scalar>& root) {
     auto node = stack.back();
     stack.pop_back();
 
-    for (auto& arg : node->args) {
+    node->visit_args([&stack](const auto& arg) {
       // If the node hasn't been explored yet, add it to the stack
-      if (arg != nullptr && ++arg->scratch == 0) {
-        stack.push_back(arg.get());
+      if (++arg->scratch == 0) {
+        stack.push_back(arg);
       }
-    }
+    });
   }
 
   // Generate topological sort of graph from parent to child.
@@ -64,12 +64,12 @@ ExpressionGraph<Scalar> topological_sort(const ExpressionPtr<Scalar>& root) {
 
     list.emplace_back(node);
 
-    for (auto& arg : node->args) {
+    node->visit_args([&stack](const auto& arg) {
       // If we traversed all this node's incoming edges, add it to the stack
-      if (arg != nullptr && --arg->scratch == -1) {
-        stack.push_back(arg.get());
+      if (--arg->scratch == -1) {
+        stack.push_back(arg);
       }
-    }
+    });
   }
 
   return list;
@@ -84,12 +84,7 @@ template <typename Scalar>
 void update_values(const ExpressionGraph<Scalar>& list) {
   // Traverse graph from child to parent and update values
   for (auto& node : list | std::views::reverse) {
-    auto& lhs = node->args[0];
-    auto& rhs = node->args[1];
-
-    if (lhs != nullptr) {
-      node->val = node->value(lhs->val, rhs ? rhs->val : Scalar(0));
-    }
+    node->val = node->value();
   }
 }
 
@@ -127,19 +122,7 @@ void append_triplets(
   // variable; the variable's adjoint is the sum of each path's adjoint
   // contribution.
   for (const auto& node : top_list) {
-    auto& lhs = node->args[0];
-    auto& rhs = node->args[1];
-
-    if (lhs != nullptr) {
-      if (rhs != nullptr) {
-        // Binary operator
-        lhs->adjoint += node->grad_l(lhs->val, rhs->val);
-        rhs->adjoint += node->grad_r(lhs->val, rhs->val);
-      } else {
-        // Unary operator
-        lhs->adjoint += node->grad_l(lhs->val, Scalar(0));
-      }
-    }
+    node->accumulate_adjoints();
   }
 
   // Exploit the row's sparsity pattern by only appending wrt adjoints that
