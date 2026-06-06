@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <Eigen/Core>
+#include <fastad>
 #include <gch/small_vector.hpp>
 
 #include "sleipnir/autodiff/expression.hpp"
