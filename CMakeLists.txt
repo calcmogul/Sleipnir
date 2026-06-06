@@ -100,6 +100,24 @@ FetchContent_MakeAvailable(small_vector)
 
 target_link_libraries(Sleipnir PUBLIC small_vector)
 
+# FastAD dependency
+FetchContent_Declare(
+    FastAD
+    GIT_REPOSITORY https://github.com/JamesYang007/FastAD.git
+    # master on 2023-09-27
+    GIT_TAG 36e3c863dc15c4609b963fab8cf003cfed1df4ee
+    GIT_SHALLOW ON
+    SYSTEM
+    PATCH_COMMAND
+        git apply
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/0001-Upgrade-to-Eigen-5.patch
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/0002-Fix-install.patch
+    UPDATE_DISCONNECTED 1
+)
+FetchContent_MakeAvailable(FastAD)
+
+target_link_libraries(Sleipnir PUBLIC FastAD)
+
 if(PROJECT_IS_TOP_LEVEL AND BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
     # Catch2 dependency
     FetchContent_Declare(
@@ -301,7 +319,7 @@ if(SLEIPNIR_BUILD_PYTHON)
     )
     target_link_libraries(
         _sleipnir
-        PUBLIC Threads::Threads Eigen3::Eigen small_vector
+        PUBLIC Threads::Threads Eigen3::Eigen small_vector FastAD
     )
 
     # Suppress compiler warnings in nanobind
