@@ -114,6 +114,9 @@ IncludeCategories:
   #  * Unsupported C headers
   - Regex:        '^<(assert\.h|ctype\.h|errno\.h|fenv\.h|float\.h|inttypes\.h|limits\.h|locale\.h|math\.h|setjmp\.h|signal\.h|stdarg\.h|stddef\.h|stdint\.h|stdio\.h|stdlib\.h|string\.h|time\.h|uchar\.h|wchar\.h|wctype\.h|stdatomic\.h|ccomplex|complex\.h|ctgmath|tgmath\.h|ciso646|cstdalign|cstdbool|iso646\.h|stdalign\.h|stdbool\.h|stdatomic\.h|stdnoreturn\.h|threads\.h)>'
     Priority:     2
+  # FastAD library
+  - Regex:        '^<fastad>'
+    Priority:     4
   # C++ standard library headers (lowercase and underscores with no .h suffix)
   - Regex:        '^<[a-z_]+>'
     Priority:     3
