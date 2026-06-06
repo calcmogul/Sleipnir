@@ -53,6 +53,11 @@ function(pybind11_mkdoc target headers)
     # TODO: Remove when Python 3.15 makes UTF-8 the default
     set(env_vars ${env_vars} PYTHONUTF8=1)
 
+    # FastAD compiler flags
+    get_target_property(fastad_flags FastAD INTERFACE_INCLUDE_DIRECTORIES)
+    list(FILTER fastad_flags INCLUDE REGEX "\\$<BUILD_INTERFACE:.*>")
+    list(TRANSFORM fastad_flags PREPEND "-I")
+
     # Generate docstrings.hpp
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/python/cpp/docstrings.hpp
@@ -61,6 +66,7 @@ function(pybind11_mkdoc target headers)
             pybind11_mkdoc ${headers} -o
             ${CMAKE_CURRENT_SOURCE_DIR}/python/cpp/docstrings.hpp
             ${target_flags} ${clang_flags} ${eigen_flags} ${small_vector_flags}
+            ${fastad_flags}
             -std=c++23
         DEPENDS ${headers}
     )

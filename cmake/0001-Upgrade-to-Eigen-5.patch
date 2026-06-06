@@ -1,0 +1,23 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Tyler Veness <calcmogul@gmail.com>
+Date: Fri, 5 Jun 2026 18:25:23 -0700
+Subject: [PATCH 1/2] Upgrade to Eigen 5
+
+---
+ CMakeLists.txt | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 9cf39b103a2fa3ba09345e7a0154d8b6a7b9e00e..3e954412de7e4e5d3e715e88cd0a8d2552a57f3e 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -15,8 +15,7 @@ option(FASTAD_ENABLE_COVERAGE "Build FastAD with coverage" OFF)
+ include(GNUInstallDirs)
+ 
+ # Dependency on Eigen
+-find_package(Eigen3 3.3 CONFIG REQUIRED NO_MODULE
+-    HINTS ${CMAKE_CURRENT_SOURCE_DIR}/libs/eigen-3.3.7/build/share)
++find_package(Eigen3 CONFIG REQUIRED NO_MODULE)
+ message(STATUS "Eigen3 found at ${EIGEN3_INCLUDE_DIR}")
+ 
+ # Add this library as interface (header-only)
