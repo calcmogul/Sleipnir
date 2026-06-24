@@ -2534,6 +2534,8 @@ Returns:
 
 )doc";
 
+static const char *mkd_doc_slp_Variable_val = R"doc(The expression node's value)doc";
+
 static const char *mkd_doc_slp_Variable_value =
 R"doc(Returns the value of this variable.
 
