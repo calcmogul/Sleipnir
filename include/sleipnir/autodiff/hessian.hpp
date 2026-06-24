@@ -110,7 +110,7 @@ class Hessian {
     for (int row = 0; row < m_variables.rows(); ++row) {
       auto grad = detail::gradient_tree(m_top_lists[row], m_wrt);
       for (int col = 0; col < m_wrt.rows(); ++col) {
-        if (grad[col].expr != nullptr) {
+        if (grad[col].expr != ad::Var<Scalar, ad::scl>{}) {
           result[row, col] = std::move(grad[col]);
         } else {
           result[row, col] = Variable{Scalar(0)};

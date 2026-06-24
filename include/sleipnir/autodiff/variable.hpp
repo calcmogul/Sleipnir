@@ -59,7 +59,7 @@ class Variable : public SleipnirBase {
   Variable() = default;
 
   /// Constructs an empty Variable.
-  explicit constexpr Variable(std::nullptr_t) : expr{nullptr} {}
+  explicit constexpr Variable(std::nullptr_t) {}
 
   /// Constructs a Variable from a scalar type.
   ///
@@ -82,17 +82,13 @@ class Variable : public SleipnirBase {
   ///
   /// @param value The value of the Variable.
   // NOLINTNEXTLINE (google-explicit-constructor)
-  Variable(std::floating_point auto value)
-      : expr{detail::make_expression_ptr<detail::ConstantExpression<Scalar>>(
-            Scalar(value))} {}
+  Variable(std::floating_point auto value) : expr{value} {}
 
   /// Constructs a Variable from an integral type.
   ///
   /// @param value The value of the Variable.
   // NOLINTNEXTLINE (google-explicit-constructor)
-  Variable(std::integral auto value)
-      : expr{detail::make_expression_ptr<detail::ConstantExpression<Scalar>>(
-            Scalar(value))} {}
+  Variable(std::integral auto value) : expr{value} {}
 
   /// Constructs a Variable pointing to the specified expression.
   ///
@@ -124,7 +120,7 @@ class Variable : public SleipnirBase {
 #ifndef SLEIPNIR_DISABLE_DIAGNOSTICS
     // We only need to check the first argument since unary and binary operators
     // both use it
-    if (expr->args[0] != nullptr) {
+    if (expr->args[0] != ad::Var<Scalar, ad::scl>{}) {
       auto location = std::source_location::current();
       slp::println(
           stderr,
@@ -132,7 +128,7 @@ class Variable : public SleipnirBase {
           location.file_name(), location.line(), location.function_name());
     }
 #endif
-    expr->val = Scalar(value);
+    val = Scalar(value);
   }
 
   /// Returns the value of this variable.
@@ -145,7 +141,7 @@ class Variable : public SleipnirBase {
     }
     detail::update_values(m_graph);
 
-    return Scalar(expr->val);
+    return Scalar(val);
   }
 
   /// Returns the type of this expression (constant, linear, quadratic, or
@@ -266,8 +262,10 @@ class Variable : public SleipnirBase {
 
  private:
   /// The expression node
-  detail::ExpressionPtr<Scalar> expr =
-      detail::make_expression_ptr<detail::DecisionVariableExpression<Scalar>>();
+  ad::Var<Scalar, ad::scl> expr;
+
+  /// The expression node's value
+  Scalar val;
 
   /// Used to update the value of this variable based on the values of its
   /// dependent variables
