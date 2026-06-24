@@ -2279,6 +2279,8 @@ nonlinear).
 Returns:
     The type of this expression.)doc";
 
+static const char *__doc_slp_Variable_val = R"doc(The expression node's value)doc";
+
 static const char *__doc_slp_Variable_value =
 R"doc(Returns the value of this variable.
 
