@@ -66,8 +66,7 @@ function(pybind11_mkdoc target headers)
             pybind11_mkdoc ${headers} -o
             ${CMAKE_CURRENT_SOURCE_DIR}/python/cpp/docstrings.hpp
             ${target_flags} ${clang_flags} ${eigen_flags} ${small_vector_flags}
-            ${fastad_flags}
-            -std=c++23
+            ${fastad_flags} -std=c++23
         DEPENDS ${headers}
     )
 
