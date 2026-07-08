@@ -89,10 +89,6 @@ struct Expression {
   /// The adjoint of the expression node, used during autodiff.
   Scalar adj{0};
 
-  /// The adjoint of the expression node, used during gradient expression tree
-  /// generation.
-  ExpressionPtr<Scalar> adj_expr;
-
   /// True if the expression is a leaf node (a nullary expression).
   ///
   /// Graph traversals check this to avoid virtual calls on leaves. The check
