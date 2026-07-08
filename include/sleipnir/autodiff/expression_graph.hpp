@@ -17,7 +17,30 @@ namespace slp::detail {
 ///
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
-using ExpressionGraph = gch::small_vector<Expression<Scalar>*>;
+struct ExpressionGraph {
+  /// Topologically sorted expression graph from parent to child.
+  gch::small_vector<Expression<Scalar>*> top_list;
+
+  /// The values of the expression nodes.
+  gch::small_vector<Scalar> values;
+
+  /// The adjoints of the expression nodes, used during autodiff.
+  gch::small_vector<Scalar> adjoints;
+
+  /// The adjoints of the expression nodes, used during gradient expression tree
+  /// generation.
+  gch::small_vector<Scalar> adjoint_exprs;
+
+  /// Constructs an ExperessionGraph.
+  ///
+  /// @param top_list Topologically sorted expression graph from parent to
+  ///     child.
+  explicit ExpressionGraph(gch::small_vector<Expression<Scalar>*> top_list)
+      : top_list{std::move(top_list)},
+        values{this->top_list.size(), Scalar(0)},
+        adjoints{this->top_list.size(), Scalar(0)},
+        adjoint_exprs{this->top_list.size(), Scalar(0)} {}
+};
 
 /// Generates a topological sort of an expression graph from parent to child.
 ///
@@ -74,7 +97,7 @@ ExpressionGraph<Scalar> topological_sort(const ExpressionPtr<Scalar>& root) {
     }
   }
 
-  return list;
+  return ExpressionGraph{list};
 }
 
 /// Updates the values of all nodes in this graph based on the values of

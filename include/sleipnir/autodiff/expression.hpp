@@ -96,10 +96,6 @@ struct Expression {
   /// The adjoint of the expression node, used during autodiff.
   Scalar adj{0};
 
-  /// The adjoint of the expression node, used during gradient expression tree
-  /// generation.
-  ExpressionPtr<Scalar> adj_expr;
-
   /// Expression arguments.
   std::array<ExpressionPtr<Scalar>, 2> args{nullptr, nullptr};
 
