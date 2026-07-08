@@ -306,13 +306,13 @@ static const char *mkd_doc_slp_Hessian_m_H = R"doc()doc";
 
 static const char *mkd_doc_slp_Hessian_m_cached_triplets = R"doc()doc";
 
+static const char *mkd_doc_slp_Hessian_m_graphs =
+R"doc(List of topologically sorted graphs from parent to child, one for each
+row)doc";
+
 static const char *mkd_doc_slp_Hessian_m_nonlinear_rows = R"doc()doc";
 
 static const char *mkd_doc_slp_Hessian_m_output_lists = R"doc(List of output rows as column-node pairs)doc";
-
-static const char *mkd_doc_slp_Hessian_m_top_lists =
-R"doc(List of topologically sorted graphs from parent to child, one for each
-row)doc";
 
 static const char *mkd_doc_slp_Hessian_m_variables = R"doc()doc";
 
@@ -451,15 +451,15 @@ static const char *mkd_doc_slp_Jacobian_m_J = R"doc()doc";
 
 static const char *mkd_doc_slp_Jacobian_m_cached_triplets = R"doc(Cached triplets for gradients of linear rows)doc";
 
+static const char *mkd_doc_slp_Jacobian_m_graphs =
+R"doc(List of topologically sorted graphs from parent to child, one for each
+row)doc";
+
 static const char *mkd_doc_slp_Jacobian_m_nonlinear_rows =
 R"doc(List of row indices for nonlinear rows whose graients will be computed
 in value())doc";
 
 static const char *mkd_doc_slp_Jacobian_m_output_lists = R"doc(List of output rows as column-node pairs)doc";
-
-static const char *mkd_doc_slp_Jacobian_m_top_lists =
-R"doc(List of topologically sorted graphs from parent to child, one for each
-row)doc";
 
 static const char *mkd_doc_slp_Jacobian_m_variables = R"doc()doc";
 
@@ -2723,7 +2723,7 @@ no adjoint. Ensure Variable::expr isn't nullptr before calling member
 functions.
 
 Args:
-    top_list: Topologically sorted graph from parent to child.
+    graph: Topologically sorted graph from parent to child.
     wrt: Variables with respect to which to compute the gradient.
 
 Template Args:

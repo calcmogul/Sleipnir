@@ -1750,29 +1750,29 @@ namespace detail {
 /// functions.
 ///
 /// @tparam Scalar Scalar type.
-/// @param top_list Topologically sorted graph from parent to child.
+/// @param graph Topologically sorted graph from parent to child.
 /// @param wrt Variables with respect to which to compute the gradient.
 /// @return The variable's gradient tree.
 template <typename Scalar>
-VariableMatrix<Scalar> gradient_tree(const ExpressionGraph<Scalar>& top_list,
+VariableMatrix<Scalar> gradient_tree(const ExpressionGraph<Scalar>& graph,
                                      const VariableMatrix<Scalar>& wrt) {
   slp_assert(wrt.cols() == 1);
 
   // Read docs/algorithms.md#Reverse_accumulation_automatic_differentiation
   // for background on reverse accumulation automatic differentiation.
 
-  if (top_list.empty()) {
+  if (graph.top_list.empty()) {
     return VariableMatrix<Scalar>{detail::empty, wrt.rows(), 1};
   }
 
   // Set root node's adjoint to 1 since df/df is 1
-  top_list[0]->adjoint_expr = constant_ptr(Scalar(1));
+  graph.adjoint_exprs[0] = constant_ptr(Scalar(1));
 
   // df/dx = (df/dy)(dy/dx). The adjoint of x is equal to the adjoint of y
   // multiplied by dy/dx. If there are multiple "paths" from the root node to
   // variable; the variable's adjoint is the sum of each path's adjoint
   // contribution.
-  for (auto& node : top_list) {
+  for (auto& node : graph.top_list) {
     auto& lhs = node->args[0];
     auto& rhs = node->args[1];
 
@@ -1797,7 +1797,7 @@ VariableMatrix<Scalar> gradient_tree(const ExpressionGraph<Scalar>& top_list,
   // Unlink adjoints to avoid circular references between them and their
   // parent expressions. This ensures all expressions are returned to the free
   // list.
-  for (auto& node : top_list) {
+  for (auto& node : graph.top_list) {
     node->adjoint_expr = nullptr;
   }
 
