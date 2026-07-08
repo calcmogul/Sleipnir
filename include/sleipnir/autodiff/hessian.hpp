@@ -53,7 +53,7 @@ class Hessian {
     slp_assert(m_wrt.cols() == 1);
 
     for (auto& variable : m_variables) {
-      m_top_lists.emplace_back(detail::topological_sort(variable.expr));
+      m_graphs.emplace_back(detail::topological_sort(variable.expr));
     }
 
     // Initialize column each expression's adjoint occupies in the Jacobian
@@ -62,9 +62,9 @@ class Hessian {
     }
 
     // Make list of only nodes in output row, and their output columns
-    for (auto& top_list : m_top_lists) {
+    for (auto& graph : m_graphs) {
       m_output_lists.emplace_back();
-      for (const auto& node : top_list) {
+      for (const auto& node : graph.top_list) {
         if (node->scratch != -1) {
           m_output_lists.back().emplace_back(node->scratch, node);
         }
@@ -85,7 +85,7 @@ class Hessian {
         // If the row is linear, compute its gradient once here and cache its
         // triplets. Constant rows are ignored because their gradients have no
         // nonzero triplets.
-        detail::append_triplets(m_top_lists[row], m_output_lists[row],
+        detail::append_triplets(m_graphs[row], m_output_lists[row],
                                 m_cached_triplets, row);
       } else if (m_variables[row].type() > ExpressionType::LINEAR) {
         // If the row is quadratic or nonlinear, add it to the list of nonlinear
@@ -113,7 +113,7 @@ class Hessian {
                                   m_wrt.rows()};
 
     for (int row = 0; row < m_variables.rows(); ++row) {
-      auto grad = detail::gradient_tree(m_top_lists[row], m_wrt);
+      auto grad = detail::gradient_tree(m_graphs[row], m_wrt);
       for (int col = 0; col < m_wrt.rows(); ++col) {
         if (grad[col].expr != nullptr) {
           result[row, col] = std::move(grad[col]);
@@ -134,7 +134,7 @@ class Hessian {
       return m_H;
     }
 
-    for (auto& top_list : m_top_lists) {
+    for (auto& top_list : m_graphs) {
       detail::update_values(top_list);
     }
 
@@ -144,7 +144,7 @@ class Hessian {
 
     // Compute each nonlinear row of the Hessian
     for (int row : m_nonlinear_rows) {
-      detail::append_triplets(m_top_lists[row], m_output_lists[row], triplets,
+      detail::append_triplets(m_graphs[row], m_output_lists[row], triplets,
                               row);
     }
 
@@ -161,7 +161,7 @@ class Hessian {
   VariableMatrix<Scalar> m_wrt;
 
   /// List of topologically sorted graphs from parent to child, one for each row
-  gch::small_vector<detail::ExpressionGraph<Scalar>> m_top_lists;
+  gch::small_vector<detail::ExpressionGraph<Scalar>> m_graphs;
 
   /// List of output rows as column-node pairs
   gch::small_vector<
