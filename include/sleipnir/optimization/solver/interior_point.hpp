@@ -335,18 +335,8 @@ ExitStatus interior_point(
   // Kept outside the loop so its storage can be reused
   gch::small_vector<Eigen::Triplet<Scalar>> triplets;
 
-  const int lhs_rows =
-      matrices.num_decision_variables + matrices.num_equality_constraints;
   RegularizedLDLT<Scalar> solver{
-      // Use sparse solver if lower triangle fills < 25% of system
-      H.nonZeros() +
-              (A_i.transpose() * A_i)
-                  .template triangularView<Eigen::Lower>()
-                  .eval()
-                  .nonZeros() +
-              A_e.nonZeros() <
-          0.25 * lhs_rows * lhs_rows,
-      matrices.num_decision_variables, matrices.num_equality_constraints,
+      false, matrices.num_decision_variables, matrices.num_equality_constraints,
       // Constraint regularization is forced to zero in feasibility restoration
       // because the equality constraint Jacobian cannot be rank-deficient
       in_feasibility_restoration ? Scalar(0) : Scalar(1e-10)};
