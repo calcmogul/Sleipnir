@@ -5,9 +5,9 @@
 #include <algorithm>
 #include <limits>
 
-#include <Eigen/Cholesky>
 #include <Eigen/Core>
 
+#include "sleipnir/optimization/solver/util/bunch_kaufman.hpp"
 #include "sleipnir/optimization/solver/util/inertia.hpp"
 
 namespace slp {
@@ -64,7 +64,7 @@ class DenseRegularizedLDLT {
 
       // If the inertia is ideal and D from LDLT is sufficiently far from zero,
       // don't regularize the system
-      if (Inertia{D} == ideal_inertia &&
+      if (m_solver.inertia() == ideal_inertia &&
           (D.cwiseAbs().array() >= Scalar(1e-4)).all()) {
         m_prev_δ = Scalar(0);
         m_prev_γ = Scalar(0);
@@ -90,7 +90,7 @@ class DenseRegularizedLDLT {
       m_info = m_solver.compute(lhs + regularization(δ, γ)).info();
 
       if (m_info == Eigen::Success) {
-        Inertia inertia{m_solver.vectorD()};
+        Inertia inertia{m_solver.inertia()};
 
         if (inertia == ideal_inertia) {
           // If the inertia is ideal, report success
@@ -164,7 +164,7 @@ class DenseRegularizedLDLT {
   Scalar constraint_jacobian_regularization() const { return m_prev_γ; }
 
  private:
-  using Solver = Eigen::LDLT<DenseMatrix>;
+  using Solver = BunchKaufman<DenseMatrix>;
 
   Solver m_solver;
 
