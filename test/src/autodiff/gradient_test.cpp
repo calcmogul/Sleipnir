@@ -424,6 +424,14 @@ TEMPLATE_TEST_CASE("Gradient - Power", "[Gradient]", SCALAR_TYPES_UNDER_TEST) {
   g = slp::Gradient(slp::pow(x, y), y);
   CHECK(g.get().value().coeff(0) == log(x.value()) * pow(x.value(), y.value()));
   CHECK(g.value().coeff(0) == log(x.value()) * pow(x.value(), y.value()));
+
+  // xʸ(y) with zero base. Uses x log(x) → 0 as x → 0.
+  x.set_value(T(0));
+  CHECK(slp::pow(x, y).value() == T(0));
+
+  g = slp::Gradient(slp::pow(x, y), y);
+  CHECK(g.get().value().coeff(0) == T(0));
+  CHECK(g.value().coeff(0) == T(0));
 }
 
 TEMPLATE_TEST_CASE("Gradient - abs()", "[Gradient]", SCALAR_TYPES_UNDER_TEST) {

@@ -2025,6 +2025,11 @@ struct PowExpression final : Expression<Scalar> {
     using std::log;
     using std::pow;
 
+    // Since x log(x) → 0 as x → 0
+    if (base->val == Scalar(0)) {
+      return Scalar(0);
+    }
+
     return this->adj * pow(base->val, power->val) * log(base->val);
   }
 
@@ -2033,7 +2038,14 @@ struct PowExpression final : Expression<Scalar> {
   }
 
   ExpressionPtr<Scalar> grad_expr_r() const {
-    return this->adj_expr * pow(base, power) * log(base);
+    // Since x log(x) → 0 as x → 0, replace a zero base with one so the
+    // expression evaluates to zero. Selecting zero after computing log(base)
+    // isn't enough; the unused branch's zero adjoint times log()'s infinite
+    // partial would make higher-order derivatives NaN.
+    auto safe_base =
+        if_else<Scalar>([](Scalar a, Scalar b) { return a == b; }, base,
+                        constant_ptr(Scalar(0)), constant_ptr(Scalar(1)), base);
+    return this->adj_expr * pow(safe_base, power) * log(safe_base);
   }
 };
 

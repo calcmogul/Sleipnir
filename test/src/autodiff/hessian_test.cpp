@@ -360,6 +360,19 @@ TEMPLATE_TEST_CASE("Hessian - pow()", "[Hessian]", SCALAR_TYPES_UNDER_TEST) {
                                     {mixed, T(16) * pow(log(T(4)), T(2))}};
   CHECK_THAT(symbolic_H.value(), MatrixWithinAbs(expected, T(1e-12)));
   CHECK_THAT(hessian.value().toDense(), MatrixWithinAbs(expected, T(1e-12)));
+
+  // Zero base. Uses x log(x) → 0 as x → 0.
+  auto g = slp::pow(input[0], input[1]);
+  slp::Hessian zero_base_hessian{g, input};
+
+  auto zero_base_symbolic_H = zero_base_hessian.get();
+
+  input[0].set_value(T(0));
+  input[1].set_value(T(2));
+  expected = Eigen::Matrix<T, 2, 2>{{T(2), T(0)}, {T(0), T(0)}};
+  CHECK_THAT(zero_base_symbolic_H.value(), MatrixWithinAbs(expected, T(1e-12)));
+  CHECK_THAT(zero_base_hessian.value().toDense(),
+             MatrixWithinAbs(expected, T(1e-12)));
 }
 
 TEMPLATE_TEST_CASE("Hessian - Rosenbrock", "[Hessian]",
