@@ -332,6 +332,38 @@ def main():
 
     # Find N with minimum fuel use
     print(f"Searching N ∈ [{N_min}, {N_max}] for minimum fuel use")
+    feasible_Ns: list[int] = []
+    feasible_costs: list[float] = []
+    infeasible_Ns: list[int] = []
+    infeasible_costs: list[float] = []
+    for N in range(N_min, N_max + 1):
+        sol = solve(N)
+        print(f"\tN = {N}: {sol}")
+        if sol.status == ExitStatus.SUCCESS:
+            feasible_Ns.append(N)
+            feasible_costs.append(sol.cost())
+        else:
+            infeasible_Ns.append(N)
+            infeasible_costs.append(sol.cost())
+
+    import csv
+
+    with open("feasible_cost_vs_n.csv", mode="w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(["N", "Cost"])
+        for N, cost in zip(feasible_Ns, feasible_costs):
+            writer.writerow([N, cost])
+
+    with open("infeasible_cost_vs_n.csv", mode="w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(["N", "Cost"])
+        for N, cost in zip(infeasible_Ns, infeasible_costs):
+            writer.writerow([N, cost])
+
+    return
+
+    # Find N with minimum fuel use
+    print(f"Searching N ∈ [{N_min}, {N_max}] for minimum fuel use")
     N, sol = line_search(solve, N_min, N_max)
     print(f"N = {N}: {sol}")
 
