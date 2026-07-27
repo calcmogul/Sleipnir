@@ -121,11 +121,15 @@ def main():
     U_value = np.empty((3, 1))
     σ_value = np.empty((1, 1))
 
+    feasible_Ns: list[int] = []
+    feasible_sum_σs: list[float] = []
+    infeasible_Ns: list[int] = []
+    infeasible_sum_σs: list[float] = []
+
     # Bisect to find minimum feasible N
     print(f"Searching N ∈ [{N_min}, {N_max}] for smallest feasible N")
-    found = False
-    while not found:
-        N = N_min + math.floor((N_max - N_min) / 2)
+    for N in range(N_min, N_max, 1):
+        # N = N_min + math.floor((N_max - N_min) / 2)
 
         print(f"Trying N = {N} from [{N_min}, {N_max}]...", end="")
         sys.stdout.flush()
@@ -280,29 +284,63 @@ def main():
         problem.minimize(sum(σ))
         status = problem.solve()
 
+        σ_value = σ.value()
+
         if status == ExitStatus.SUCCESS:
-            print(" feasible")
+            print(f" feasible with cost {σ_value.sum()}")
 
             X_value = X.value()
             U_value = U.value()
             Z_value = Z.value()
-            σ_value = σ.value()
+
+            feasible_Ns.append(N)
+            feasible_sum_σs.append(σ_value.sum())
 
             # Problem is feasible, so try a smaller N
-            if N_min < N:
-                N_max = N - 1
-            else:
-                print(f"Smallest feasible N = {N}")
-                found = True
+            # if N_min < N:
+            #     N_max = N - 1
+            # else:
+            #     print(f"Smallest feasible N = {N}")
+            #     found = True
         else:
-            print(" infeasible")
+            print(f" infeasible with cost {σ_value.sum()}")
+
+            infeasible_Ns.append(N)
+            infeasible_sum_σs.append(σ_value.sum())
 
             # Problem is infeasible, so try a larger N
-            if N_min < N_max:
-                N_min = N + 1
-            else:
-                print(f"Smallest feasible N = {N + 1}")
-                found = True
+            # if N_min < N_max:
+            #     N_min = N + 1
+            # else:
+            #     print(f"Smallest feasible N = {N + 1}")
+            #     found = True
+
+    import csv
+
+    with open("feasible_sum_sigma_vs_n.csv", mode="w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(["N", "sum(σ)"])
+        for N, sum_σ in zip(feasible_Ns, feasible_sum_σs):
+            writer.writerow([N, sum_σ])
+
+    with open("infeasible_sum_sigma_vs_n.csv", mode="w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(["N", "sum(σ)"])
+        for N, sum_σ in zip(infeasible_Ns, infeasible_sum_σs):
+            writer.writerow([N, sum_σ])
+
+    plt.figure()
+    ax = plt.gca()
+    ax.set_title("sum(σ) vs N")
+    ax.set_xlabel("N")
+    ax.set_ylabel("sum(σ)")
+    ax.scatter(
+        feasible_Ns, feasible_sum_σs, color="green", marker=".", label="Feasible"
+    )
+    ax.scatter(
+        infeasible_Ns, infeasible_sum_σs, c="red", marker="x", label="Infeasible"
+    )
+    ax.legend()
 
     N = X_value.shape[1] - 1
     times = [k * dt for k in range(N + 1)]
