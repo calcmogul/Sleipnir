@@ -13,10 +13,12 @@ The coordinate system is +X up, +Y east, +Z north.
 """
 
 import math
-import sys
+from collections.abc import Callable
+from dataclasses import dataclass
 
 import matplotlib.pyplot as plt
 import numpy as np
+import numpy.typing as npt
 from numpy.linalg import norm
 from scipy.signal import cont2discrete
 from sleipnir.optimization import ExitStatus, Problem, bounds
@@ -24,6 +26,57 @@ from sleipnir.optimization import ExitStatus, Problem, bounds
 
 def lerp(a, b, t):
     return a + t * (b - a)
+
+
+@dataclass
+class Solution:
+    status: ExitStatus
+    X_value: npt.NDArray[np.float64]
+    Z_value: npt.NDArray[np.float64]
+    U_value: npt.NDArray[np.float64]
+    σ_value: npt.NDArray[np.float64]
+
+    def cost(self) -> float:
+        return self.σ_value.sum()
+
+    def __lt__(self, other) -> bool:
+        if self.status != other.status:
+            return self.status == ExitStatus.SUCCESS
+        else:
+            return self.cost() < other.cost()
+
+    def __str__(self) -> str:
+        if self.status == ExitStatus.SUCCESS:
+            return f"feasible, cost = {self.cost()}"
+        else:
+            return "infeasible"
+
+
+def line_search(f: Callable[[int], Solution], a: int, c: int) -> tuple[int, Solution]:
+    """
+    Returns the minimum of the unimodal function f within [a, c].
+    """
+    # https://en.wikipedia.org/wiki/Golden-section_search
+
+    ϕ_inv = (math.sqrt(5) - 1) / 2
+
+    b = round(a + ϕ_inv * (c - a))
+    b_sol = f(b)
+    print(f"\tN ∈ [{min(a, c)}, {max(a, c)}] -> N = {b}: {b_sol}")
+
+    while abs(c - a) > 1:
+        x = round(a + ϕ_inv * (b - a))
+        x_sol = f(x)
+        print(f"\tN ∈ [{min(a, c)}, {max(a, c)}] -> N = {x}: {x_sol}")
+
+        if x_sol < b_sol:
+            b_sol = x_sol
+            c = b
+            b = x
+        else:
+            a = c
+            c = x
+    return b, b_sol
 
 
 def main():
@@ -121,15 +174,7 @@ def main():
     U_value = np.empty((3, 1))
     σ_value = np.empty((1, 1))
 
-    # Bisect to find minimum feasible N
-    print(f"Searching N ∈ [{N_min}, {N_max}] for smallest feasible N")
-    found = False
-    while not found:
-        N = N_min + math.floor((N_max - N_min) / 2)
-
-        print(f"Trying N = {N} from [{N_min}, {N_max}]...", end="")
-        sys.stdout.flush()
-
+    def solve(N: int) -> Solution:
         problem = Problem()
 
         # x = [position, velocity]ᵀ
@@ -280,31 +325,18 @@ def main():
         problem.minimize(sum(σ))
         status = problem.solve()
 
-        if status == ExitStatus.SUCCESS:
-            print(" feasible")
+        return Solution(status, X.value(), Z.value(), U.value(), σ.value())
 
-            X_value = X.value()
-            U_value = U.value()
-            Z_value = Z.value()
-            σ_value = σ.value()
+    # Find N with minimum fuel use
+    print(f"Searching N ∈ [{N_min}, {N_max}] for minimum fuel use")
+    N, sol = line_search(solve, N_min, N_max)
+    print(f"N = {N} {sol}")
 
-            # Problem is feasible, so try a smaller N
-            if N_min < N:
-                N_max = N - 1
-            else:
-                print(f"Smallest feasible N = {N}")
-                found = True
-        else:
-            print(" infeasible")
+    X_value = sol.X_value
+    Z_value = sol.Z_value
+    U_value = sol.U_value
+    σ_value = sol.σ_value
 
-            # Problem is infeasible, so try a larger N
-            if N_min < N_max:
-                N_min = N + 1
-            else:
-                print(f"Smallest feasible N = {N + 1}")
-                found = True
-
-    N = X_value.shape[1] - 1
     times = [k * dt for k in range(N + 1)]
 
     plt.figure()

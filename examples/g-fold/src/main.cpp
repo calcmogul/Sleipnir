@@ -10,10 +10,14 @@
 // [2] Açıkmeşe et al., "Convex Programming Approach to Powered Descent Guidance
 //     for Mars Landing", 2007. https://sci-hub.st/10.2514/1.27553
 
+#include <algorithm>
 #include <cmath>
+#include <format>
+#include <functional>
 #include <numbers>
 #include <numeric>
 #include <print>
+#include <tuple>
 
 #include <Eigen/Core>
 #include <sleipnir/autodiff/slice.hpp>
@@ -21,6 +25,49 @@
 #include <sleipnir/optimization/problem.hpp>
 #include <sleipnir/optimization/solver/exit_status.hpp>
 #include <unsupported/Eigen/MatrixFunctions>
+
+struct Solution {
+  slp::ExitStatus status;
+  Eigen::MatrixXd X_value;
+  Eigen::MatrixXd Z_value;
+  Eigen::MatrixXd U_value;
+  Eigen::MatrixXd σ_value;
+
+  double cost() const { return σ_value.sum(); }
+
+  bool operator<(const Solution& rhs) const {
+    if (status != rhs.status) {
+      return status == slp::ExitStatus::SUCCESS;
+    } else {
+      return cost() < rhs.cost();
+    }
+  }
+};
+
+/// Formatter for Solution.
+template <>
+struct std::formatter<Solution> {
+  /// Parses format string.
+  ///
+  /// @param ctx Format parse context.
+  /// @return Format parse context iterator.
+  constexpr auto parse(std::format_parse_context& ctx) { return ctx.begin(); }
+
+  /// Formats Solution.
+  ///
+  /// @tparam FmtContext Format context type.
+  /// @param sol Solution.
+  /// @param ctx Format context.
+  /// @return Format context iterator.
+  template <typename FmtContext>
+  auto format(const Solution& sol, FmtContext& ctx) const {
+    if (sol.status == slp::ExitStatus::SUCCESS) {
+      return std::format_to(ctx.out(), "feasible, cost = {}", sol.cost());
+    } else {
+      return std::format_to(ctx.out(), "infeasible");
+    }
+  }
+};
 
 /// Discretizes the given continuous A and B matrices.
 ///
@@ -49,6 +96,36 @@ void discretize_ab(const Eigen::Matrix<double, States, States>& cont_A,
 
   *disc_A = phi.template block<States, States>(0, 0);
   *disc_B = phi.template block<States, Inputs>(0, States);
+}
+
+/// Returns the minimum of the unimodal function f within [a, c].
+std::tuple<int, Solution> line_search(std::function<Solution(int)> f, int a,
+                                      int c) {
+  // https://en.wikipedia.org/wiki/Golden-section_search
+
+  double ϕ_inv = (std::sqrt(5) - 1) / 2;
+
+  int b = std::round(a + ϕ_inv * (c - a));
+  auto b_sol = f(b);
+  std::println("\tN ∈ [{}, {}] -> N = {}: {}", std::min(a, c), std::max(a, c),
+               b, b_sol);
+
+  while (std::abs(c - a) > 1) {
+    auto x = std::round(a + ϕ_inv * (b - a));
+    auto x_sol = f(x);
+    std::println("\tN ∈ [{}, {}] -> N = {}: {}", std::min(a, c), std::max(a, c),
+                 x, x_sol);
+
+    if (x_sol < b_sol) {
+      b_sol = x_sol;
+      c = b;
+      b = x;
+    } else {
+      a = c;
+      c = x;
+    }
+  }
+  return {b, b_sol};
 }
 
 #ifndef RUNNING_TESTS
@@ -158,14 +235,7 @@ int main() {
   Eigen::MatrixXd Z_value{3, 1};
   Eigen::MatrixXd σ_value{1, 1};
 
-  // Bisect to find minimum feasible N
-  std::println("Searching N ∈ [{}, {}] for smallest feasible N", N_min, N_max);
-  bool found = false;
-  while (!found) {
-    int N = N_min + (N_max - N_min) / 2;
-
-    std::print("Trying N = {} from [{}, {}]...", N, N_min, N_max);
-
+  auto solve = [&](int N) -> Solution {
     slp::Problem<double> problem;
 
     // x = [position, velocity]ᵀ
@@ -323,32 +393,12 @@ int main() {
     problem.minimize(std::accumulate(σ.begin(), σ.end(), slp::Variable{0.0}));
     auto status = problem.solve();
 
-    if (status == slp::ExitStatus::SUCCESS) {
-      std::println(" feasible");
+    return Solution{status, X.value(), Z.value(), U.value(), σ.value()};
+  };
 
-      X_value = X.value();
-      U_value = U.value();
-      Z_value = Z.value();
-      σ_value = σ.value();
-
-      // Problem is feasible, so try a smaller N
-      if (N_min < N) {
-        N_max = N - 1;
-      } else {
-        std::println("Smallest feasible N = {}", N);
-        found = true;
-      }
-    } else {
-      std::println(" infeasible");
-
-      // Problem is infeasible, so try a larger N
-      if (N_min < N_max) {
-        N_min = N + 1;
-      } else {
-        std::println("Smallest feasible N = {}", N + 1);
-        found = true;
-      }
-    }
-  }
+  // Find N with minimum fuel use
+  std::println("Searching N ∈ [{}, {}] for minimum fuel use", N_min, N_max);
+  auto [N, sol] = line_search(solve, N_min, N_max);
+  std::println("N = {} {}", N, sol);
 }
 #endif
