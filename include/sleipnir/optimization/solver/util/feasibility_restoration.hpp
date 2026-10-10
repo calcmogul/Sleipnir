@@ -633,6 +633,8 @@ ExitStatus feasibility_restoration(
 #endif
                   fr_x, fr_s, fr_y, fr_z, fr_μ, iterations);
 
+  const DenseVector s_old = s;
+
   x = fr_x.segment(0, x.rows());
   s = fr_s.segment(0, s.rows());
 
@@ -649,14 +651,26 @@ ExitStatus feasibility_restoration(
       s[row] = c_i[row] >= κ ? c_i[row] : Scalar(1);
     }
 
-    auto g = matrices.g(x);
-    auto A_e = matrices.A_e(x);
-    auto A_i = matrices.A_i(x);
+    // Reset the equality constraint duals since the restoration phase didn't
+    // take the cost function into account
+    y.setZero();
 
-    auto [y_estimate, z_estimate] =
-        lagrange_multiplier_estimate(g, A_e, A_i, s, μ);
-    y = y_estimate;
-    z = z_estimate;
+    // Update the inequality constraint duals with a Newton step for
+    // complementarity, taking the change in slacks during the restoration
+    // phase as the primal step.
+    //
+    //   Sz + SΔz + ZΔs = μe
+    //   Δz = S⁻¹(μe − Sz − ZΔs)
+    //
+    // If the result is too large or isn't strictly positive, reset all of
+    // them to 1.
+    z += s_old.cwiseInverse().cwiseProduct(
+        (μ - s_old.cwiseProduct(z).array() - z.cwiseProduct(s - s_old).array())
+            .matrix());
+    if (z.size() > 0 &&
+        (!(z.minCoeff() > Scalar(0)) || z.maxCoeff() > Scalar(1e3))) {
+      z.setOnes();
+    }
 
     return ExitStatus::SUCCESS;
   } else if (status == ExitStatus::SUCCESS) {
