@@ -95,7 +95,7 @@ pytest
 
 ### Running C++ tests
 
-The following will run the C++ tests on a development build.
+The following runs the C++ tests on a development build.
 
 ```bash
 cmake --build build
@@ -104,7 +104,7 @@ ctest --test-dir build --output-on-failure
 
 ### Running Python tests
 
-The following will run the Python tests on a development build.
+The following runs the Python tests on a development build.
 
 ```bash
 uv run pytest
@@ -118,6 +118,16 @@ The following runs an example on a development build.
 cd examples/...
 uv run main.py
 ```
+
+### Running formatters and linters
+
+The following runs the formatters and linters on the whole repo.
+
+```bash
+uvx wpiformat
+```
+
+Use the `-f` flag to run wpiformat on a file or directory.
 
 ## Educational resources
 
