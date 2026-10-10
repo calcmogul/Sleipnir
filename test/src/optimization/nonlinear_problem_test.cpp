@@ -2,6 +2,7 @@
 
 #include <format>
 
+#include <Eigen/Core>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -65,14 +66,11 @@ TEMPLATE_TEST_CASE("Problem - Rosenbrock with cubic and line constraint",
 
       // Local minimum at (0, 0)
       // Global minimum at (1, 1)
-      CHECK_THAT(x.value(),
-                 WithinAbs(T(0), T(1e-2)) || WithinAbs(T(1), T(1e-2)));
       INFO(std::format("  (x₀, y₀) = ({}, {})", x0, y0));
-      INFO(std::format("  (x, y) = ({}, {})", x.value(), y.value()));
-      CHECK_THAT(y.value(),
-                 WithinAbs(T(0), T(1e-2)) || WithinAbs(T(1), T(1e-2)));
-      INFO(std::format("  (x₀, y₀) = ({}, {})", x0, y0));
-      INFO(std::format("  (x, y) = ({}, {})", x.value(), y.value()));
+      Eigen::Vector<T, 2> sol{x.value(), y.value()};
+      CHECK_THAT(sol,
+                 MatrixWithinAbs(Eigen::Vector<T, 2>{T(0), T(0)}, T(1e-2)) ||
+                     MatrixWithinAbs(Eigen::Vector<T, 2>{T(1), T(1)}, T(1e-2)));
     }
   }
 }

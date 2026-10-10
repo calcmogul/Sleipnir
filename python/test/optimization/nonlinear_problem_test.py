@@ -51,12 +51,10 @@ def test_rosenbrock_with_cubic_and_line_constraint():
 
             # Local minimum at (0.0, 0.0)
             # Global minimum at (1.0, 1.0)
-            assert x.value() == pytest.approx(
-                0.0, abs=1e-2
-            ) or x.value() == pytest.approx(1.0, abs=1e-2)
-            assert y.value() == pytest.approx(
-                0.0, abs=1e-2
-            ) or y.value() == pytest.approx(1.0, abs=1e-2)
+            sol = (x.value(), y.value())
+            assert sol == pytest.approx((0.0, 0.0), abs=1e-2) or sol == pytest.approx(
+                (1.0, 1.0), abs=1e-2
+            )
 
 
 def test_rosenbrock_with_disk_constraint():
