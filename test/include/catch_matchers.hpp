@@ -5,12 +5,12 @@
 #include <cmath>
 #include <concepts>
 #include <format>
-#include <sstream>
 #include <string>
 #include <utility>
 
 #include <Eigen/Core>
 #include <Eigen/SparseCore>
+#include <catch2/catch_tostring.hpp>
 #include <catch2/matchers/catch_matchers_templated.hpp>
 
 template <typename T>
@@ -94,7 +94,7 @@ struct MatrixWithinAbs : Catch::Matchers::MatcherGenericBase {
   bool match(const Eigen::DenseBase<Derived>& matchee) const = delete;
 
   std::string describe() const override {
-    return (std::ostringstream{} << "\n==\n" << target).str();
+    return std::format("\n==\n{}", Catch::Detail::stringify(target));
   }
 
  private:
