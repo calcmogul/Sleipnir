@@ -368,11 +368,11 @@ The iterates are applied like so
 ```
   xₖ₊₁ = xₖ + αₖᵐᵃˣpₖˣ
   sₖ₊₁ = sₖ + αₖᵐᵃˣpₖˢ
-  yₖ₊₁ = yₖ + αₖᶻpₖʸ
+  yₖ₊₁ = yₖ + αₖᵐᵃˣpₖʸ
   zₖ₊₁ = zₖ + αₖᶻpₖᶻ
 ```
 
-where αₖᵐᵃˣ and αₖᶻ are computed via the fraction-to-the-boundary rule shown in equations (15a) and (15b) of [^2].
+where αₖᵐᵃˣ and αₖᶻ are computed via the fraction-to-the-boundary rule shown in equations (15a) and (15b) of [^2]. The equality constraint duals use the primal step size so they don't take full Newton steps while the primal iterates barely move.
 
 ```
   αₖᵐᵃˣ = max(α ∈ (0, 1] : sₖ + αpₖˢ ≥ (1−τⱼ)sₖ)

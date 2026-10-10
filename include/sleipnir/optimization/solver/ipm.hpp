@@ -509,7 +509,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
       } else {
         trial_s = s + α * step.p_s;
       }
-      trial_y = y + α_z * step.p_y;
+      trial_y = y + α * step.p_y;
       trial_z = z + α_z * step.p_z;
 
       trial_f = matrices.f(trial_x);
@@ -613,7 +613,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
 
           trial_x = x + α_soc * soc_step.p_x;
           trial_s = s + α_soc * soc_step.p_s;
-          trial_y = y + α_z_soc * soc_step.p_y;
+          trial_y = y + α_soc * soc_step.p_y;
           trial_z = z + α_z_soc * soc_step.p_z;
 
           trial_f = matrices.f(trial_x);
@@ -682,7 +682,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
 
         trial_x = x + α_max * step.p_x;
         trial_s = s + α_max * step.p_s;
-        trial_y = y + α_z * step.p_y;
+        trial_y = y + α_max * step.p_y;
         trial_z = z + α_z * step.p_z;
 
         trial_f = matrices.f(trial_x);
