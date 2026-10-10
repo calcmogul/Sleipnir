@@ -1,6 +1,5 @@
 // Copyright (c) Sleipnir contributors
 
-#include <cmath>
 #include <format>
 
 #include <catch2/catch_message.hpp>
@@ -64,17 +63,14 @@ TEMPLATE_TEST_CASE("Problem - Rosenbrock with cubic and line constraint",
 
       CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
 
-      auto near = [](T expected, T actual, T tolerance) {
-        using std::abs;
-        return abs(expected - actual) < tolerance;
-      };
-
       // Local minimum at (0, 0)
       // Global minimum at (1, 1)
-      CHECK((near(T(0), x.value(), T(1e-2)) || near(T(1), x.value(), T(1e-2))));
+      CHECK_THAT(x.value(),
+                 WithinAbs(T(0), T(1e-2)) || WithinAbs(T(1), T(1e-2)));
       INFO(std::format("  (x₀, y₀) = ({}, {})", x0, y0));
       INFO(std::format("  (x, y) = ({}, {})", x.value(), y.value()));
-      CHECK((near(T(0), y.value(), T(1e-2)) || near(T(1), y.value(), T(1e-2))));
+      CHECK_THAT(y.value(),
+                 WithinAbs(T(0), T(1e-2)) || WithinAbs(T(1), T(1e-2)));
       INFO(std::format("  (x₀, y₀) = ({}, {})", x0, y0));
       INFO(std::format("  (x, y) = ({}, {})", x.value(), y.value()));
     }
