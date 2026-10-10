@@ -9,6 +9,7 @@
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <sleipnir/autodiff/expression_type.hpp>
 #include <sleipnir/autodiff/variable.hpp>
@@ -32,8 +33,17 @@ TEMPLATE_TEST_CASE("Problem - Cart-pole", "[Problem]",
       [] { CHECK(slp::global_pool_resource().blocks_in_use() == 0u); }};
 
   constexpr std::chrono::duration<T> TOTAL_TIME{T(5)};
-  constexpr std::chrono::duration<T> dt{T(0.05)};
-  constexpr int N = static_cast<int>(TOTAL_TIME / dt);
+
+  // dt = 0.125 s enters feasibility restoration and returns to the normal
+  // solve, which exercises the post-restoration slack and dual reset.
+  //
+  // dt = 0.25 s used to end in a local minimizer of the constraint violation
+  // when the equality constraint duals took full steps while the primal steps
+  // were tiny. It's sensitive to small solver changes, so a failure here may
+  // just mean the iterates found a different basin rather than a regression.
+  const std::chrono::duration<T> dt{GENERATE(T(0.05), T(0.125), T(0.25))};
+  const int N = static_cast<int>(TOTAL_TIME / dt);
+  INFO(std::format("dt = {} s", dt.count()));
 
   constexpr T u_max(20);  // N
   constexpr T d_max(2);   // m

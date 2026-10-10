@@ -154,3 +154,35 @@ def test_wachter_and_biegler_line_search_failure():
     assert x.value() == pytest.approx(1.0, abs=1e-6)
     assert s1.value() == pytest.approx(0.0, abs=1e-6)
     assert s2.value() == pytest.approx(0.5, abs=1e-6)
+
+
+def test_hock_schittkowski_13():
+    # Problem 13 of [1]. The constraint gradients are linearly dependent at the
+    # solution, and the solver enters feasibility restoration and returns to the
+    # normal solve from the standard starting point.
+    #
+    # [1] Hock, W. and Schittkowski, K. "Test Examples for Nonlinear Programming
+    #     Codes", Springer, 1981.
+
+    problem = Problem()
+
+    x, y = problem.decision_variable(2)
+    x.set_value(-2)
+    y.set_value(-2)
+
+    problem.minimize((x - 2) ** 2 + y**2)
+
+    problem.subject_to((1 - x) ** 3 - y >= 0)
+    problem.subject_to(x >= 0)
+    problem.subject_to(y >= 0)
+
+    assert problem.cost_function_type() == ExpressionType.QUADRATIC
+    assert problem.equality_constraint_type() == ExpressionType.NONE
+    assert problem.inequality_constraint_type() == ExpressionType.NONLINEAR
+
+    assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS
+
+    # The solution has no finite Lagrange multipliers, so the iterates only
+    # approach it to within the square root of the tolerance
+    assert x.value() == pytest.approx(1.0, abs=1e-4)
+    assert y.value() == pytest.approx(0.0, abs=1e-4)
