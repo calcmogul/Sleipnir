@@ -353,6 +353,11 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
 
   int full_step_rejected_counter = 0;
 
+  // Variables for detecting when tiny steps stall progress toward feasibility
+  constexpr Scalar α_stall(1e-3);
+  constexpr int max_stalled_steps = 5;
+  int stalled_step_counter = 0;
+
   // Error
   Scalar E_0 = unscaled_kkt_error<Scalar, KKTErrorType::INF_NORM_SCALED>(
       matrices.scaling, g, A_e, c_e, A_i, c_i, s, y, z, Scalar(0));
@@ -700,6 +705,25 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
     }
 
     line_search_profiler.stop();
+
+    // If the filter accepts a long run of tiny steps that make no progress
+    // toward feasibility (e.g., when the Newton direction barely changes),
+    // invoke feasibility restoration
+    if (!call_feasibility_restoration && !in_feasibility_restoration) {
+      const FilterEntry<Scalar> trial_entry{trial_f, trial_s, trial_c_e,
+                                            trial_c_i, μ};
+      if (α < α_stall &&
+          current_entry.constraint_violation > Scalar(options.tolerance) &&
+          trial_entry.constraint_violation >
+              Scalar(0.99) * current_entry.constraint_violation) {
+        if (++stalled_step_counter >= max_stalled_steps) {
+          stalled_step_counter = 0;
+          call_feasibility_restoration = true;
+        }
+      } else {
+        stalled_step_counter = 0;
+      }
+    }
 
     if (call_feasibility_restoration) {
       ScopedProfiler feasibility_restoration_profiler{
