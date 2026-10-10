@@ -637,6 +637,18 @@ ExitStatus feasibility_restoration(
   s = fr_s.segment(0, s.rows());
 
   if (status == ExitStatus::CALLBACK_REQUESTED_STOP) {
+    // Feasibility restoration's barrier drives the slacks of
+    // cᵢ(x) − pᵢ + nᵢ ≥ 0 toward zero independently of the normal problem's
+    // barrier parameter. Slacks much smaller than μ make the primal-dual
+    // barrier term Hessian Σ = S⁻¹Z and μS⁻¹e huge, which causes enormous
+    // dual steps after returning. Re-center the slacks on the constraint
+    // values if they're sufficiently feasible, and on 1 otherwise.
+    constexpr Scalar κ(1e-2);
+    const DenseVector c_i = matrices.c_i(x);
+    for (int row = 0; row < s.rows(); ++row) {
+      s[row] = c_i[row] >= κ ? c_i[row] : Scalar(1);
+    }
+
     auto g = matrices.g(x);
     auto A_e = matrices.A_e(x);
     auto A_i = matrices.A_i(x);
