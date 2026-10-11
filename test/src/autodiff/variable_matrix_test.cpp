@@ -540,33 +540,33 @@ TEMPLATE_TEST_CASE("VariableMatrix - exp()", "[VariableMatrix]",
   // Scalar
   auto A1 = slp::VariableMatrix<T>{{T(4)}};
   CHECK_THAT(A1.exp().value(),
-             MatrixWithinAbs(Eigen::Matrix<T, 1, 1>{exp(T(4))}, T(1e-13)));
+             WithinAbs(Eigen::Matrix<T, 1, 1>{exp(T(4))}, T(1e-13)));
   CHECK_THAT((A1[_, _].exp().value()),
-             MatrixWithinAbs(Eigen::Matrix<T, 1, 1>{exp(T(4))}, T(1e-13)));
+             WithinAbs(Eigen::Matrix<T, 1, 1>{exp(T(4))}, T(1e-13)));
 
   auto A2 = slp::VariableMatrix<T>{{T(0), T(1)}, {T(0), T(-0.5)}};
   CHECK_THAT(A2.exp().value() * (-A2).exp().value(),
-             MatrixWithinAbs(Eigen::Matrix<T, 2, 2>::Identity(), T(1e-15)));
+             WithinAbs(Eigen::Matrix<T, 2, 2>::Identity(), T(1e-15)));
   CHECK_THAT((A2[_, _].exp().value() * (-A2[_, _]).exp().value()),
-             MatrixWithinAbs(Eigen::Matrix<T, 2, 2>::Identity(), T(1e-15)));
+             WithinAbs(Eigen::Matrix<T, 2, 2>::Identity(), T(1e-15)));
 
   auto A3 = slp::VariableMatrix<T>{{T(0), T(1)}, {T(0), T(10)}};
   CHECK_THAT(A3.exp().value() * (-A3).exp().value(),
-             MatrixWithinAbs(Eigen::Matrix<T, 2, 2>::Identity(), T(1e-15)));
+             WithinAbs(Eigen::Matrix<T, 2, 2>::Identity(), T(1e-15)));
   CHECK_THAT((A3[_, _].exp().value() * (-A3[_, _]).exp().value()),
-             MatrixWithinAbs(Eigen::Matrix<T, 2, 2>::Identity(), T(1e-15)));
+             WithinAbs(Eigen::Matrix<T, 2, 2>::Identity(), T(1e-15)));
 
   auto A4 = slp::VariableMatrix<T>{{T(1), T(10)}, {T(0), T(0)}};
   CHECK_THAT(A4.exp().value() * (-A4).exp().value(),
-             MatrixWithinAbs(Eigen::Matrix<T, 2, 2>::Identity(), T(1e-15)));
+             WithinAbs(Eigen::Matrix<T, 2, 2>::Identity(), T(1e-15)));
   CHECK_THAT((A4[_, _].exp().value() * (-A4[_, _]).exp().value()),
-             MatrixWithinAbs(Eigen::Matrix<T, 2, 2>::Identity(), T(1e-15)));
+             WithinAbs(Eigen::Matrix<T, 2, 2>::Identity(), T(1e-15)));
 
   auto A5 = slp::VariableMatrix<T>{{T(2), T(3)}, {T(4), T(5)}};
   CHECK_THAT(A5.exp().value() * (-A5).exp().value(),
-             MatrixWithinAbs(Eigen::Matrix<T, 2, 2>::Identity(), T(1e-12)));
+             WithinAbs(Eigen::Matrix<T, 2, 2>::Identity(), T(1e-12)));
   CHECK_THAT((A5[_, _].exp().value() * (-A5[_, _]).exp().value()),
-             MatrixWithinAbs(Eigen::Matrix<T, 2, 2>::Identity(), T(1e-12)));
+             WithinAbs(Eigen::Matrix<T, 2, 2>::Identity(), T(1e-12)));
 
   // Pascal matrix
   //
@@ -589,9 +589,9 @@ TEMPLATE_TEST_CASE("VariableMatrix - exp()", "[VariableMatrix]",
           expected_pascal[row - 1, col - 1] + expected_pascal[row - 1, col];
     }
   }
-  CHECK_THAT(pascal.exp().value(), MatrixWithinAbs(expected_pascal, T(1e-14)));
+  CHECK_THAT(pascal.exp().value(), WithinAbs(expected_pascal, T(1e-14)));
   CHECK_THAT((pascal[_, _].exp().value()),
-             MatrixWithinAbs(expected_pascal, T(1e-14)));
+             WithinAbs(expected_pascal, T(1e-14)));
 }
 
 TEMPLATE_TEST_CASE("VariableMatrix - block() free function", "[VariableMatrix]",

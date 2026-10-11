@@ -200,8 +200,8 @@ TEMPLATE_TEST_CASE("Hessian - Product of sines", "[Hessian]",
       }
     }
   }
-  CHECK_THAT(H.get().value(), MatrixWithinAbs(expected_H, T(1e-15)));
-  CHECK_THAT(H.value().toDense(), MatrixWithinAbs(expected_H, T(1e-15)));
+  CHECK_THAT(H.get().value(), WithinAbs(expected_H, T(1e-15)));
+  CHECK_THAT(H.value().toDense(), WithinAbs(expected_H, T(1e-15)));
 }
 
 TEMPLATE_TEST_CASE("Hessian - Sum of squared residuals", "[Hessian]",
@@ -350,16 +350,16 @@ TEMPLATE_TEST_CASE("Hessian - pow()", "[Hessian]", SCALAR_TYPES_UNDER_TEST) {
   T mixed = T(9) * (T(1) + T(3) * log(T(3)));
   Eigen::Matrix<T, 2, 2> expected{{T(18), mixed},
                                   {mixed, T(27) * pow(log(T(3)), T(2))}};
-  CHECK_THAT(symbolic_H.value(), MatrixWithinAbs(expected, T(1e-12)));
-  CHECK_THAT(hessian.value().toDense(), MatrixWithinAbs(expected, T(1e-12)));
+  CHECK_THAT(symbolic_H.value(), WithinAbs(expected, T(1e-12)));
+  CHECK_THAT(hessian.value().toDense(), WithinAbs(expected, T(1e-12)));
 
   input[0].set_value(T(3));
   input[1].set_value(T(2));
   mixed = T(4) * (T(1) + T(2) * log(T(4)));
   expected = Eigen::Matrix<T, 2, 2>{{T(2), mixed},
                                     {mixed, T(16) * pow(log(T(4)), T(2))}};
-  CHECK_THAT(symbolic_H.value(), MatrixWithinAbs(expected, T(1e-12)));
-  CHECK_THAT(hessian.value().toDense(), MatrixWithinAbs(expected, T(1e-12)));
+  CHECK_THAT(symbolic_H.value(), WithinAbs(expected, T(1e-12)));
+  CHECK_THAT(hessian.value().toDense(), WithinAbs(expected, T(1e-12)));
 }
 
 TEMPLATE_TEST_CASE("Hessian - Rosenbrock", "[Hessian]",

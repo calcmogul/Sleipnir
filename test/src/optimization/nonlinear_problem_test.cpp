@@ -68,9 +68,8 @@ TEMPLATE_TEST_CASE("Problem - Rosenbrock with cubic and line constraint",
       // Global minimum at (1, 1)
       INFO(std::format("  (x₀, y₀) = ({}, {})", x0, y0));
       Eigen::Vector<T, 2> sol{x.value(), y.value()};
-      CHECK_THAT(sol,
-                 MatrixWithinAbs(Eigen::Vector<T, 2>{T(0), T(0)}, T(1e-2)) ||
-                     MatrixWithinAbs(Eigen::Vector<T, 2>{T(1), T(1)}, T(1e-2)));
+      CHECK_THAT(sol, WithinAbs(Eigen::Vector<T, 2>{T(0), T(0)}, T(1e-2)) ||
+                          WithinAbs(Eigen::Vector<T, 2>{T(1), T(1)}, T(1e-2)));
     }
   }
 }

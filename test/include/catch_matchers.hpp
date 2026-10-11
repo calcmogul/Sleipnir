@@ -13,9 +13,11 @@
 #include <catch2/catch_tostring.hpp>
 #include <catch2/matchers/catch_matchers_templated.hpp>
 
+/// Scalar absolute tolerance matcher.
 template <typename T>
-struct WithinAbs : Catch::Matchers::MatcherGenericBase {
-  WithinAbs(T target, T margin) : target{target}, margin{margin} {}
+struct ScalarWithinAbsMatcher : Catch::Matchers::MatcherGenericBase {
+  ScalarWithinAbsMatcher(T target, T margin)
+      : target{std::move(target)}, margin{std::move(margin)} {}
 
   bool match(const T& matchee) const {
     using std::abs;
@@ -23,13 +25,19 @@ struct WithinAbs : Catch::Matchers::MatcherGenericBase {
   }
 
   std::string describe() const override {
-    return std::format("\n==\n{}", target);
+    return std::format("is within {} of {}", margin, target);
   }
 
  private:
   T target;
   T margin;
 };
+
+/// Creates a scalar absolute tolerance matcher.
+template <typename T>
+ScalarWithinAbsMatcher<T> WithinAbs(T target, T margin) {
+  return {std::move(target), std::move(margin)};
+}
 
 /// Any Eigen::Matrix (i.e., not an expression template).
 template <typename T>
@@ -44,12 +52,13 @@ concept SparseMatrix =
     std::same_as<T, Eigen::SparseMatrix<typename T::Scalar, T::Options,
                                         typename T::StorageIndex>>;
 
+/// Matrix absolute tolerance matcher.
 template <typename Matrix>
   requires DenseMatrix<Matrix> || SparseMatrix<Matrix>
-struct MatrixWithinAbs : Catch::Matchers::MatcherGenericBase {
+struct MatrixWithinAbsMatcher : Catch::Matchers::MatcherGenericBase {
   using Scalar = typename Matrix::Scalar;
 
-  MatrixWithinAbs(Matrix target, Scalar margin)
+  MatrixWithinAbsMatcher(Matrix target, Scalar margin)
       : target{std::move(target)}, margin{margin} {}
 
   bool match(const Matrix& matchee) const {
@@ -94,7 +103,8 @@ struct MatrixWithinAbs : Catch::Matchers::MatcherGenericBase {
   bool match(const Eigen::DenseBase<Derived>& matchee) const = delete;
 
   std::string describe() const override {
-    return std::format("\n==\n{}", Catch::Detail::stringify(target));
+    return std::format("\nis within {} elementwise of\n{}", margin,
+                       Catch::StringMaker<Matrix>::convert(target));
   }
 
  private:
@@ -102,21 +112,22 @@ struct MatrixWithinAbs : Catch::Matchers::MatcherGenericBase {
   Scalar margin;
 };
 
-/// Plain dense matrix deduces dynamic-size dense matrix specialization so
-/// matchees with mismatched sizes fail the match instead of Eigen producing a
-/// resize assertion.
-template <DenseMatrix M>
-MatrixWithinAbs(const M&, typename M::Scalar) -> MatrixWithinAbs<
-    Eigen::Matrix<typename M::Scalar, Eigen::Dynamic, Eigen::Dynamic>>;
-
-/// Dense expression template deduces dense matrix specialization.
+/// Creates a dense matrix absolute tolerance matcher.
+///
+/// Uses a dynamic-size target so matchees with mismatched sizes fail the match
+/// instead of Eigen producing a resize assertion.
 template <typename Derived>
-MatrixWithinAbs(const Eigen::DenseBase<Derived>&, typename Derived::Scalar)
-    -> MatrixWithinAbs<Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic,
-                                     Eigen::Dynamic>>;
+MatrixWithinAbsMatcher<
+    Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic>>
+WithinAbs(const Eigen::DenseBase<Derived>& target,
+          typename Derived::Scalar margin) {
+  return {target, margin};
+}
 
-/// Sparse expression template deduces sparse matrix specialization.
+/// Creates a sparse matrix absolute tolerance matcher.
 template <typename Derived>
-MatrixWithinAbs(const Eigen::SparseMatrixBase<Derived>&,
-                typename Derived::Scalar)
-    -> MatrixWithinAbs<Eigen::SparseMatrix<typename Derived::Scalar>>;
+MatrixWithinAbsMatcher<Eigen::SparseMatrix<typename Derived::Scalar>> WithinAbs(
+    const Eigen::SparseMatrixBase<Derived>& target,
+    typename Derived::Scalar margin) {
+  return {target, margin};
+}
