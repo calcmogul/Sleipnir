@@ -22,11 +22,7 @@
 
 namespace slp::detail {
 
-#ifdef _WIN32
-inline constexpr bool USE_POOL_ALLOCATOR = false;
-#else
 inline constexpr bool USE_POOL_ALLOCATOR = true;
-#endif
 
 template <typename Scalar>
 struct Expression;
