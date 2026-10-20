@@ -12,6 +12,8 @@
 #include "sleipnir/optimization/solver/util/inertia.hpp"
 #include "sleipnir/optimization/solver/util/regularization_limits.hpp"
 
+// See docs/algorithms.md#Works_cited for citation definitions.
+
 namespace slp {
 
 /// Solves a dense KKT system.
@@ -65,8 +67,8 @@ class DenseKKTSolver {
     m_lhs = lhs;
     m_info = m_solver.compute(m_lhs).info();
     if (m_info == Eigen::Success && inertia() == ideal_inertia) {
-      m_prev_δ = Scalar(0);
-      m_prev_γ = Scalar(0);
+      m_δ = Scalar(0);
+      m_γ = Scalar(0);
       return *this;
     }
 
@@ -83,16 +85,22 @@ class DenseKKTSolver {
     // The initial nonzero constraint regularization
     const Scalar γ_initial = min_constraint_regularization<Scalar>();
 
-    // If the previous δ was zero, attempt a small value. Otherwise, attempt a
-    // smaller value than the previous δ so δ trends downward. δ has a floor
-    // because when regularization is needed, δ is the only curvature in some
-    // directions, so the KKT matrix's smallest eigenvalues shrink with δ. Too
-    // small a δ makes the matrix ill-conditioned, which amplifies the
-    // factorization's rounding error in the solution, and eventually puts those
-    // eigenvalues near zero, where the inertia check counts them as
-    // zero.
-    Scalar δ = m_prev_δ == Scalar(0) ? Scalar(1e-4)
-                                     : std::max(m_prev_δ / Scalar(2), δ_min);
+    // Start at half the last δ that was needed (or 1e-4 if none) so δ trends
+    // downward, then increase δ from there. Unlike LDLT, Bunch-Kaufman has no
+    // exact zero pivots from structurally zero diagonal entries, so the δ = 0
+    // attempt above replaces the δ_min attempt the sparse solver makes.
+    //
+    // δ has a floor because when regularization is needed, δ is the only
+    // curvature in some directions, so the KKT matrix's smallest eigenvalues
+    // shrink with δ. Too small a δ makes the matrix ill-conditioned, which
+    // amplifies the factorization's rounding error in the solution, and
+    // eventually puts those eigenvalues near zero, where the inertia check
+    // counts them as zero.
+    //
+    // See algorithm IC in section 3.1 of [2].
+    Scalar δ = m_last_needed_δ == Scalar(0)
+                   ? Scalar(1e-4)
+                   : std::max(m_last_needed_δ / Scalar(2), δ_min);
 
     // Start γ at the minimum to minimize equality constraint Jacobian
     // distortion.
@@ -107,8 +115,9 @@ class DenseKKTSolver {
 
         if (inertia == ideal_inertia) {
           // If the inertia is ideal, report success
-          m_prev_δ = δ;
-          m_prev_γ = γ;
+          m_last_needed_δ = δ;
+          m_δ = δ;
+          m_γ = γ;
           return *this;
         } else if (inertia.zero > 0) {
           if (γ == Scalar(0)) {
@@ -149,8 +158,9 @@ class DenseKKTSolver {
       // by ill-conditioning.
       if (δ > Scalar(1e20) || γ > Scalar(1e20)) {
         m_info = Eigen::NumericalIssue;
-        m_prev_δ = δ;
-        m_prev_γ = γ;
+        m_last_needed_δ = δ;
+        m_δ = δ;
+        m_γ = γ;
         return *this;
       }
     }
@@ -200,12 +210,12 @@ class DenseKKTSolver {
   /// Returns the Hessian regularization factor.
   ///
   /// @return Hessian regularization factor.
-  Scalar hessian_regularization() const { return m_prev_δ; }
+  Scalar hessian_regularization() const { return m_δ; }
 
   /// Returns the constraint Jacobian regularization factor.
   ///
   /// @return Constraint Jacobian regularization factor.
-  Scalar constraint_jacobian_regularization() const { return m_prev_γ; }
+  Scalar constraint_jacobian_regularization() const { return m_γ; }
 
  private:
   using Solver = Eigen::BunchKaufman<DenseMatrix>;
@@ -230,11 +240,16 @@ class DenseKKTSolver {
   Inertia ideal_inertia{m_num_decision_variables, m_num_equality_constraints,
                         0};
 
-  /// The value of δ from the previous run of compute().
-  Scalar m_prev_δ{0};
+  /// The last nonzero δ that was needed for ideal inertia (or that hit the
+  /// failure limit). Seeds the δ search.
+  Scalar m_last_needed_δ{0};
 
-  /// The value of γ from the previous run of compute().
-  Scalar m_prev_γ{0};
+  /// The Hessian regularization factor of the current factorization.
+  Scalar m_δ{0};
+
+  /// The equality constraint Jacobian regularization factor of the current
+  /// factorization.
+  Scalar m_γ{0};
 
   /// Returns the inertia of the most recently factorized KKT matrix.
   ///

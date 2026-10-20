@@ -13,6 +13,8 @@
 #include "sleipnir/optimization/solver/util/kkt_ordering.hpp"
 #include "sleipnir/optimization/solver/util/regularization_limits.hpp"
 
+// See docs/algorithms.md#Works_cited for citation definitions.
+
 namespace slp {
 
 /// Solves a sparse KKT system.
@@ -66,33 +68,11 @@ class SparseKKTSolver {
   SparseKKTSolver& compute(const SparseMatrix& lhs) {
     // Regularization with zeros ensures the pattern analysis in the sparse
     // solver is reused by all factorizations
-    m_lhs = lhs + regularization(Scalar(0), Scalar(0));
-
     if (!m_analyzed_pattern) {
+      m_lhs = lhs + regularization(Scalar(0), Scalar(0));
       m_ordering.analyze(m_lhs, m_num_decision_variables);
       m_solver.analyzePattern(m_ordering.permute(m_lhs));
       m_analyzed_pattern = true;
-    }
-
-    // If the previous δ was small and nonzero, skip the δ = 0 attempt because
-    // it's almost always rejected for small pivots. If the previous δ was
-    // large, attempt δ = 0 so δ can drop to zero quickly.
-    if (m_prev_δ == Scalar(0) || m_prev_δ > Scalar(1e-2)) {
-      m_solver.factorize(m_ordering.permute(m_lhs));
-      m_info = m_solver.info();
-
-      if (m_info == Eigen::Success) {
-        // If the inertia is ideal and D from LDLT is sufficiently far from
-        // zero, don't regularize the system
-        if (inertia() == ideal_inertia &&
-            (m_solver.vectorD().cwiseAbs().array() >=
-             min_unregularized_pivot<Scalar>())
-                .all()) {
-          m_prev_δ = Scalar(0);
-          m_prev_γ = Scalar(0);
-          return *this;
-        }
-      }
     }
 
     // We'll give lhs the correct inertia by adding [δI, 0; 0, −γI] where δ and
@@ -108,17 +88,32 @@ class SparseKKTSolver {
     // The initial nonzero constraint regularization
     const Scalar γ_initial = min_constraint_regularization<Scalar>();
 
-    // If the previous δ was zero, attempt a small value. Otherwise, attempt a
-    // smaller value than the previous δ so δ trends downward. δ has a floor
-    // because Hessian rows with no curvature (e.g., states in linear dynamics)
-    // have only δ on their diagonal, and pivots that small cause element growth
-    // that corrupts the inertia and solution.
-    Scalar δ = m_prev_δ == Scalar(0) ? Scalar(1e-4)
-                                     : std::max(m_prev_δ / Scalar(2), δ_min);
+    // First, attempt the minimum δ. It's too small to distort the step, but it
+    // removes the exact zero pivots that structurally zero diagonal entries
+    // (e.g., decision variables with no curvature) cause in LDLT. If that
+    // fails, δ jumps to a value based on the last δ that was needed, then
+    // increases from there.
+    //
+    // See algorithm IC in section 3.1 of [2].
+    Scalar δ = δ_min;
 
     // Start γ at the minimum to minimize equality constraint Jacobian
     // distortion.
     Scalar γ = m_γ_min;
+
+    // Picks the next δ to try
+    auto next_δ = [&] {
+      // If δ is at the minimum, jump to half the last needed δ (or 1e-4 if
+      // none) so δ trends downward
+      if (δ == δ_min) {
+        δ = m_last_needed_δ == Scalar(0)
+                ? Scalar(1e-4)
+                : std::max(m_last_needed_δ / Scalar(2), Scalar(10) * δ_min);
+      } else {
+        // Otherwise, multiply δ by 10
+        δ *= Scalar(10);
+      }
+    };
 
     while (true) {
       m_lhs = lhs + regularization(δ, γ);
@@ -129,9 +124,13 @@ class SparseKKTSolver {
         Inertia inertia = this->inertia();
 
         if (inertia == ideal_inertia) {
-          // If the inertia is ideal, report success
-          m_prev_δ = δ;
-          m_prev_γ = γ;
+          // If the inertia is ideal, report success. Only remember δ if it
+          // was needed.
+          if (δ > δ_min) {
+            m_last_needed_δ = δ;
+          }
+          m_δ = δ;
+          m_γ = γ;
           return *this;
         } else if (inertia.zero > 0) {
           if (γ == Scalar(0)) {
@@ -139,15 +138,15 @@ class SparseKKTSolver {
             // compensate for a rank-deficient equality constraint Jacobian
             γ = γ_initial;
           } else {
-            // If there's zero eigenvalues and γ > 0, increase δ and γ to drive
-            // all eigenvalues away from zero
-            δ *= Scalar(10);
+            // If there's zero eigenvalues and γ > 0, try the next δ and a
+            // larger γ to drive all eigenvalues away from zero
+            next_δ();
             γ = std::min(γ * Scalar(10), γ_max);
           }
         } else if (inertia.negative > ideal_inertia.negative) {
-          // If there's too many negative eigenvalues, increase δ to add more
-          // positive eigenvalues
-          δ *= Scalar(10);
+          // If there's too many negative eigenvalues, try the next δ to add
+          // more positive eigenvalues
+          next_δ();
         } else if (inertia.positive > ideal_inertia.positive) {
           // If there's too many positive eigenvalues and the smallest pivot is
           // from the equality constraint Jacobian block, increase γ to add more
@@ -160,13 +159,13 @@ class SparseKKTSolver {
           if (γ < γ_max && !smallest_pivot_is_hessian()) {
             γ = γ == Scalar(0) ? γ_initial : std::min(γ * Scalar(10), γ_max);
           } else {
-            δ *= Scalar(10);
+            next_δ();
           }
         }
       } else {
-        // If the decomposition failed, increase δ and γ to drive all
-        // eigenvalues away from zero
-        δ *= Scalar(10);
+        // If the decomposition failed, try the next δ and a larger γ to drive
+        // all eigenvalues away from zero
+        next_δ();
         γ = γ == Scalar(0) ? γ_initial : std::min(γ * Scalar(10), γ_max);
       }
 
@@ -174,8 +173,9 @@ class SparseKKTSolver {
       // by ill-conditioning.
       if (δ > Scalar(1e20) || γ > Scalar(1e20)) {
         m_info = Eigen::NumericalIssue;
-        m_prev_δ = δ;
-        m_prev_γ = γ;
+        m_last_needed_δ = δ;
+        m_δ = δ;
+        m_γ = γ;
         return *this;
       }
     }
@@ -227,12 +227,12 @@ class SparseKKTSolver {
   /// Returns the Hessian regularization factor.
   ///
   /// @return Hessian regularization factor.
-  Scalar hessian_regularization() const { return m_prev_δ; }
+  Scalar hessian_regularization() const { return m_δ; }
 
   /// Returns the constraint Jacobian regularization factor.
   ///
   /// @return Constraint Jacobian regularization factor.
-  Scalar constraint_jacobian_regularization() const { return m_prev_γ; }
+  Scalar constraint_jacobian_regularization() const { return m_γ; }
 
  private:
   // KKTOrdering permutes the KKT matrix before factorization, so the solver
@@ -264,11 +264,16 @@ class SparseKKTSolver {
   Inertia ideal_inertia{m_num_decision_variables, m_num_equality_constraints,
                         0};
 
-  /// The value of δ from the previous run of compute().
-  Scalar m_prev_δ{0};
+  /// The last δ larger than the minimum that was needed for ideal inertia
+  /// (or that hit the failure limit). Seeds next_δ().
+  Scalar m_last_needed_δ{0};
 
-  /// The value of γ from the previous run of compute().
-  Scalar m_prev_γ{0};
+  /// The Hessian regularization factor of the current factorization.
+  Scalar m_δ{0};
+
+  /// The equality constraint Jacobian regularization factor of the current
+  /// factorization.
+  Scalar m_γ{0};
 
   /// Returns the inertia of the most recently factorized KKT matrix.
   ///
