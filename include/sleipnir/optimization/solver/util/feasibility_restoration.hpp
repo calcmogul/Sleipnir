@@ -312,10 +312,25 @@ ExitStatus feasibility_restoration(
 
   x = fr_x.segment(0, x.rows());
 
-  if (status == ExitStatus::CALLBACK_REQUESTED_STOP) {
-    auto g = matrices.g(x);
-    auto A_e = matrices.A_e(x);
+  // If feasibility restoration converged, check the constraint violation in
+  // the original problem's scaling
+  DenseVector c_e_unscaled;
+  bool c_e_violated = false;
+  if (status == ExitStatus::SUCCESS) {
+    c_e_unscaled = matrices.c_e(x);
+    if (matrices.scaling.c_e.size() > 0) {
+      c_e_unscaled =
+          matrices.scaling.c_e.cwiseInverse().cwiseProduct(c_e_unscaled);
+    }
 
+    c_e_violated = c_e_unscaled.template lpNorm<Eigen::Infinity>() >
+                   Scalar(options.tolerance);
+  }
+
+  // Return to the normal phase if feasibility restoration stopped early, or if
+  // it converged to a feasible point (e.g., because it was run to convergence)
+  if (status == ExitStatus::CALLBACK_REQUESTED_STOP ||
+      (status == ExitStatus::SUCCESS && !c_e_violated)) {
     // Reset the equality constraint duals since feasibility restoration didn't
     // account for the cost function
     y.setZero();
@@ -323,25 +338,17 @@ ExitStatus feasibility_restoration(
     return ExitStatus::SUCCESS;
   } else if (status == ExitStatus::SUCCESS) {
     // Feasibility restoration converged to a minimizer of the constraint
-    // violation. If the constraint violation is still above the tolerance,
+    // violation, and the constraint violation is still above the tolerance, so
     // that minimizer is a certificate of local infeasibility. Declaring local
     // infeasibility anywhere else risks false positives (e.g., a
     // point-in-time test can reject iterates the solver would otherwise
     // escape). See section 3.3, p. 14 of [2].
-    DenseVector c_e = matrices.c_e(x);
-    if (matrices.scaling.c_e.size() > 0) {
-      c_e = matrices.scaling.c_e.cwiseInverse().cwiseProduct(c_e);
+    if (options.diagnostics) {
+      print_c_e_local_infeasibility_error(c_e_unscaled,
+                                          Scalar(options.tolerance));
     }
 
-    if (c_e.template lpNorm<Eigen::Infinity>() > Scalar(options.tolerance)) {
-      if (options.diagnostics) {
-        print_c_e_local_infeasibility_error(c_e, Scalar(options.tolerance));
-      }
-
-      return ExitStatus::LOCALLY_INFEASIBLE;
-    }
-
-    return ExitStatus::FEASIBILITY_RESTORATION_FAILED;
+    return ExitStatus::LOCALLY_INFEASIBLE;
   } else {
     return ExitStatus::FEASIBILITY_RESTORATION_FAILED;
   }
@@ -636,7 +643,38 @@ ExitStatus feasibility_restoration(
 
   x = fr_x.segment(0, x.rows());
 
-  if (status == ExitStatus::CALLBACK_REQUESTED_STOP) {
+  // If feasibility restoration converged, check the constraint violation in the
+  // original problem's scaling
+  DenseVector c_e_unscaled;
+  DenseVector c_i_unscaled;
+  bool c_e_violated = false;
+  bool c_i_violated = false;
+  if (status == ExitStatus::SUCCESS) {
+    c_e_unscaled = matrices.c_e(x);
+    if (matrices.scaling.c_e.size() > 0) {
+      c_e_unscaled =
+          matrices.scaling.c_e.cwiseInverse().cwiseProduct(c_e_unscaled);
+    }
+
+    c_i_unscaled = matrices.c_i(x);
+    if (matrices.scaling.c_i.size() > 0) {
+      c_i_unscaled =
+          matrices.scaling.c_i.cwiseInverse().cwiseProduct(c_i_unscaled);
+    }
+
+    // Inequality constraints cᵢ(x) ≥ 0 are only violated where they're
+    // negative
+    c_e_violated = c_e_unscaled.template lpNorm<Eigen::Infinity>() >
+                   Scalar(options.tolerance);
+    c_i_violated =
+        (-c_i_unscaled).cwiseMax(Scalar(0)).template lpNorm<Eigen::Infinity>() >
+        Scalar(options.tolerance);
+  }
+
+  // Return to the normal phase if feasibility restoration stopped early, or if
+  // it converged to a feasible point (e.g., because it was run to convergence)
+  if (status == ExitStatus::CALLBACK_REQUESTED_STOP ||
+      (status == ExitStatus::SUCCESS && !c_e_violated && !c_i_violated)) {
     const DenseVector s_old = s;
 
     // Re-center the slacks on the original constraints cᵢ(x) if they're
@@ -672,7 +710,7 @@ ExitStatus feasibility_restoration(
     return ExitStatus::SUCCESS;
   } else if (status == ExitStatus::SUCCESS) {
     // Feasibility restoration converged to a minimizer of the constraint
-    // violation. If the constraint violation is still above the tolerance,
+    // violation, and the constraint violation is still above the tolerance, so
     // that minimizer is a certificate of local infeasibility. Declaring local
     // infeasibility anywhere else risks false positives (e.g., a
     // point-in-time test can reject iterates the solver would otherwise
@@ -680,39 +718,18 @@ ExitStatus feasibility_restoration(
 
     s = fr_s.segment(0, s.rows());
 
-    DenseVector c_e = matrices.c_e(x);
-    if (matrices.scaling.c_e.size() > 0) {
-      c_e = matrices.scaling.c_e.cwiseInverse().cwiseProduct(c_e);
-    }
-
-    DenseVector c_i = matrices.c_i(x);
-    if (matrices.scaling.c_i.size() > 0) {
-      c_i = matrices.scaling.c_i.cwiseInverse().cwiseProduct(c_i);
-    }
-
-    // Inequality constraints cᵢ(x) ≥ 0 are only violated where they're
-    // negative
-    const DenseVector c_i_violation = (-c_i).cwiseMax(Scalar(0));
-
-    const bool c_e_violated =
-        c_e.template lpNorm<Eigen::Infinity>() > Scalar(options.tolerance);
-    const bool c_i_violated = c_i_violation.template lpNorm<Eigen::Infinity>() >
-                              Scalar(options.tolerance);
-
-    if (c_e_violated || c_i_violated) {
-      if (options.diagnostics) {
-        if (c_e_violated) {
-          print_c_e_local_infeasibility_error(c_e, Scalar(options.tolerance));
-        }
-        if (c_i_violated) {
-          print_c_i_local_infeasibility_error(c_i, Scalar(options.tolerance));
-        }
+    if (options.diagnostics) {
+      if (c_e_violated) {
+        print_c_e_local_infeasibility_error(c_e_unscaled,
+                                            Scalar(options.tolerance));
       }
-
-      return ExitStatus::LOCALLY_INFEASIBLE;
+      if (c_i_violated) {
+        print_c_i_local_infeasibility_error(c_i_unscaled,
+                                            Scalar(options.tolerance));
+      }
     }
 
-    return ExitStatus::FEASIBILITY_RESTORATION_FAILED;
+    return ExitStatus::LOCALLY_INFEASIBLE;
   } else {
     s = fr_s.segment(0, s.rows());
     return ExitStatus::FEASIBILITY_RESTORATION_FAILED;

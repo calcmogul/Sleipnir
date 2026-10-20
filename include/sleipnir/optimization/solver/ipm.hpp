@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cmath>
 #include <functional>
+#include <limits>
 #include <optional>
 #include <span>
 
@@ -263,6 +264,12 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
   Scalar τ = τ_min;
 
   Filter<Scalar> filter{constraint_violation(c_e, c_i, s)};
+
+  // Used to detect cycling between the normal phase and feasibility restoration
+  int num_feasibility_restoration_entries = 0;
+  Scalar min_feasibility_restoration_entry_violation =
+      std::numeric_limits<Scalar>::infinity();
+  int num_feasibility_restoration_stalled_entries = 0;
 
   // This should be run when the error is below a desired threshold for the
   // current barrier parameter
@@ -669,6 +676,34 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
 
       FilterEntry initial_entry{matrices.f(x), s, c_e, c_i, μ};
 
+      // Feasibility restoration normally stops once it sufficiently reduces the
+      // constraint violation, but the normal phase can then drive the
+      // constraint violation back up, so the solver cycles between them. On
+      // infeasible problems, this prevents feasibility restoration from ever
+      // converging to a minimizer of the constraint violation, which is the
+      // certificate of local infeasibility.
+      //
+      // If several consecutive feasibility restoration entries didn't improve
+      // on the smallest constraint violation at entry, run feasibility
+      // restoration to convergence instead.
+      //
+      // Don't do this during the first few entries. Early entries often fail to
+      // improve while the solver is still far from a feasible region, and
+      // converging feasibility restoration there can find a local minimizer of
+      // the constraint violation even though the problem is feasible.
+      ++num_feasibility_restoration_entries;
+      if (initial_entry.constraint_violation <
+          Scalar(0.9) * min_feasibility_restoration_entry_violation) {
+        min_feasibility_restoration_entry_violation =
+            initial_entry.constraint_violation;
+        num_feasibility_restoration_stalled_entries = 0;
+      } else {
+        ++num_feasibility_restoration_stalled_entries;
+      }
+      const bool run_feasibility_restoration_to_convergence =
+          num_feasibility_restoration_entries > 5 &&
+          num_feasibility_restoration_stalled_entries >= 2;
+
       // Feasibility restoration phase
       gch::small_vector<std::function<bool(const IterationInfo<Scalar>& info)>>
           callbacks;
@@ -676,6 +711,10 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
         callbacks.emplace_back(callback);
       }
       callbacks.emplace_back([&](const IterationInfo<Scalar>& info) {
+        if (run_feasibility_restoration_to_convergence) {
+          return false;
+        }
+
         DenseVector trial_x =
             info.x.segment(0, matrices.num_decision_variables);
         DenseVector trial_s =
