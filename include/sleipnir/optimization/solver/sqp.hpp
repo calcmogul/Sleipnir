@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cmath>
 #include <functional>
+#include <limits>
 #include <optional>
 #include <span>
 
@@ -191,6 +192,12 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
   }
 
   Filter<Scalar> filter{constraint_violation(c_e)};
+
+  // Used to detect cycling between the normal phase and feasibility restoration
+  int feasibility_restoration_entries = 0;
+  Scalar min_feasibility_restoration_entry_violation =
+      std::numeric_limits<Scalar>::infinity();
+  int feasibility_restoration_stalled_entries = 0;
 
   // Kept outside the loop so its storage can be reused
   gch::small_vector<Eigen::Triplet<Scalar>> triplets;
@@ -474,6 +481,34 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
 
       FilterEntry initial_entry{matrices.f(x), c_e};
 
+      // Feasibility restoration normally stops once it sufficiently reduces the
+      // constraint violation, but the normal phase can then drive the
+      // constraint violation back up, so the solver cycles between them. On
+      // infeasible problems, this prevents feasibility restoration from ever
+      // converging to a minimizer of the constraint violation, which is the
+      // certificate of local infeasibility.
+      //
+      // If several consecutive feasibility restoration entries didn't improve
+      // on the smallest constraint violation at entry, run feasibility
+      // restoration to convergence instead.
+      //
+      // Don't do this during the first few entries. Early entries often fail to
+      // improve while the solver is still far from a feasible region, and
+      // converging feasibility restoration there can find a local minimizer of
+      // the constraint violation even though the problem is feasible.
+      ++feasibility_restoration_entries;
+      if (initial_entry.constraint_violation <
+          Scalar(0.9) * min_feasibility_restoration_entry_violation) {
+        min_feasibility_restoration_entry_violation =
+            initial_entry.constraint_violation;
+        feasibility_restoration_stalled_entries = 0;
+      } else {
+        ++feasibility_restoration_stalled_entries;
+      }
+      const bool run_feasibility_restoration_to_convergence =
+          feasibility_restoration_entries > 5 &&
+          feasibility_restoration_stalled_entries >= 2;
+
       // Feasibility restoration phase
       gch::small_vector<std::function<bool(const IterationInfo<Scalar>& info)>>
           callbacks;
@@ -481,6 +516,10 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
         callbacks.emplace_back(callback);
       }
       callbacks.emplace_back([&](const IterationInfo<Scalar>& info) {
+        if (run_feasibility_restoration_to_convergence) {
+          return false;
+        }
+
         DenseVector trial_x =
             info.x.segment(0, matrices.num_decision_variables);
 
