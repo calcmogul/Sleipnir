@@ -73,8 +73,14 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
                Eigen::Vector<Scalar, Eigen::Dynamic>& x) {
   using DenseVector = Eigen::Vector<Scalar, Eigen::Dynamic>;
 
+  // Start the slacks on the inequality constraints cᵢ(x) if they're
+  // sufficiently feasible, and on 1 otherwise
   DenseVector s =
       DenseVector::Ones(matrix_callbacks.num_inequality_constraints);
+  if (s.rows() > 0) {
+    const DenseVector c_i = matrix_callbacks.c_i(x);
+    s = (c_i.array() >= Scalar(1e-2)).select(c_i, Scalar(1));
+  }
   DenseVector y = DenseVector::Zero(matrix_callbacks.num_equality_constraints);
   DenseVector z =
       DenseVector::Ones(matrix_callbacks.num_inequality_constraints);
