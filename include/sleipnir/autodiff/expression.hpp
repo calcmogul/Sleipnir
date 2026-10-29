@@ -215,10 +215,14 @@ struct Expression {
   /// In expression_graph.hpp's topological_sort(), scratch counts incoming
   /// edges for this node, offset by -1 so -1 means no edges.
   ///
-  /// In Hessian and Jacobian constructors, scratch represents this expression's
-  /// column in a Jacobian, or -1 otherwise.
+  /// In Hessian's constructor, scratch represents this expression's column in a
+  /// Jacobian, or -1 otherwise.
   ///
-  /// They share a default state of -1 to avoid extra assignments.
+  /// In AdjointTape's constructor, scratch temporarily holds this expression's
+  /// index in the topological list.
+  ///
+  /// All users restore it to -1 afterward, a shared default that avoids extra
+  /// assignments.
   int32_t scratch = -1;
 
   /// Reference count for intrusive shared pointer.
@@ -466,7 +470,8 @@ struct Expression {
 ///
 /// If the derived expression type sets CONSTANT_PARTIALS to true, gradient
 /// trees evaluate the partial derivatives as Scalars instead of building them
-/// as expressions.
+/// as expressions, and AdjointTape can eliminate the node from its adjoint
+/// operations if they're all 1 or −1.
 ///
 /// @tparam Derived Derived expression type.
 /// @tparam Scalar Scalar type.

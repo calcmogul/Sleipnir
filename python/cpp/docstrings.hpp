@@ -449,17 +449,21 @@ Returns:
 
 constexpr char mkd_doc_slp_Jacobian_m_J[] = R"doc()doc";
 
-constexpr char mkd_doc_slp_Jacobian_m_cached_triplets[] = R"doc(Cached triplets for gradients of linear rows)doc";
+constexpr char mkd_doc_slp_Jacobian_m_linear_rows[] =
+R"doc(Row indices of linear rows, whose gradients are computed once on
+construction)doc";
+
+constexpr char mkd_doc_slp_Jacobian_m_linear_slot_map[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Jacobian_m_linear_tape[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Jacobian_m_nonlinear_rows[] =
-R"doc(List of row indices for nonlinear rows whose graients will be computed
-in value())doc";
+R"doc(Row indices of quadratic or nonlinear rows, whose gradients are
+computed in value())doc";
 
-constexpr char mkd_doc_slp_Jacobian_m_output_lists[] = R"doc(List of output rows as column-node pairs)doc";
+constexpr char mkd_doc_slp_Jacobian_m_nonlinear_slot_map[] = R"doc()doc";
 
-constexpr char mkd_doc_slp_Jacobian_m_top_lists[] =
-R"doc(List of topologically sorted graphs from parent to child, one for each
-row)doc";
+constexpr char mkd_doc_slp_Jacobian_m_nonlinear_tape[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Jacobian_m_variables[] = R"doc()doc";
 
