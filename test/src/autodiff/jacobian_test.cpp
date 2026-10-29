@@ -204,6 +204,52 @@ TEMPLATE_TEST_CASE("Jacobian - Non-square", "[Jacobian]", SCALAR_TYPES) {
   CHECK(J_value.toDense() == expected_J);
 }
 
+TEMPLATE_TEST_CASE("Jacobian - Mixed rows", "[Jacobian]", SCALAR_TYPES) {
+  using T = TestType;
+
+  slp::scope_exit exit{
+      [] { CHECK(slp::global_pool_resource().blocks_in_use() == 0u); }};
+
+  slp::VariableMatrix<T> x{3};
+  for (int i = 0; i < 3; ++i) {
+    x[i].set_value(T(i + 1));
+  }
+
+  // Nonlinear, constant, leaf, and linear rows, with x₃ in none of them
+  //
+  //     [ x₁x₂  ]
+  // y = [   5   ]
+  //     [  x₁   ]
+  //     [x₁ + 3x₂]
+  //
+  //         [x₂  x₁  0]
+  // dy/dx = [0   0   0]
+  //         [1   0   0]
+  //         [1   3   0]
+  slp::VariableMatrix<T> y{4};
+  y[0] = x[0] * x[1];
+  y[1] = T(5);
+  y[2] = x[0];
+  y[3] = x[0] + T(3) * x[1];
+  auto J = slp::Jacobian(y, x);
+  auto J_get = J.get();
+
+  Eigen::Matrix<T, 4, 3> expected_J{{T(2), T(1), T(0)},
+                                    {T(0), T(0), T(0)},
+                                    {T(1), T(0), T(0)},
+                                    {T(1), T(3), T(0)}};
+  CHECK(J_get.value() == expected_J);
+  CHECK(J.value().toDense() == expected_J);
+
+  // The symbolic Jacobian follows wrt's values
+  x[0].set_value(T(3));
+  x[1].set_value(T(4));
+  expected_J(0, 0) = T(4);
+  expected_J(0, 1) = T(3);
+  CHECK(J_get.value() == expected_J);
+  CHECK(J.value().toDense() == expected_J);
+}
+
 TEMPLATE_TEST_CASE("Jacobian - Variable reuse", "[Jacobian]", SCALAR_TYPES) {
   using T = TestType;
 

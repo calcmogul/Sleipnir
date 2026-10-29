@@ -30,6 +30,17 @@ inline constexpr bool USE_POOL_ALLOCATOR = false;
 inline constexpr bool USE_POOL_ALLOCATOR = true;
 #endif
 
+/// Returns the operator of a non-leaf derived expression type template.
+///
+/// An operator is its derived expression type template's index in
+/// NonLeafExpressionTemplates. This function is defined in expression_op.hpp
+/// after all derived expression types.
+///
+/// @tparam T Derived expression type template.
+/// @return The operator.
+template <template <typename, ExpressionType> typename T>
+consteval uint8_t op_of();
+
 template <typename Scalar>
 struct Expression;
 
@@ -143,10 +154,17 @@ struct Expression {
   /// In expression_graph.hpp's topological_sort(), scratch counts incoming
   /// edges for this node, offset by -1 so -1 means no edges.
   ///
-  /// In Hessian and Jacobian constructors, scratch represents this expression's
-  /// column in a Jacobian, or -1 otherwise.
+  /// In Hessian's constructor, scratch represents this expression's column in a
+  /// Jacobian, or -1 otherwise.
   ///
-  /// They share a default state of -1 to avoid extra assignments.
+  /// In ExpressionTape's constructor, scratch temporarily holds this
+  /// expression's index in the topological list.
+  ///
+  /// In AdjointTape's constructor, scratch temporarily holds this expression's
+  /// column if it's a variable the adjoints are with respect to.
+  ///
+  /// All users restore it to -1 afterward, a shared default that avoids extra
+  /// assignments.
   int32_t scratch = -1;
 
   /// Reference count for intrusive shared pointer.
@@ -379,6 +397,14 @@ struct Expression {
 
   /// Accumulates the child adjoints as Expressions.
   virtual void accumulate_adjoints_expr() const {}
+
+  /// Returns the operator of this expression.
+  ///
+  /// An operator is its derived expression type template's index in
+  /// NonLeafExpressionTemplates. Must not be called on a leaf.
+  ///
+  /// @return The operator of this expression.
+  virtual uint8_t op() const { std::unreachable(); }
 };
 
 /// Base of the derived expression types of non-leaf operators.
@@ -397,7 +423,8 @@ struct Expression {
 ///
 /// If the derived expression type sets CONSTANT_PARTIALS to true, gradient
 /// trees evaluate the partial derivatives as Scalars instead of building them
-/// as expressions.
+/// as expressions, and AdjointTape can eliminate the node from its adjoint
+/// operations if they're all 1 or −1.
 ///
 /// @tparam Derived Derived expression type template.
 /// @tparam Scalar Scalar type.
@@ -406,6 +433,9 @@ struct Expression {
 template <template <typename, ExpressionType> typename Derived, typename Scalar,
           ExpressionType Type, size_t NumArgs>
 struct NonLeafExpression : Expression<Scalar> {
+  /// The number of arguments.
+  static constexpr size_t NUM_ARGS = NumArgs;
+
   /// Whether the partial derivatives are the same at every argument value.
   static constexpr bool CONSTANT_PARTIALS = false;
 
@@ -457,6 +487,11 @@ struct NonLeafExpression : Expression<Scalar> {
   /// @return True if the partial derivatives are the same at every argument
   ///     value.
   bool has_constant_partials() const final { return Self::CONSTANT_PARTIALS; }
+
+  /// Returns the operator of this expression.
+  ///
+  /// @return The operator of this expression.
+  uint8_t op() const final { return op_of<Derived>(); }
 
   /// Accumulates the child adjoints as Scalars.
   void accumulate_adjoints() const final {
