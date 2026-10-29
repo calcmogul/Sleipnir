@@ -5,7 +5,11 @@ macro(compiler_flags target)
         if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
             # Suppress the following false positive warnings:
             #   * -Warray-bounds=
-            target_compile_options(${target} PRIVATE -Wno-array-bounds)
+            #   * -Wmaybe-uninitialized (Eigen's GEMM kernel with Variable)
+            target_compile_options(
+                ${target}
+                PRIVATE -Wno-array-bounds -Wno-maybe-uninitialized
+            )
         endif()
     else()
         # Suppress the following warnings:

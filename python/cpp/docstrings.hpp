@@ -2468,11 +2468,11 @@ Args:
 
 constexpr char mkd_doc_slp_Variable_expr[] = R"doc(The expression node)doc";
 
-constexpr char mkd_doc_slp_Variable_m_graph[] =
+constexpr char mkd_doc_slp_Variable_m_tape[] =
 R"doc(Used to update the value of this variable based on the values of its
-dependent variables)doc";
-
-constexpr char mkd_doc_slp_Variable_m_graph_initialized[] = R"doc(Used for lazy initialization of m_graph)doc";
+dependent variables. It's created on the first value() call, and
+copies of this variable share it since they share the expression
+graph.)doc";
 
 constexpr char mkd_doc_slp_Variable_operator_assign[] =
 R"doc(Assignment operator for scalar.
@@ -2723,6 +2723,8 @@ Template Args:
     Scalar: Scalar type.
 
 )doc";
+
+constexpr char mkd_doc_slp_detail_ValueTape[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_detail_gradient_tree[] = R"doc()doc";
 
