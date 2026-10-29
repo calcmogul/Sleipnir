@@ -17,6 +17,7 @@
 #include "sleipnir/autodiff/expression.hpp"
 #include "sleipnir/autodiff/expression_functions.hpp"
 #include "sleipnir/autodiff/expression_graph.hpp"
+#include "sleipnir/autodiff/expression_op.hpp"
 #include "sleipnir/autodiff/expression_type.hpp"
 #include "sleipnir/autodiff/sleipnir_base.hpp"
 #include "sleipnir/util/assert.hpp"
