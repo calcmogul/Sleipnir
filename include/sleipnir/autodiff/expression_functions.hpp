@@ -19,7 +19,7 @@ namespace slp::detail {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct AbsExpression final
-    : NonLeafExpression<AbsExpression<Scalar>, Scalar, 1> {
+    : NonLeafExpression<AbsExpression<Scalar>, Scalar, ExpressionOp::ABS, 1> {
   using AbsExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -30,8 +30,8 @@ struct AbsExpression final
     return abs(x);
   }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, [[maybe_unused]] const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, [[maybe_unused]] const Value& val,
                         const Value& x) {
     if constexpr (std::same_as<Value, Scalar>) {
       if (x < Scalar(0)) {
@@ -61,7 +61,7 @@ ExpressionPtr<Scalar> abs(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct AcosExpression final
-    : NonLeafExpression<AcosExpression<Scalar>, Scalar, 1> {
+    : NonLeafExpression<AcosExpression<Scalar>, Scalar, ExpressionOp::ACOS, 1> {
   using AcosExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -72,8 +72,8 @@ struct AcosExpression final
     return acos(x);
   }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, [[maybe_unused]] const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, [[maybe_unused]] const Value& val,
                         const Value& x) {
     using std::sqrt;
     g[0] = lit<Value>(Scalar(-1)) / sqrt(lit<Value>(Scalar(1)) - x * x);
@@ -94,7 +94,7 @@ ExpressionPtr<Scalar> acos(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct AsinExpression final
-    : NonLeafExpression<AsinExpression<Scalar>, Scalar, 1> {
+    : NonLeafExpression<AsinExpression<Scalar>, Scalar, ExpressionOp::ASIN, 1> {
   using AsinExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -105,8 +105,8 @@ struct AsinExpression final
     return asin(x);
   }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, [[maybe_unused]] const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, [[maybe_unused]] const Value& val,
                         const Value& x) {
     using std::sqrt;
     g[0] = lit<Value>(Scalar(1)) / sqrt(lit<Value>(Scalar(1)) - x * x);
@@ -127,7 +127,7 @@ ExpressionPtr<Scalar> asin(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct AtanExpression final
-    : NonLeafExpression<AtanExpression<Scalar>, Scalar, 1> {
+    : NonLeafExpression<AtanExpression<Scalar>, Scalar, ExpressionOp::ATAN, 1> {
   using AtanExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -138,8 +138,8 @@ struct AtanExpression final
     return atan(x);
   }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, [[maybe_unused]] const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, [[maybe_unused]] const Value& val,
                         const Value& x) {
     g[0] = lit<Value>(Scalar(1)) / (lit<Value>(Scalar(1)) + x * x);
   }
@@ -159,7 +159,8 @@ ExpressionPtr<Scalar> atan(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct Atan2Expression final
-    : NonLeafExpression<Atan2Expression<Scalar>, Scalar, 2> {
+    : NonLeafExpression<Atan2Expression<Scalar>, Scalar, ExpressionOp::ATAN2,
+                        2> {
   using Atan2Expression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -170,8 +171,8 @@ struct Atan2Expression final
     return atan2(y, x);
   }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, [[maybe_unused]] const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, [[maybe_unused]] const Value& val,
                         const Value& y, const Value& x) {
     Value d = y * y + x * x;
     g[0] = x / d;
@@ -195,7 +196,7 @@ ExpressionPtr<Scalar> atan2(const ExpressionPtr<Scalar>& y,
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct CbrtExpression final
-    : NonLeafExpression<CbrtExpression<Scalar>, Scalar, 1> {
+    : NonLeafExpression<CbrtExpression<Scalar>, Scalar, ExpressionOp::CBRT, 1> {
   using CbrtExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -206,8 +207,8 @@ struct CbrtExpression final
     return cbrt(x);
   }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, const Value& val,
                         [[maybe_unused]] const Value& x) {
     g[0] = lit<Value>(Scalar(1)) / (lit<Value>(Scalar(3)) * val * val);
   }
@@ -227,7 +228,7 @@ ExpressionPtr<Scalar> cbrt(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct CosExpression final
-    : NonLeafExpression<CosExpression<Scalar>, Scalar, 1> {
+    : NonLeafExpression<CosExpression<Scalar>, Scalar, ExpressionOp::COS, 1> {
   using CosExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -238,8 +239,8 @@ struct CosExpression final
     return cos(x);
   }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, [[maybe_unused]] const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, [[maybe_unused]] const Value& val,
                         const Value& x) {
     using std::sin;
     g[0] = -sin(x);
@@ -260,7 +261,7 @@ ExpressionPtr<Scalar> cos(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct CoshExpression final
-    : NonLeafExpression<CoshExpression<Scalar>, Scalar, 1> {
+    : NonLeafExpression<CoshExpression<Scalar>, Scalar, ExpressionOp::COSH, 1> {
   using CoshExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -271,8 +272,8 @@ struct CoshExpression final
     return cosh(x);
   }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, [[maybe_unused]] const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, [[maybe_unused]] const Value& val,
                         const Value& x) {
     using std::sinh;
     g[0] = sinh(x);
@@ -293,7 +294,7 @@ ExpressionPtr<Scalar> cosh(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct ErfExpression final
-    : NonLeafExpression<ErfExpression<Scalar>, Scalar, 1> {
+    : NonLeafExpression<ErfExpression<Scalar>, Scalar, ExpressionOp::ERF, 1> {
   using ErfExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -304,8 +305,8 @@ struct ErfExpression final
     return erf(x);
   }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, [[maybe_unused]] const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, [[maybe_unused]] const Value& val,
                         const Value& x) {
     using std::exp;
     g[0] = lit<Value>(Scalar(2.0 * std::numbers::inv_sqrtpi)) * exp(-x * x);
@@ -326,7 +327,7 @@ ExpressionPtr<Scalar> erf(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct ExpExpression final
-    : NonLeafExpression<ExpExpression<Scalar>, Scalar, 1> {
+    : NonLeafExpression<ExpExpression<Scalar>, Scalar, ExpressionOp::EXP, 1> {
   using ExpExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -337,8 +338,8 @@ struct ExpExpression final
     return exp(x);
   }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, const Value& val,
                         [[maybe_unused]] const Value& x) {
     g[0] = val;
   }
@@ -362,7 +363,8 @@ ExpressionPtr<Scalar> hypot(const ExpressionPtr<Scalar>& x,
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct Hypot2Expression final
-    : NonLeafExpression<Hypot2Expression<Scalar>, Scalar, 2> {
+    : NonLeafExpression<Hypot2Expression<Scalar>, Scalar, ExpressionOp::HYPOT2,
+                        2> {
   using Hypot2Expression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -373,8 +375,8 @@ struct Hypot2Expression final
     return hypot(x, y);
   }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, const Value& val, const Value& x,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, const Value& val, const Value& x,
                         const Value& y) {
     g[0] = x / val;
     g[1] = y / val;
@@ -409,7 +411,8 @@ ExpressionPtr<Scalar> hypot(const ExpressionPtr<Scalar>& x,
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct Hypot3Expression final
-    : NonLeafExpression<Hypot3Expression<Scalar>, Scalar, 3> {
+    : NonLeafExpression<Hypot3Expression<Scalar>, Scalar, ExpressionOp::HYPOT3,
+                        3> {
   using Hypot3Expression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -420,8 +423,8 @@ struct Hypot3Expression final
     return hypot(x, y, z);
   }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, const Value& val, const Value& x,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, const Value& val, const Value& x,
                         const Value& y, const Value& z) {
     g[0] = x / val;
     g[1] = y / val;
@@ -458,7 +461,8 @@ ExpressionPtr<Scalar> hypot(const ExpressionPtr<Scalar>& x,
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct IfElseExpression final
-    : NonLeafExpression<IfElseExpression<Scalar>, Scalar, 4> {
+    : NonLeafExpression<IfElseExpression<Scalar>, Scalar, ExpressionOp::IF_ELSE,
+                        4> {
   /// The expression's name.
   static constexpr std::string_view NAME = "if-else";
 
@@ -483,8 +487,8 @@ struct IfElseExpression final
     return cond(a, b) ? t : f;
   }
 
-  template <typename Value>
-  void eval_grad(ArgArray<Value>& g, [[maybe_unused]] const Value& val,
+  template <typename Partial, typename Value>
+  void eval_grad(ArgArray<Partial>& g, [[maybe_unused]] const Value& val,
                  const Value& a, const Value& b,
                  [[maybe_unused]] const Value& t,
                  [[maybe_unused]] const Value& f) const {
@@ -540,7 +544,7 @@ ExpressionPtr<Scalar> if_else(
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct LogExpression final
-    : NonLeafExpression<LogExpression<Scalar>, Scalar, 1> {
+    : NonLeafExpression<LogExpression<Scalar>, Scalar, ExpressionOp::LOG, 1> {
   using LogExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -551,8 +555,8 @@ struct LogExpression final
     return log(x);
   }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, [[maybe_unused]] const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, [[maybe_unused]] const Value& val,
                         const Value& x) {
     g[0] = lit<Value>(Scalar(1)) / x;
   }
@@ -572,7 +576,8 @@ ExpressionPtr<Scalar> log(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct Log10Expression final
-    : NonLeafExpression<Log10Expression<Scalar>, Scalar, 1> {
+    : NonLeafExpression<Log10Expression<Scalar>, Scalar, ExpressionOp::LOG10,
+                        1> {
   using Log10Expression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -583,8 +588,8 @@ struct Log10Expression final
     return log10(x);
   }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, [[maybe_unused]] const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, [[maybe_unused]] const Value& val,
                         const Value& x) {
     g[0] = lit<Value>(Scalar(1)) / (lit<Value>(Scalar(std::numbers::ln10)) * x);
   }
@@ -606,7 +611,7 @@ ExpressionPtr<Scalar> log10(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct MaxExpression final
-    : NonLeafExpression<MaxExpression<Scalar>, Scalar, 2> {
+    : NonLeafExpression<MaxExpression<Scalar>, Scalar, ExpressionOp::MAX, 2> {
   using MaxExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -617,8 +622,8 @@ struct MaxExpression final
     return max(a, b);
   }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, [[maybe_unused]] const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, [[maybe_unused]] const Value& val,
                         const Value& a, const Value& b) {
     if constexpr (std::same_as<Value, Scalar>) {
       bool c = a >= b;
@@ -652,7 +657,7 @@ ExpressionPtr<Scalar> max(const ExpressionPtr<Scalar>& a,
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct MinExpression final
-    : NonLeafExpression<MinExpression<Scalar>, Scalar, 2> {
+    : NonLeafExpression<MinExpression<Scalar>, Scalar, ExpressionOp::MIN, 2> {
   using MinExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -663,8 +668,8 @@ struct MinExpression final
     return min(a, b);
   }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, [[maybe_unused]] const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, [[maybe_unused]] const Value& val,
                         const Value& a, const Value& b) {
     if constexpr (std::same_as<Value, Scalar>) {
       bool c = a <= b;
@@ -703,8 +708,8 @@ ExpressionPtr<Scalar> sqrt(const ExpressionPtr<Scalar>& x);
 /// @tparam Scalar Scalar type.
 /// @tparam T Expression type.
 template <typename Scalar, ExpressionType T>
-struct PowExpression final
-    : NonLeafExpression<PowExpression<Scalar, T>, Scalar, 2, T> {
+struct PowExpression final : NonLeafExpression<PowExpression<Scalar, T>, Scalar,
+                                               ExpressionOp::POW, 2, T> {
   using PowExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -715,9 +720,9 @@ struct PowExpression final
     return pow(base, power);
   }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, const Value& val, const Value& base,
-                        const Value& power) {
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, const Value& val,
+                        const Value& base, const Value& power) {
     using std::log;
     using std::pow;
 
@@ -772,7 +777,7 @@ ExpressionPtr<Scalar> pow(const ExpressionPtr<Scalar>& base,
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct SignExpression final
-    : NonLeafExpression<SignExpression<Scalar>, Scalar, 1> {
+    : NonLeafExpression<SignExpression<Scalar>, Scalar, ExpressionOp::SIGN, 1> {
   using SignExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -803,7 +808,7 @@ ExpressionPtr<Scalar> sign(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct SinExpression final
-    : NonLeafExpression<SinExpression<Scalar>, Scalar, 1> {
+    : NonLeafExpression<SinExpression<Scalar>, Scalar, ExpressionOp::SIN, 1> {
   using SinExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -814,8 +819,8 @@ struct SinExpression final
     return sin(x);
   }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, [[maybe_unused]] const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, [[maybe_unused]] const Value& val,
                         const Value& x) {
     using std::cos;
     g[0] = cos(x);
@@ -836,7 +841,7 @@ ExpressionPtr<Scalar> sin(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct SinhExpression final
-    : NonLeafExpression<SinhExpression<Scalar>, Scalar, 1> {
+    : NonLeafExpression<SinhExpression<Scalar>, Scalar, ExpressionOp::SINH, 1> {
   using SinhExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -847,8 +852,8 @@ struct SinhExpression final
     return sinh(x);
   }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, [[maybe_unused]] const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, [[maybe_unused]] const Value& val,
                         const Value& x) {
     using std::cosh;
     g[0] = cosh(x);
@@ -869,7 +874,7 @@ ExpressionPtr<Scalar> sinh(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct SqrtExpression final
-    : NonLeafExpression<SqrtExpression<Scalar>, Scalar, 1> {
+    : NonLeafExpression<SqrtExpression<Scalar>, Scalar, ExpressionOp::SQRT, 1> {
   using SqrtExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -880,8 +885,8 @@ struct SqrtExpression final
     return sqrt(x);
   }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, const Value& val,
                         [[maybe_unused]] const Value& x) {
     g[0] = lit<Value>(Scalar(1)) / (lit<Value>(Scalar(2)) * val);
   }
@@ -901,7 +906,7 @@ ExpressionPtr<Scalar> sqrt(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct TanExpression final
-    : NonLeafExpression<TanExpression<Scalar>, Scalar, 1> {
+    : NonLeafExpression<TanExpression<Scalar>, Scalar, ExpressionOp::TAN, 1> {
   using TanExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -912,8 +917,8 @@ struct TanExpression final
     return tan(x);
   }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, [[maybe_unused]] const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, [[maybe_unused]] const Value& val,
                         const Value& x) {
     using std::cos;
 
@@ -936,7 +941,7 @@ ExpressionPtr<Scalar> tan(const ExpressionPtr<Scalar>& x) {
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct TanhExpression final
-    : NonLeafExpression<TanhExpression<Scalar>, Scalar, 1> {
+    : NonLeafExpression<TanhExpression<Scalar>, Scalar, ExpressionOp::TANH, 1> {
   using TanhExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -947,8 +952,8 @@ struct TanhExpression final
     return tanh(x);
   }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, [[maybe_unused]] const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, [[maybe_unused]] const Value& val,
                         const Value& x) {
     using std::cosh;
 

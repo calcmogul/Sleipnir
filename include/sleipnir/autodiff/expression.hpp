@@ -30,6 +30,72 @@ inline constexpr bool USE_POOL_ALLOCATOR = false;
 inline constexpr bool USE_POOL_ALLOCATOR = true;
 #endif
 
+/// Expression operators, one per derived expression type.
+enum class ExpressionOp : uint8_t {
+  /// abs().
+  ABS,
+  /// acos().
+  ACOS,
+  /// asin().
+  ASIN,
+  /// atan().
+  ATAN,
+  /// atan2().
+  ATAN2,
+  /// Binary minus operator.
+  BINARY_MINUS,
+  /// Binary plus operator.
+  BINARY_PLUS,
+  /// cbrt().
+  CBRT,
+  /// cos().
+  COS,
+  /// cosh().
+  COSH,
+  /// Binary division operator.
+  DIV,
+  /// erf().
+  ERF,
+  /// exp().
+  EXP,
+  /// Two-argument hypot().
+  HYPOT2,
+  /// Three-argument hypot().
+  HYPOT3,
+  /// if_else().
+  IF_ELSE,
+  /// log().
+  LOG,
+  /// log10().
+  LOG10,
+  /// max().
+  MAX,
+  /// min().
+  MIN,
+  /// Binary multiplication operator.
+  MULT,
+  /// pow().
+  POW,
+  /// sign().
+  SIGN,
+  /// sin().
+  SIN,
+  /// sinh().
+  SINH,
+  /// sqrt().
+  SQRT,
+  /// tan().
+  TAN,
+  /// tanh().
+  TANH,
+  /// Unary minus operator.
+  UNARY_MINUS,
+  /// Constant.
+  CONSTANT,
+  /// Decision variable.
+  DECISION_VARIABLE,
+};
+
 template <typename Scalar>
 struct Expression;
 
@@ -377,6 +443,11 @@ struct Expression {
 
   /// Accumulates the child adjoints as Expressions.
   virtual void accumulate_adjoints_expr() const {}
+
+  /// Returns the operator of this expression.
+  ///
+  /// @return The operator of this expression.
+  virtual ExpressionOp op() const = 0;
 };
 
 /// Base of the derived expression types of non-leaf operators.
@@ -385,12 +456,13 @@ struct Expression {
 /// eval(), eval_grad(), and NAME and the operator's properties.
 ///
 /// The derived expression type computes its partial derivatives with
-/// `eval_grad<Value>(g, val, a₀, a₁, ...)`, which writes ∂/∂aₖ to g[k] given
-/// the expression's value followed by the argument values. Value is Scalar to
-/// evaluate them, or ExpressionPtr<Scalar> to build them as expressions. It's
-/// static unless the partial derivatives depend on the expression's state. If
-/// the derived expression type doesn't define it, all partial derivatives are
-/// structurally zero.
+/// `eval_grad<Partial, Value>(g, val, a₀, a₁, ...)`, which writes ∂/∂aₖ to
+/// g[k] given the expression's value followed by the argument values. Value is
+/// Scalar to evaluate them, or ExpressionPtr<Scalar> to build them as
+/// expressions. Partial is the type each partial derivative is written as,
+/// which is Value here. It's static unless the partial derivatives depend on
+/// the expression's state. If the derived expression type doesn't define it,
+/// all partial derivatives are structurally zero.
 ///
 /// If the derived expression type sets CONSTANT_PARTIALS to true, gradient
 /// trees evaluate the partial derivatives as Scalars instead of building them
@@ -398,11 +470,15 @@ struct Expression {
 ///
 /// @tparam Derived Derived expression type.
 /// @tparam Scalar Scalar type.
+/// @tparam Op The expression's operator.
 /// @tparam NumArgs The number of arguments.
 /// @tparam Type The expression's type.
-template <typename Derived, typename Scalar, size_t NumArgs,
+template <typename Derived, typename Scalar, ExpressionOp Op, size_t NumArgs,
           ExpressionType Type = ExpressionType::NONLINEAR>
 struct NonLeafExpression : Expression<Scalar> {
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = Op;
+
   /// The number of arguments.
   static constexpr size_t NUM_ARGS = NumArgs;
 
@@ -453,6 +529,11 @@ struct NonLeafExpression : Expression<Scalar> {
   ///
   /// @return The name of this expression.
   std::string_view name() const final { return Derived::NAME; }
+
+  /// Returns the operator of this expression.
+  ///
+  /// @return The operator of this expression.
+  ExpressionOp op() const final { return OP; }
 
   /// Accumulates the child adjoints as Scalars.
   void accumulate_adjoints() const final {
@@ -565,7 +646,8 @@ ExpressionPtr<typename T::Scalar> fold_or_make(const Args&... args) {
 /// @tparam T Expression type.
 template <typename Scalar, ExpressionType T>
 struct BinaryMinusExpression final
-    : NonLeafExpression<BinaryMinusExpression<Scalar, T>, Scalar, 2, T> {
+    : NonLeafExpression<BinaryMinusExpression<Scalar, T>, Scalar,
+                        ExpressionOp::BINARY_MINUS, 2, T> {
   using BinaryMinusExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -576,8 +658,8 @@ struct BinaryMinusExpression final
 
   static Scalar eval(Scalar lhs, Scalar rhs) { return lhs - rhs; }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, [[maybe_unused]] const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, [[maybe_unused]] const Value& val,
                         [[maybe_unused]] const Value& lhs,
                         [[maybe_unused]] const Value& rhs) {
     g[0] = lit<Value>(Scalar(1));
@@ -591,7 +673,8 @@ struct BinaryMinusExpression final
 /// @tparam T Expression type.
 template <typename Scalar, ExpressionType T>
 struct BinaryPlusExpression final
-    : NonLeafExpression<BinaryPlusExpression<Scalar, T>, Scalar, 2, T> {
+    : NonLeafExpression<BinaryPlusExpression<Scalar, T>, Scalar,
+                        ExpressionOp::BINARY_PLUS, 2, T> {
   using BinaryPlusExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -602,8 +685,8 @@ struct BinaryPlusExpression final
 
   static Scalar eval(Scalar lhs, Scalar rhs) { return lhs + rhs; }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, [[maybe_unused]] const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, [[maybe_unused]] const Value& val,
                         [[maybe_unused]] const Value& lhs,
                         [[maybe_unused]] const Value& rhs) {
     g[0] = lit<Value>(Scalar(1));
@@ -616,8 +699,8 @@ struct BinaryPlusExpression final
 /// @tparam Scalar Scalar type.
 /// @tparam T Expression type.
 template <typename Scalar, ExpressionType T>
-struct DivExpression final
-    : NonLeafExpression<DivExpression<Scalar, T>, Scalar, 2, T> {
+struct DivExpression final : NonLeafExpression<DivExpression<Scalar, T>, Scalar,
+                                               ExpressionOp::DIV, 2, T> {
   using DivExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -625,8 +708,8 @@ struct DivExpression final
 
   static Scalar eval(Scalar lhs, Scalar rhs) { return lhs / rhs; }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, [[maybe_unused]] const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, [[maybe_unused]] const Value& val,
                         const Value& lhs, const Value& rhs) {
     g[0] = lit<Value>(Scalar(1)) / rhs;
     g[1] = -lhs / (rhs * rhs);
@@ -639,7 +722,8 @@ struct DivExpression final
 /// @tparam T Expression type.
 template <typename Scalar, ExpressionType T>
 struct MultExpression final
-    : NonLeafExpression<MultExpression<Scalar, T>, Scalar, 2, T> {
+    : NonLeafExpression<MultExpression<Scalar, T>, Scalar, ExpressionOp::MULT,
+                        2, T> {
   using MultExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -647,8 +731,8 @@ struct MultExpression final
 
   static Scalar eval(Scalar lhs, Scalar rhs) { return lhs * rhs; }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, [[maybe_unused]] const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, [[maybe_unused]] const Value& val,
                         const Value& lhs, const Value& rhs) {
     g[0] = rhs;
     g[1] = lhs;
@@ -661,7 +745,8 @@ struct MultExpression final
 /// @tparam T Expression type.
 template <typename Scalar, ExpressionType T>
 struct UnaryMinusExpression final
-    : NonLeafExpression<UnaryMinusExpression<Scalar, T>, Scalar, 1, T> {
+    : NonLeafExpression<UnaryMinusExpression<Scalar, T>, Scalar,
+                        ExpressionOp::UNARY_MINUS, 1, T> {
   using UnaryMinusExpression::NonLeafExpression::NonLeafExpression;
 
   /// The expression's name.
@@ -672,8 +757,8 @@ struct UnaryMinusExpression final
 
   static Scalar eval(Scalar lhs) { return -lhs; }
 
-  template <typename Value>
-  static void eval_grad(ArgArray<Value>& g, [[maybe_unused]] const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(ArgArray<Partial>& g, [[maybe_unused]] const Value& val,
                         [[maybe_unused]] const Value& lhs) {
     g[0] = lit<Value>(Scalar(-1));
   }
@@ -757,6 +842,11 @@ struct ConstantExpression final : Expression<Scalar> {
   ExpressionType type() const override { return ExpressionType::CONSTANT; }
 
   std::string_view name() const override { return "constant"; }
+
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::CONSTANT;
+
+  ExpressionOp op() const override { return OP; }
 };
 
 template <typename Scalar>
@@ -783,6 +873,11 @@ struct DecisionVariableExpression final : Expression<Scalar> {
   ExpressionType type() const override { return ExpressionType::LINEAR; }
 
   std::string_view name() const override { return "decision variable"; }
+
+  /// The expression's operator.
+  static constexpr ExpressionOp OP = ExpressionOp::DECISION_VARIABLE;
+
+  ExpressionOp op() const override { return OP; }
 };
 
 }  // namespace slp::detail
