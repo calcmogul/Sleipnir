@@ -6,8 +6,10 @@
 #include <concepts>
 #include <cstddef>
 #include <initializer_list>
+#include <memory>
 #include <ranges>
 #include <source_location>
+#include <span>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -18,7 +20,7 @@
 #include "sleipnir/autodiff/expression.hpp"
 #include "sleipnir/autodiff/expression_functions.hpp"
 #include "sleipnir/autodiff/expression_graph.hpp"
-#include "sleipnir/autodiff/expression_op.hpp"
+#include "sleipnir/autodiff/expression_tape.hpp"
 #include "sleipnir/autodiff/expression_type.hpp"
 #include "sleipnir/autodiff/sleipnir_base.hpp"
 #include "sleipnir/util/assert.hpp"
@@ -47,6 +49,9 @@ template <typename Scalar>
 VariableMatrix<Scalar> gradient_tree(
     const detail::ExpressionGraph<Scalar>& top_list,
     const VariableMatrix<Scalar>& wrt);
+
+template <typename Scalar>
+class ValueTape;
 
 }  // namespace detail
 
@@ -123,7 +128,7 @@ class Variable : public SleipnirBase {
   Variable<Scalar>& operator=(ScalarLike auto value) {
     expr =
         detail::make_expression_ptr<detail::ConstantExpression<Scalar>>(value);
-    m_graph_initialized = false;
+    m_tape.reset();
 
     return *this;
   }
@@ -148,12 +153,19 @@ class Variable : public SleipnirBase {
   ///
   /// @return The value of this variable.
   Scalar value() {
-    if (!m_graph_initialized) {
-      m_graph = detail::topological_sort(expr);
-      m_graph_initialized = true;
-    }
-    detail::update_values(m_graph);
+    if (m_tape == nullptr) {
+      // A leaf's value is already up to date, so it doesn't need a tape
+      if (expr->is_leaf) {
+        return Scalar(expr->val);
+      }
 
+      detail::Expression<Scalar>* root = expr.get();
+      m_tape = std::make_shared<detail::ExpressionTape<Scalar>>(
+          std::span<detail::Expression<Scalar>* const>{&root, 1}, 0);
+    }
+    m_tape->template update_values<0>();
+
+    expr->val = m_tape->root_value(0);
     return Scalar(expr->val);
   }
 
@@ -279,11 +291,9 @@ class Variable : public SleipnirBase {
       detail::make_expression_ptr<detail::DecisionVariableExpression<Scalar>>();
 
   /// Used to update the value of this variable based on the values of its
-  /// dependent variables
-  detail::ExpressionGraph<Scalar> m_graph;
-
-  /// Used for lazy initialization of m_graph
-  bool m_graph_initialized = false;
+  /// dependent variables. It's created on the first value() call, and copies
+  /// of this variable share it since they share the expression graph.
+  std::shared_ptr<detail::ExpressionTape<Scalar>> m_tape;
 
   template <typename Scalar>
   friend Variable<Scalar> abs(const Variable<Scalar>& x);
@@ -388,6 +398,8 @@ class Variable : public SleipnirBase {
   friend class Hessian;
   template <typename Scalar>
   friend class Jacobian;
+  template <typename Scalar>
+  friend class detail::ValueTape;
 };
 
 template <template <typename> typename T, typename Scalar>
