@@ -31,8 +31,8 @@ struct AbsExpression final : NonLeafExpression<AbsExpression, Scalar, Type, 1> {
     return abs(x);
   }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 1>& g,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 1>& g,
                         [[maybe_unused]] const Value& val, const Value& x) {
     if constexpr (std::same_as<Value, Scalar>) {
       if (x < Scalar(0)) {
@@ -74,8 +74,8 @@ struct AcosExpression final
     return acos(x);
   }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 1>& g,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 1>& g,
                         [[maybe_unused]] const Value& val, const Value& x) {
     using std::sqrt;
     g[0] = lit<Value>(Scalar(-1)) / sqrt(lit<Value>(Scalar(1)) - x * x);
@@ -108,8 +108,8 @@ struct AsinExpression final
     return asin(x);
   }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 1>& g,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 1>& g,
                         [[maybe_unused]] const Value& val, const Value& x) {
     using std::sqrt;
     g[0] = lit<Value>(Scalar(1)) / sqrt(lit<Value>(Scalar(1)) - x * x);
@@ -142,8 +142,8 @@ struct AtanExpression final
     return atan(x);
   }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 1>& g,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 1>& g,
                         [[maybe_unused]] const Value& val, const Value& x) {
     g[0] = lit<Value>(Scalar(1)) / (lit<Value>(Scalar(1)) + x * x);
   }
@@ -175,8 +175,8 @@ struct Atan2Expression final
     return atan2(y, x);
   }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 2>& g,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 2>& g,
                         [[maybe_unused]] const Value& val, const Value& y,
                         const Value& x) {
     Value d = y * y + x * x;
@@ -213,8 +213,8 @@ struct CbrtExpression final
     return cbrt(x);
   }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 1>& g, const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 1>& g, const Value& val,
                         [[maybe_unused]] const Value& x) {
     g[0] = lit<Value>(Scalar(1)) / (lit<Value>(Scalar(3)) * val * val);
   }
@@ -245,8 +245,8 @@ struct CosExpression final : NonLeafExpression<CosExpression, Scalar, Type, 1> {
     return cos(x);
   }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 1>& g,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 1>& g,
                         [[maybe_unused]] const Value& val, const Value& x) {
     using std::sin;
     g[0] = -sin(x);
@@ -279,8 +279,8 @@ struct CoshExpression final
     return cosh(x);
   }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 1>& g,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 1>& g,
                         [[maybe_unused]] const Value& val, const Value& x) {
     using std::sinh;
     g[0] = sinh(x);
@@ -312,8 +312,8 @@ struct ErfExpression final : NonLeafExpression<ErfExpression, Scalar, Type, 1> {
     return erf(x);
   }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 1>& g,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 1>& g,
                         [[maybe_unused]] const Value& val, const Value& x) {
     using std::exp;
     g[0] = lit<Value>(Scalar(2.0 * std::numbers::inv_sqrtpi)) * exp(-x * x);
@@ -345,8 +345,8 @@ struct ExpExpression final : NonLeafExpression<ExpExpression, Scalar, Type, 1> {
     return exp(x);
   }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 1>& g, const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 1>& g, const Value& val,
                         [[maybe_unused]] const Value& x) {
     g[0] = val;
   }
@@ -382,8 +382,8 @@ struct Hypot2Expression final
     return hypot(x, y);
   }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 2>& g, const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 2>& g, const Value& val,
                         const Value& x, const Value& y) {
     g[0] = x / val;
     g[1] = y / val;
@@ -430,8 +430,8 @@ struct Hypot3Expression final
     return hypot(x, y, z);
   }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 3>& g, const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 3>& g, const Value& val,
                         const Value& x, const Value& y, const Value& z) {
     g[0] = x / val;
     g[1] = y / val;
@@ -494,8 +494,8 @@ struct IfElseExpression final
     return cond(a, b) ? t : f;
   }
 
-  template <typename Value>
-  void eval_grad(std::array<Value, 4>& g, [[maybe_unused]] const Value& val,
+  template <typename Partial, typename Value>
+  void eval_grad(std::array<Partial, 4>& g, [[maybe_unused]] const Value& val,
                  const Value& a, const Value& b,
                  [[maybe_unused]] const Value& t,
                  [[maybe_unused]] const Value& f) const {
@@ -569,8 +569,8 @@ struct LogExpression final : NonLeafExpression<LogExpression, Scalar, Type, 1> {
     return log(x);
   }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 1>& g,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 1>& g,
                         [[maybe_unused]] const Value& val, const Value& x) {
     g[0] = lit<Value>(Scalar(1)) / x;
   }
@@ -602,8 +602,8 @@ struct Log10Expression final
     return log10(x);
   }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 1>& g,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 1>& g,
                         [[maybe_unused]] const Value& val, const Value& x) {
     g[0] = lit<Value>(Scalar(1)) / (lit<Value>(Scalar(std::numbers::ln10)) * x);
   }
@@ -636,8 +636,8 @@ struct MaxExpression final : NonLeafExpression<MaxExpression, Scalar, Type, 2> {
     return max(a, b);
   }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 2>& g,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 2>& g,
                         [[maybe_unused]] const Value& val, const Value& a,
                         const Value& b) {
     if constexpr (std::same_as<Value, Scalar>) {
@@ -683,8 +683,8 @@ struct MinExpression final : NonLeafExpression<MinExpression, Scalar, Type, 2> {
     return min(a, b);
   }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 2>& g,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 2>& g,
                         [[maybe_unused]] const Value& val, const Value& a,
                         const Value& b) {
     if constexpr (std::same_as<Value, Scalar>) {
@@ -735,8 +735,8 @@ struct PowExpression final : NonLeafExpression<PowExpression, Scalar, Type, 2> {
     return pow(base, power);
   }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 2>& g, const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 2>& g, const Value& val,
                         const Value& base, const Value& power) {
     using std::log;
     using std::pow;
@@ -841,8 +841,8 @@ struct SinExpression final : NonLeafExpression<SinExpression, Scalar, Type, 1> {
     return sin(x);
   }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 1>& g,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 1>& g,
                         [[maybe_unused]] const Value& val, const Value& x) {
     using std::cos;
     g[0] = cos(x);
@@ -875,8 +875,8 @@ struct SinhExpression final
     return sinh(x);
   }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 1>& g,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 1>& g,
                         [[maybe_unused]] const Value& val, const Value& x) {
     using std::cosh;
     g[0] = cosh(x);
@@ -909,8 +909,8 @@ struct SqrtExpression final
     return sqrt(x);
   }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 1>& g, const Value& val,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 1>& g, const Value& val,
                         [[maybe_unused]] const Value& x) {
     g[0] = lit<Value>(Scalar(1)) / (lit<Value>(Scalar(2)) * val);
   }
@@ -941,8 +941,8 @@ struct TanExpression final : NonLeafExpression<TanExpression, Scalar, Type, 1> {
     return tan(x);
   }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 1>& g,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 1>& g,
                         [[maybe_unused]] const Value& val, const Value& x) {
     using std::cos;
 
@@ -977,8 +977,8 @@ struct TanhExpression final
     return tanh(x);
   }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 1>& g,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 1>& g,
                         [[maybe_unused]] const Value& val, const Value& x) {
     using std::cosh;
 

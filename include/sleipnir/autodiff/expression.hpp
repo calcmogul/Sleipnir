@@ -387,12 +387,13 @@ struct Expression {
 /// eval(), eval_grad(), and NAME and the operator's properties.
 ///
 /// The derived expression type computes its partial derivatives with
-/// `eval_grad<Value>(g, val, a₀, a₁, ...)`, which writes ∂/∂aₖ to g[k] given
-/// the expression's value followed by the argument values. Value is Scalar to
-/// evaluate them, or ExpressionPtr<Scalar> to build them as expressions. It's
-/// static unless the partial derivatives depend on the expression's state. If
-/// the derived expression type doesn't define it, all partial derivatives are
-/// structurally zero.
+/// `eval_grad<Partial, Value>(g, val, a₀, a₁, ...)`, which writes ∂/∂aₖ to
+/// g[k] given the expression's value followed by the argument values. Value is
+/// Scalar to evaluate them, or ExpressionPtr<Scalar> to build them as
+/// expressions. Partial is the type each partial derivative is written as,
+/// which is Value here. It's static unless the partial derivatives depend on
+/// the expression's state. If the derived expression type doesn't define it,
+/// all partial derivatives are structurally zero.
 ///
 /// If the derived expression type sets CONSTANT_PARTIALS to true, gradient
 /// trees evaluate the partial derivatives as Scalars instead of building them
@@ -588,8 +589,8 @@ struct BinaryMinusExpression final
 
   static Scalar eval(Scalar lhs, Scalar rhs) { return lhs - rhs; }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 2>& g,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 2>& g,
                         [[maybe_unused]] const Value& val,
                         [[maybe_unused]] const Value& lhs,
                         [[maybe_unused]] const Value& rhs) {
@@ -615,8 +616,8 @@ struct BinaryPlusExpression final
 
   static Scalar eval(Scalar lhs, Scalar rhs) { return lhs + rhs; }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 2>& g,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 2>& g,
                         [[maybe_unused]] const Value& val,
                         [[maybe_unused]] const Value& lhs,
                         [[maybe_unused]] const Value& rhs) {
@@ -638,8 +639,8 @@ struct DivExpression final : NonLeafExpression<DivExpression, Scalar, Type, 2> {
 
   static Scalar eval(Scalar lhs, Scalar rhs) { return lhs / rhs; }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 2>& g,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 2>& g,
                         [[maybe_unused]] const Value& val, const Value& lhs,
                         const Value& rhs) {
     g[0] = lit<Value>(Scalar(1)) / rhs;
@@ -661,8 +662,8 @@ struct MultExpression final
 
   static Scalar eval(Scalar lhs, Scalar rhs) { return lhs * rhs; }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 2>& g,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 2>& g,
                         [[maybe_unused]] const Value& val, const Value& lhs,
                         const Value& rhs) {
     g[0] = rhs;
@@ -687,8 +688,8 @@ struct UnaryMinusExpression final
 
   static Scalar eval(Scalar lhs) { return -lhs; }
 
-  template <typename Value>
-  static void eval_grad(std::array<Value, 1>& g,
+  template <typename Partial, typename Value>
+  static void eval_grad(std::array<Partial, 1>& g,
                         [[maybe_unused]] const Value& val,
                         [[maybe_unused]] const Value& lhs) {
     g[0] = lit<Value>(Scalar(-1));
