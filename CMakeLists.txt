@@ -8,7 +8,25 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "")
 set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING "")
 
-project(Sleipnir LANGUAGES CXX)
+set(SLEIPNIR_VERSION 0.0.0)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/.git)
+    execute_process(
+        COMMAND git describe --match "v[0-9]*"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE git_describe
+        RESULT_VARIABLE git_describe_result
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+    if(
+        git_describe_result EQUAL 0
+        AND git_describe MATCHES "^v([0-9]+\\.[0-9]+\\.[0-9]+)"
+    )
+        set(SLEIPNIR_VERSION ${CMAKE_MATCH_1})
+    endif()
+endif()
+
+project(Sleipnir VERSION ${SLEIPNIR_VERSION} LANGUAGES CXX)
 
 include(CMakePackageConfigHelpers)
 include(CTest)
@@ -153,9 +171,16 @@ configure_package_config_file(
     NO_CHECK_REQUIRED_COMPONENTS_MACRO
 )
 
-# Install the config file
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/SleipnirConfigVersion.cmake
+    COMPATIBILITY SameMinorVersion
+)
+
+# Install the config files
 install(
-    FILES ${CMAKE_CURRENT_BINARY_DIR}/SleipnirConfig.cmake
+    FILES
+        ${CMAKE_CURRENT_BINARY_DIR}/SleipnirConfig.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/SleipnirConfigVersion.cmake
     COMPONENT Sleipnir
     DESTINATION lib/cmake/Sleipnir
 )
