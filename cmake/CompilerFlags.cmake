@@ -15,7 +15,8 @@ function(compiler_flags target)
         # Suppress the following warnings:
         #   * C4244: lossy conversion
         #   * C4251: missing dllexport/dllimport attribute on data member
-        target_compile_options(${target} PRIVATE /wd4244 /wd4251)
+        #   * C4750: function with _alloca() inlined into a loop (from BunchKaufman.h)
+        target_compile_options(${target} PRIVATE /wd4244 /wd4251 /wd4750)
     endif()
     set_property(TARGET ${target} PROPERTY COMPILE_WARNING_AS_ERROR ON)
 

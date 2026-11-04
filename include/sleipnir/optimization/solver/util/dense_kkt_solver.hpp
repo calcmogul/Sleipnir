@@ -9,7 +9,6 @@
 #include <Eigen/Cholesky>
 #include <Eigen/Core>
 
-#include "sleipnir/optimization/solver/util/inertia.hpp"
 #include "sleipnir/optimization/solver/util/regularization_limits.hpp"
 
 namespace slp {
@@ -37,19 +36,6 @@ class DenseKKTSolver {
       : m_num_decision_variables{num_decision_variables},
         m_num_equality_constraints{num_equality_constraints} {}
 
-  /// Constructs a DenseKKTSolver instance.
-  ///
-  /// @param num_decision_variables The number of decision variables in the
-  ///     system.
-  /// @param num_equality_constraints The number of equality constraints in the
-  ///     system.
-  /// @param γ_min The minimum constraint regularization.
-  DenseKKTSolver(int num_decision_variables, int num_equality_constraints,
-                 Scalar γ_min)
-      : m_num_decision_variables{num_decision_variables},
-        m_num_equality_constraints{num_equality_constraints},
-        m_γ_min{γ_min} {}
-
   /// Reports whether previous computation was successful.
   ///
   /// @return Whether previous computation was successful.
@@ -63,8 +49,8 @@ class DenseKKTSolver {
     // Bunch-Kaufman pivoting is backward stable for indefinite matrices, so the
     // unregularized system is accepted whenever its inertia is ideal
     m_lhs = lhs;
-    m_info = m_solver.compute(m_lhs).info();
-    if (m_info == Eigen::Success && inertia() == ideal_inertia) {
+    factorize();
+    if (m_info == Eigen::Success && has_ideal_inertia()) {
       m_prev_δ = Scalar(0);
       m_prev_γ = Scalar(0);
       return *this;
@@ -89,28 +75,20 @@ class DenseKKTSolver {
     // directions, so the KKT matrix's smallest eigenvalues shrink with δ. Too
     // small a δ makes the matrix ill-conditioned, which amplifies the
     // factorization's rounding error in the solution, and eventually puts those
-    // eigenvalues near zero, where the inertia check counts them as
-    // zero.
+    // eigenvalues near zero, where the inertia check counts them as zero.
     Scalar δ = m_prev_δ == Scalar(0) ? Scalar(1e-4)
                                      : std::max(m_prev_δ / Scalar(2), δ_min);
 
-    // Start γ at the minimum to minimize equality constraint Jacobian
-    // distortion.
-    Scalar γ = m_γ_min;
+    // Start γ at zero to avoid distorting the equality constraint Jacobian. It
+    // only needs to be nonzero if the Jacobian turns out to be rank-deficient.
+    Scalar γ(0);
 
     while (true) {
       m_lhs = lhs + regularization(δ, γ);
-      m_info = m_solver.compute(m_lhs).info();
+      factorize();
 
       if (m_info == Eigen::Success) {
-        Inertia inertia = this->inertia();
-
-        if (inertia == ideal_inertia) {
-          // If the inertia is ideal, report success
-          m_prev_δ = δ;
-          m_prev_γ = γ;
-          return *this;
-        } else if (inertia.zero > 0) {
+        if (has_near_zero_eigenvalue()) {
           if (γ == Scalar(0)) {
             // If there's zero eigenvalues and γ = 0, increase γ to potentially
             // compensate for a rank-deficient equality constraint Jacobian
@@ -121,22 +99,23 @@ class DenseKKTSolver {
             δ *= Scalar(10);
             γ = std::min(γ * Scalar(10), γ_max);
           }
-        } else if (inertia.negative > ideal_inertia.negative) {
+        } else if (m_solver.numNegative() > m_num_equality_constraints) {
           // If there's too many negative eigenvalues, increase δ to add more
           // positive eigenvalues
           δ *= Scalar(10);
-        } else if (inertia.positive > ideal_inertia.positive) {
+        } else if (m_solver.numPositive() > m_num_decision_variables) {
           // The KKT matrix has at least as many negative eigenvalues as
           // equality constraints if γ > 0 (from the −γI block) or if the
-          // equality constraint Jacobian has full row rank (as in feasibility
-          // restoration, where γ = 0). Too many positive eigenvalues can then
-          // only come from rounding error, so increase δ and γ to drive all
-          // eigenvalues away from zero.
-          //
-          // Unlike LDLT, Bunch-Kaufman pivoting avoids small pivots, so
-          // there's no need to find which block the error came from.
+          // equality constraint Jacobian has full row rank. Too many positive
+          // eigenvalues can then only come from rounding error, so increase δ
+          // and γ to drive all eigenvalues away from zero.
           δ *= Scalar(10);
-          γ = std::min(γ * Scalar(10), γ_max);
+          γ = γ == Scalar(0) ? γ_initial : std::min(γ * Scalar(10), γ_max);
+        } else {
+          // If the inertia is ideal, report success
+          m_prev_δ = δ;
+          m_prev_γ = γ;
+          return *this;
         }
       } else {
         // If the decomposition failed, increase δ and γ to drive all
@@ -164,7 +143,7 @@ class DenseKKTSolver {
   DenseVector solve(const Eigen::MatrixBase<Rhs>& rhs) const {
     using std::pow;
 
-    DenseVector x = m_solver.solve(rhs);
+    DenseVector x = solve_factorized(rhs);
 
     // The factorization is backward stable, but the matrix's conditioning
     // amplifies its rounding error in the solution, so apply iterative
@@ -182,7 +161,7 @@ class DenseKKTSolver {
       if (r.norm() <= refinement_tolerance * rhs.norm()) {
         break;
       }
-      x += m_solver.solve(r);
+      x += solve_factorized(r);
     }
 
     return x;
@@ -223,28 +202,49 @@ class DenseKKTSolver {
   /// The number of equality constraints in the system.
   int m_num_equality_constraints = 0;
 
-  /// The minimum constraint regularization.
-  Scalar m_γ_min = min_constraint_regularization<Scalar>();
-
-  /// The ideal system inertia.
-  Inertia ideal_inertia{m_num_decision_variables, m_num_equality_constraints,
-                        0};
-
   /// The value of δ from the previous run of compute().
   Scalar m_prev_δ{0};
 
   /// The value of γ from the previous run of compute().
   Scalar m_prev_γ{0};
 
-  /// Returns the inertia of the most recently factorized KKT matrix.
+  /// Factorizes the KKT matrix in m_lhs.
+  void factorize() { m_info = m_solver.compute(m_lhs).info(); }
+
+  /// Solves the system of equations with the most recent factorization.
+  ///
+  /// @param rhs Right-hand side of the system.
+  /// @return The solution.
+  DenseVector solve_factorized(const DenseVector& rhs) const {
+    return m_solver.solve(rhs);
+  }
+
+  /// Returns whether the most recently factorized KKT matrix has the ideal
+  /// inertia.
+  ///
+  /// The factorization's sign counts are the KKT matrix's inertia by
+  /// Sylvester's law of inertia, but they only count exact zero pivots.
+  /// Rounding can leave a tiny pivot in place of a zero, so near-zero
+  /// eigenvalues are checked first.
+  ///
+  /// @return Whether the most recently factorized KKT matrix has the ideal
+  ///     inertia.
+  bool has_ideal_inertia() const {
+    return !has_near_zero_eigenvalue() &&
+           m_solver.numPositive() == m_num_decision_variables &&
+           m_solver.numNegative() == m_num_equality_constraints;
+  }
+
+  /// Returns whether the most recently factorized KKT matrix has an eigenvalue
+  /// that should be counted as zero.
   ///
   /// D from the Bunch-Kaufman factorization has 1x1 and 2x2 diagonal blocks.
-  /// By Sylvester's law of inertia, the KKT matrix's inertia is the inertia of
-  /// D, which is the inertia of the blocks's eigenvalues. Eigenvalues within
-  /// zero_pivot_threshold() of zero are counted as zero.
+  /// Eigenvalues within zero_pivot_threshold() of zero are counted as zero. If
+  /// there aren't any, the factorization's sign counts are the inertia.
   ///
-  /// @return The inertia of the most recently factorized KKT matrix.
-  Inertia inertia() const {
+  /// @return Whether the most recently factorized KKT matrix has an eigenvalue
+  ///     that should be counted as zero.
+  bool has_near_zero_eigenvalue() const {
     using std::abs;
     using std::hypot;
 
@@ -253,42 +253,26 @@ class DenseKKTSolver {
     const auto D = m_solver.vectorD();
     const auto& D_sub = m_solver.subDiagonal();
 
-    Inertia inertia;
-    auto count = [&](Scalar λ) {
-      if (λ > threshold) {
-        ++inertia.positive;
-      } else if (λ < -threshold) {
-        ++inertia.negative;
-      } else {
-        ++inertia.zero;
-      }
-    };
+    // This treats NaN as zero
+    auto is_near_zero = [&](Scalar λ) { return !(abs(λ) > threshold); };
 
     for (int k = 0; k < D.size(); ++k) {
-      if (k + 1 < D.size() && D_sub[k] != Scalar(0)) {
+      if (D_sub[k] != Scalar(0)) {
         // The eigenvalues of the 2x2 block [a  b; b  c] are the roots of its
         // characteristic polynomial.
         //
         //   det([a − λ  b; b  c − λ]) = (a − λ)(c − λ) − b²
-        //                             = ac − aλ − cλ + λ² − b²
         //                             = λ² − (a + c)λ + (ac − b²)
         //
         //   λ = (a + c)/2 ± r where r = √(((a − c)/2)² + b²)
         //
-        // Let λ₁ be the root farther from zero. Its two terms have the same
-        // sign, so it has no cancellation. The two terms of the other root λ₂
-        // have opposite signs, so λ₂ loses accuracy if |a| >> |c|. Instead,
-        // compute λ₂ from λ₁ and the product of the roots.
+        // Let λ₁ be the root farther from zero, so only the other root λ₂ needs
+        // checking. λ₁'s two terms have the same sign, so it has no
+        // cancellation. The two terms of λ₂ have opposite signs, so λ₂ loses
+        // accuracy if |a| >> |c|. Instead, compute λ₂ from λ₁ and the product
+        // of the roots.
         //
         //   λ₁λ₂ = ((a + c)/2 + r)((a + c)/2 − r)
-        //   λ₁λ₂ = ((a + c)/2)² − r²
-        //   λ₁λ₂ = ((a + c)/2)² − (((a − c)/2)² + b²)
-        //   λ₁λ₂ = (a + c)²/4 − (a − c)²/4 − b²
-        //   λ₁λ₂ = ((a² + 2ac + c²) − (a² − 2ac + c²))/4 − b²
-        //   λ₁λ₂ = 4ac/4 − b²
-        //   λ₁λ₂ = ac − b²
-        //   λ₂ = (ac − b²)/λ₁
-        //   λ₂ = ac/λ₁ − b²/λ₁
         //   λ₂ = (a/λ₁)c − (b/λ₁)b
         //
         // Dividing first prevents ac and b² from overflowing. |λ₁| is the
@@ -301,15 +285,16 @@ class DenseKKTSolver {
         const Scalar mid = (a + c) / Scalar(2);
         const Scalar r = hypot((a - c) / Scalar(2), abs(b));
         const Scalar λ = mid >= Scalar(0) ? mid + r : mid - r;
-        count(λ);
-        count((a / λ) * c - (b / λ) * b);
+        if (is_near_zero((a / λ) * c - (b / λ) * b)) {
+          return true;
+        }
         ++k;
-      } else {
-        count(D[k]);
+      } else if (is_near_zero(D[k])) {
+        return true;
       }
     }
 
-    return inertia;
+    return false;
   }
 
   /// Returns regularization matrix.

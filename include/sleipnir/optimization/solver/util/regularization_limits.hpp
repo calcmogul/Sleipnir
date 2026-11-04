@@ -75,19 +75,4 @@ Scalar max_constraint_regularization() {
   return sqrt(std::numeric_limits<Scalar>::epsilon());
 }
 
-/// Returns the smallest LDLT pivot magnitude allowed without regularization.
-///
-/// @tparam Scalar Scalar type.
-/// @return The smallest LDLT pivot magnitude allowed without regularization.
-template <typename Scalar>
-Scalar min_unregularized_pivot() {
-  using std::pow;
-
-  // In a well-scaled matrix, a pivot D magnifies the factorization's rounding
-  // error by roughly 1/|D|. Pivots of at least ε^(1/4) keep that error within
-  // the KKT solver's iterative refinement tolerance of ε^(3/4), so the
-  // unregularized factorization is accurate enough without regularization.
-  return pow(std::numeric_limits<Scalar>::epsilon(), Scalar(0.25));
-}
-
 }  // namespace slp

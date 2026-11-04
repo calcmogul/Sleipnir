@@ -3,14 +3,13 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 
 #include <Eigen/Core>
 #include <Eigen/SparseCholesky>
 #include <Eigen/SparseCore>
 
-#include "sleipnir/optimization/solver/util/inertia.hpp"
-#include "sleipnir/optimization/solver/util/kkt_ordering.hpp"
 #include "sleipnir/optimization/solver/util/regularization_limits.hpp"
 
 namespace slp {
@@ -38,19 +37,6 @@ class SparseKKTSolver {
       : m_num_decision_variables{num_decision_variables},
         m_num_equality_constraints{num_equality_constraints} {}
 
-  /// Constructs a SparseKKTSolver instance.
-  ///
-  /// @param num_decision_variables The number of decision variables in the
-  ///     system.
-  /// @param num_equality_constraints The number of equality constraints in the
-  ///     system.
-  /// @param γ_min The minimum constraint regularization.
-  SparseKKTSolver(int num_decision_variables, int num_equality_constraints,
-                  Scalar γ_min)
-      : m_num_decision_variables{num_decision_variables},
-        m_num_equality_constraints{num_equality_constraints},
-        m_γ_min{γ_min} {}
-
   /// Reports whether previous computation was successful.
   ///
   /// @return Whether previous computation was successful.
@@ -69,30 +55,19 @@ class SparseKKTSolver {
     m_lhs = lhs + regularization(Scalar(0), Scalar(0));
 
     if (!m_analyzed_pattern) {
-      m_ordering.analyze(m_lhs, m_num_decision_variables);
-      m_solver.analyzePattern(m_ordering.permute(m_lhs));
+      m_scaled_lhs = m_lhs;
+      m_solver.analyzePattern(m_scaled_lhs);
       m_analyzed_pattern = true;
     }
 
-    // If the previous δ was small and nonzero, skip the δ = 0 attempt because
-    // it's almost always rejected for small pivots. If the previous δ was
-    // large, attempt δ = 0 so δ can drop to zero quickly.
-    if (m_prev_δ == Scalar(0) || m_prev_δ > Scalar(1e-2)) {
-      m_solver.factorize(m_ordering.permute(m_lhs));
-      m_info = m_solver.info();
-
-      if (m_info == Eigen::Success) {
-        // If the inertia is ideal and D from LDLT is sufficiently far from
-        // zero, don't regularize the system
-        if (inertia() == ideal_inertia &&
-            (m_solver.vectorD().cwiseAbs().array() >=
-             min_unregularized_pivot<Scalar>())
-                .all()) {
-          m_prev_δ = Scalar(0);
-          m_prev_γ = Scalar(0);
-          return *this;
-        }
-      }
+    // Threshold pivoting with 2x2 blocks is stable for indefinite matrices in
+    // practice, so the unregularized system is accepted whenever its inertia is
+    // ideal
+    factorize();
+    if (m_info == Eigen::Success && has_ideal_inertia()) {
+      m_prev_δ = Scalar(0);
+      m_prev_γ = Scalar(0);
+      return *this;
     }
 
     // We'll give lhs the correct inertia by adding [δI, 0; 0, −γI] where δ and
@@ -110,30 +85,24 @@ class SparseKKTSolver {
 
     // If the previous δ was zero, attempt a small value. Otherwise, attempt a
     // smaller value than the previous δ so δ trends downward. δ has a floor
-    // because Hessian rows with no curvature (e.g., states in linear dynamics)
-    // have only δ on their diagonal, and pivots that small cause element growth
-    // that corrupts the inertia and solution.
+    // because when regularization is needed, δ is the only curvature in some
+    // directions, so the KKT matrix's smallest eigenvalues shrink with δ. Too
+    // small a δ makes the matrix ill-conditioned, which amplifies the
+    // factorization's rounding error in the solution, and eventually puts those
+    // eigenvalues near zero, where the inertia check counts them as zero.
     Scalar δ = m_prev_δ == Scalar(0) ? Scalar(1e-4)
                                      : std::max(m_prev_δ / Scalar(2), δ_min);
 
-    // Start γ at the minimum to minimize equality constraint Jacobian
-    // distortion.
-    Scalar γ = m_γ_min;
+    // Start γ at zero to avoid distorting the equality constraint Jacobian. It
+    // only needs to be nonzero if the Jacobian turns out to be rank-deficient.
+    Scalar γ(0);
 
     while (true) {
       m_lhs = lhs + regularization(δ, γ);
-      m_solver.factorize(m_ordering.permute(m_lhs));
-      m_info = m_solver.info();
+      factorize();
 
       if (m_info == Eigen::Success) {
-        Inertia inertia = this->inertia();
-
-        if (inertia == ideal_inertia) {
-          // If the inertia is ideal, report success
-          m_prev_δ = δ;
-          m_prev_γ = γ;
-          return *this;
-        } else if (inertia.zero > 0) {
+        if (has_near_zero_eigenvalue()) {
           if (γ == Scalar(0)) {
             // If there's zero eigenvalues and γ = 0, increase γ to potentially
             // compensate for a rank-deficient equality constraint Jacobian
@@ -144,24 +113,23 @@ class SparseKKTSolver {
             δ *= Scalar(10);
             γ = std::min(γ * Scalar(10), γ_max);
           }
-        } else if (inertia.negative > ideal_inertia.negative) {
+        } else if (m_solver.numNegative() > m_num_equality_constraints) {
           // If there's too many negative eigenvalues, increase δ to add more
           // positive eigenvalues
           δ *= Scalar(10);
-        } else if (inertia.positive > ideal_inertia.positive) {
-          // If there's too many positive eigenvalues and the smallest pivot is
-          // from the equality constraint Jacobian block, increase γ to add more
-          // negative eigenvalues.
-          //
-          // Otherwise, the smallest pivot is from the Hessian block, or γ is
-          // already large enough that increasing it further would distort the
-          // equality constraint Jacobian more than it helps. Increase δ to
-          // reduce element growth from Hessian pivots instead.
-          if (γ < γ_max && !smallest_pivot_is_hessian()) {
-            γ = γ == Scalar(0) ? γ_initial : std::min(γ * Scalar(10), γ_max);
-          } else {
-            δ *= Scalar(10);
-          }
+        } else if (m_solver.numPositive() > m_num_decision_variables) {
+          // The KKT matrix has at least as many negative eigenvalues as
+          // equality constraints if γ > 0 (from the −γI block) or if the
+          // equality constraint Jacobian has full row rank. Too many positive
+          // eigenvalues can then only come from rounding error, so increase δ
+          // and γ to drive all eigenvalues away from zero.
+          δ *= Scalar(10);
+          γ = γ == Scalar(0) ? γ_initial : std::min(γ * Scalar(10), γ_max);
+        } else {
+          // If the inertia is ideal, report success
+          m_prev_δ = δ;
+          m_prev_γ = γ;
+          return *this;
         }
       } else {
         // If the decomposition failed, increase δ and γ to drive all
@@ -189,12 +157,11 @@ class SparseKKTSolver {
   DenseVector solve(const Eigen::MatrixBase<Rhs>& rhs) const {
     using std::pow;
 
-    DenseVector x = m_ordering.inverse_permutation() *
-                    m_solver.solve(m_ordering.permutation() * rhs);
+    DenseVector x = solve_factorized(rhs);
 
-    // Element growth in the factorization can make the solution inaccurate
-    // (e.g., from small Hessian pivots in rows with no curvature), so apply
-    // iterative refinement with the same factorization
+    // The factorization is stable, but the matrix's conditioning amplifies its
+    // rounding error in the solution, so apply iterative refinement with the
+    // same factorization
     constexpr int max_refinement_steps = 3;
 
     // Stop once the relative residual is ε^(3/4), which is halfway (on a log
@@ -208,8 +175,7 @@ class SparseKKTSolver {
       if (r.norm() <= refinement_tolerance * rhs.norm()) {
         break;
       }
-      x += m_ordering.inverse_permutation() *
-           m_solver.solve(m_ordering.permutation() * r);
+      x += solve_factorized(r);
     }
 
     return x;
@@ -235,19 +201,22 @@ class SparseKKTSolver {
   Scalar constraint_jacobian_regularization() const { return m_prev_γ; }
 
  private:
-  // KKTOrdering permutes the KKT matrix before factorization, so the solver
-  // factors it as given. The upper triangle is the one it can factor without a
-  // copy.
-  using Solver = Eigen::SimplicialLDLT<
-      SparseMatrix, Eigen::Upper,
-      Eigen::NaturalOrdering<typename SparseMatrix::StorageIndex>>;
+  using Solver = Eigen::MultifrontalLDLT<SparseMatrix, Eigen::Lower>;
 
   Solver m_solver;
-  KKTOrdering<Scalar> m_ordering;
   bool m_analyzed_pattern = false;
 
   /// The most recently factorized KKT matrix's lower triangle.
   SparseMatrix m_lhs;
+
+  /// The lower triangle of S lhs S, where S is the equilibration.
+  SparseMatrix m_scaled_lhs;
+
+  /// The diagonal of the equilibration S.
+  DenseVector m_scale;
+
+  /// Each row's largest entry during equilibration, kept to avoid reallocating.
+  DenseVector m_row_max;
 
   Eigen::ComputationInfo m_info = Eigen::Success;
 
@@ -257,54 +226,162 @@ class SparseKKTSolver {
   /// The number of equality constraints in the system.
   int m_num_equality_constraints = 0;
 
-  /// The minimum constraint regularization.
-  Scalar m_γ_min = min_constraint_regularization<Scalar>();
-
-  /// The ideal system inertia.
-  Inertia ideal_inertia{m_num_decision_variables, m_num_equality_constraints,
-                        0};
-
   /// The value of δ from the previous run of compute().
   Scalar m_prev_δ{0};
 
   /// The value of γ from the previous run of compute().
   Scalar m_prev_γ{0};
 
-  /// Returns the inertia of the most recently factorized KKT matrix.
+  /// Factorizes the KKT matrix in m_lhs.
   ///
-  /// By Sylvester's law of inertia, the KKT matrix's inertia is the inertia of
-  /// D from its LDLT factorization. Pivots within zero_pivot_threshold() of
-  /// zero are counted as zero.
-  ///
-  /// @return The inertia of the most recently factorized KKT matrix.
-  Inertia inertia() const {
-    const Scalar threshold = zero_pivot_threshold<Scalar>();
+  /// The pivot tests compare a column's entries with each other, so a large
+  /// entry in a row that isn't fully summed yet (e.g., a timestep variable
+  /// shared by every dynamics constraint) can delay pivots all the way up the
+  /// elimination tree. To avoid that, this factors S lhs S, where S is a Ruiz
+  /// equilibration.
+  void factorize() {
+    using std::abs;
 
-    Inertia inertia;
-    for (const auto& d : m_solver.vectorD()) {
-      if (d > threshold) {
-        ++inertia.positive;
-      } else if (d < -threshold) {
-        ++inertia.negative;
-      } else {
-        ++inertia.zero;
+    // Each sweep moves every row's largest entry closer to 1. A few are enough
+    // because the pivot tests only need rough scaling.
+    constexpr int num_scaling_sweeps = 3;
+
+    const int size = m_lhs.rows();
+    const auto* outer = m_lhs.outerIndexPtr();
+    const auto* inner = m_lhs.innerIndexPtr();
+
+    m_scale.setOnes(size);
+    m_row_max.resize(size);
+    for (int sweep = 0; sweep < num_scaling_sweeps; ++sweep) {
+      m_row_max.setZero();
+      for (int col = 0; col < size; ++col) {
+        const Scalar col_scale = m_scale[col];
+        Scalar col_max{0};
+        for (auto k = outer[col]; k < outer[col + 1]; ++k) {
+          const int row = inner[k];
+          const Scalar value =
+              abs(m_lhs.valuePtr()[k]) * m_scale[row] * col_scale;
+          m_row_max[row] = std::max(m_row_max[row], value);
+          col_max = std::max(col_max, value);
+        }
+        m_row_max[col] = std::max(m_row_max[col], col_max);
+      }
+
+      // Empty rows keep their scale
+      m_row_max = (m_row_max.array() > Scalar(0)).select(m_row_max, Scalar(1));
+      m_scale.array() /= m_row_max.array().sqrt();
+    }
+
+    // m_scaled_lhs has the same sparsity pattern as m_lhs
+    Scalar* scaled_values = m_scaled_lhs.valuePtr();
+    for (int col = 0; col < size; ++col) {
+      const Scalar col_scale = m_scale[col];
+      for (auto k = outer[col]; k < outer[col + 1]; ++k) {
+        scaled_values[k] =
+            m_lhs.valuePtr()[k] * (m_scale[inner[k]] * col_scale);
       }
     }
 
-    return inertia;
+    m_solver.factorize(m_scaled_lhs);
+    m_info = m_solver.info();
   }
 
-  /// Returns true if the smallest-magnitude pivot of the most recent
-  /// factorization corresponds to a row of the Hessian block.
+  /// Solves the system of equations with the most recent factorization.
   ///
-  /// @return True if the smallest pivot is from the Hessian block.
-  bool smallest_pivot_is_hessian() const {
-    Eigen::Index k;
-    m_solver.vectorD().cwiseAbs().minCoeff(&k);
+  /// @param rhs Right-hand side of the system.
+  /// @return The solution.
+  DenseVector solve_factorized(const DenseVector& rhs) const {
+    DenseVector scaled_rhs = rhs.cwiseProduct(m_scale);
+    DenseVector x = m_solver.solve(scaled_rhs);
+    x.array() *= m_scale.array();
+    return x;
+  }
 
-    // The factorization is of PAP⁻¹, so the original row of pivot k is P⁻¹k
-    return m_ordering.inverse_permutation().indices()(k) <
-           m_num_decision_variables;
+  /// Returns whether the most recently factorized KKT matrix has the ideal
+  /// inertia.
+  ///
+  /// The factorization's sign counts are the KKT matrix's inertia by
+  /// Sylvester's law of inertia, but they only count exact zero pivots.
+  /// Rounding can leave a tiny pivot in place of a zero, so near-zero
+  /// eigenvalues are checked first.
+  ///
+  /// @return Whether the most recently factorized KKT matrix has the ideal
+  ///     inertia.
+  bool has_ideal_inertia() const {
+    return !has_near_zero_eigenvalue() &&
+           m_solver.numPositive() == m_num_decision_variables &&
+           m_solver.numNegative() == m_num_equality_constraints;
+  }
+
+  /// Returns whether the most recently factorized KKT matrix has an eigenvalue
+  /// that should be counted as zero.
+  ///
+  /// D from the LDLT factorization has 1x1 and 2x2 diagonal blocks. Eigenvalues
+  /// within zero_pivot_threshold() of zero are counted as zero. If there aren't
+  /// any, the factorization's sign counts are the inertia.
+  ///
+  /// The factorization is of S lhs S, whose D has the same inertia, but the
+  /// threshold applies to the KKT matrix itself. Equilibration can scale a
+  /// nearly singular matrix's small pivots past it, so this undoes the scaling
+  /// first.
+  ///
+  /// @return Whether the most recently factorized KKT matrix has an eigenvalue
+  ///     that should be counted as zero.
+  bool has_near_zero_eigenvalue() const {
+    using std::abs;
+    using std::hypot;
+
+    const Scalar threshold = zero_pivot_threshold<Scalar>();
+
+    const auto& D = m_solver.vectorD();
+    const auto& D_sub = m_solver.subDiagonal();
+    const auto& rows = m_solver.permutationPinv().indices();
+
+    // This treats NaN as zero
+    auto is_near_zero = [&](Scalar λ) { return !(abs(λ) > threshold); };
+
+    for (int k = 0; k < D.size(); ++k) {
+      const Scalar s = m_scale[rows[k]];
+      if (D_sub[k] != Scalar(0)) {
+        const Scalar s_next = m_scale[rows[k + 1]];
+
+        // The eigenvalues of the 2x2 block [a  b; b  c] are the roots of its
+        // characteristic polynomial.
+        //
+        //   det([a − λ  b; b  c − λ]) = (a − λ)(c − λ) − b²
+        //                             = λ² − (a + c)λ + (ac − b²)
+        //
+        //   λ = (a + c)/2 ± r where r = √(((a − c)/2)² + b²)
+        //
+        // Let λ₁ be the root farther from zero, so only the other root λ₂ needs
+        // checking. λ₁'s two terms have the same sign, so it has no
+        // cancellation. The two terms of λ₂ have opposite signs, so λ₂ loses
+        // accuracy if |a| >> |c|. Instead, compute λ₂ from λ₁ and the product
+        // of the roots.
+        //
+        //   λ₁λ₂ = ((a + c)/2 + r)((a + c)/2 − r)
+        //   λ₂ = (a/λ₁)c − (b/λ₁)b
+        //
+        // Dividing first prevents ac and b² from overflowing. |λ₁| is the
+        // block's spectral radius (its largest eigenvalue magnitude), which for
+        // a symmetric matrix is the most it can stretch a unit vector. The
+        // block maps [1, 0]ᵀ to [a, b]ᵀ, so |a| ≤ |λ₁| and |b| ≤ |λ₁|.
+        const Scalar a = D[k] / (s * s);
+        const Scalar b = D_sub[k] / (s * s_next);
+        const Scalar c = D[k + 1] / (s_next * s_next);
+        const Scalar mid = (a + c) / Scalar(2);
+        const Scalar r = hypot((a - c) / Scalar(2), abs(b));
+        const Scalar λ = mid >= Scalar(0) ? mid + r : mid - r;
+        if (is_near_zero((a / λ) * c - (b / λ) * b)) {
+          return true;
+        }
+        ++k;
+      } else if (is_near_zero(D[k] / (s * s))) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /// Returns regularization matrix.
