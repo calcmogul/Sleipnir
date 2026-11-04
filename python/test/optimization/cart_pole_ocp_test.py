@@ -86,15 +86,20 @@ def test_cart_pole_ocp() -> None:
     assert X.value(2, 0) == pytest.approx(x_initial[2, 0], abs=solution_tolerance(1))
     assert X.value(3, 0) == pytest.approx(x_initial[3, 0], abs=solution_tolerance(1))
 
+    # Constraint residuals are part of the KKT error, so the solver only guarantees
+    # bounds to within its tolerance. For example, X(0, 0) is pinned to its lower
+    # bound by the initial state, so its sign is rounding error.
+    bound_tolerance = solution_tolerance(1)
+
     # Verify solution
     for k in range(N):
         # Cart position constraints
-        assert X.value(0, k) >= 0.0
-        assert X.value(0, k) <= d_max
+        assert X.value(0, k) >= -bound_tolerance
+        assert X.value(0, k) <= d_max + bound_tolerance
 
         # Input constraints
-        assert U.value(0, k) >= -u_max
-        assert U.value(0, k) <= u_max
+        assert U.value(0, k) >= -u_max - bound_tolerance
+        assert U.value(0, k) <= u_max + bound_tolerance
 
         # Dynamics constraints
         #

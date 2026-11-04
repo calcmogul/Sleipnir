@@ -36,22 +36,6 @@ class KKTSolver {
         m_sparse_solver{num_decision_variables, num_equality_constraints},
         m_dense_solver{num_decision_variables, num_equality_constraints} {}
 
-  /// Constructs a KKTSolver instance.
-  ///
-  /// @param use_sparse_solver Whether to use sparse or dense solver.
-  /// @param num_decision_variables The number of decision variables in the
-  ///     system.
-  /// @param num_equality_constraints The number of equality constraints in the
-  ///     system.
-  /// @param γ_min The minimum constraint regularization.
-  KKTSolver(bool use_sparse_solver, int num_decision_variables,
-            int num_equality_constraints, Scalar γ_min)
-      : m_use_sparse_solver{use_sparse_solver},
-        m_sparse_solver{num_decision_variables, num_equality_constraints,
-                        γ_min},
-        m_dense_solver{num_decision_variables, num_equality_constraints,
-                       γ_min} {}
-
   /// Reports whether previous computation was successful.
   ///
   /// @return Whether previous computation was successful.

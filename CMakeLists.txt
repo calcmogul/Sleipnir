@@ -98,9 +98,8 @@ if(NOT SLEIPNIR_USE_SYSTEM_EIGEN)
     set(EIGEN_BUILD_CMAKE_PACKAGE TRUE)
     FetchContent_Declare(
         Eigen3
-        GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
-        # master on 2026-10-17
-        GIT_TAG 3c3bf4532bf9e059e3999827b00b7452c2bcde7d
+        GIT_REPOSITORY https://gitlab.com/calcmogul/eigen.git
+        GIT_TAG sleipnir-fork
         SYSTEM
     )
     FetchContent_MakeAvailable(Eigen3)

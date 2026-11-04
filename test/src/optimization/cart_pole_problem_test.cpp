@@ -104,15 +104,20 @@ TEMPLATE_TEST_CASE("Problem - Cart-pole", "[Problem]", SCALAR_TYPES) {
                        solution_tolerance<T>(1, SolutionType::DEGENERATE)));
   CHECK_THAT(X.value(3, 0), WithinAbs(x_initial[3], solution_tolerance<T>(1)));
 
+  // Constraint residuals are part of the KKT error, so the solver only
+  // guarantees bounds to within its tolerance. For example, the initial state
+  // pins X(0, 0) to its lower bound, so its sign is rounding error.
+  const T bound_tolerance = solution_tolerance<T>(1);
+
   // Verify solution
   for (int k = 0; k < N; ++k) {
     // Cart position constraints
-    CHECK(X[0, k] >= T(0));
-    CHECK(X[0, k] <= d_max);
+    CHECK(X.value(0, k) >= -bound_tolerance);
+    CHECK(X.value(0, k) <= d_max + bound_tolerance);
 
     // Input constraints
-    CHECK(U[0, k] >= -u_max);
-    CHECK(U[0, k] <= u_max);
+    CHECK(U.value(0, k) >= -u_max - bound_tolerance);
+    CHECK(U.value(0, k) <= u_max + bound_tolerance);
 
     // Dynamics constraints
     Eigen::VectorX<T> expected_x_k1 =

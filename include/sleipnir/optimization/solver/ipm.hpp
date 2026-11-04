@@ -27,7 +27,6 @@
 #include "sleipnir/optimization/solver/util/fraction_to_the_boundary_rule.hpp"
 #include "sleipnir/optimization/solver/util/kkt_error.hpp"
 #include "sleipnir/optimization/solver/util/kkt_solver.hpp"
-#include "sleipnir/optimization/solver/util/regularization_limits.hpp"
 #include "sleipnir/optimization/solver/util/time_trace.hpp"
 #include "sleipnir/util/assert.hpp"
 #include "sleipnir/util/print_diagnostics.hpp"
@@ -348,11 +347,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
                   .nonZeros() +
               A_e.nonZeros() <
           0.25 * lhs_rows * lhs_rows,
-      matrices.num_decision_variables, matrices.num_equality_constraints,
-      // Constraint regularization is forced to zero in feasibility restoration
-      // because the equality constraint Jacobian cannot be rank-deficient
-      in_feasibility_restoration ? Scalar(0)
-                                 : min_constraint_regularization<Scalar>()};
+      matrices.num_decision_variables, matrices.num_equality_constraints};
 
   // Step size reduction factor
   constexpr Scalar α_reduction_factor(0.5);
