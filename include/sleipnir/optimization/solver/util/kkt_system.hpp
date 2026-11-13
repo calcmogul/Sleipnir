@@ -11,6 +11,7 @@
 
 #include "sleipnir/optimization/solver/util/append_as_triplets.hpp"
 #include "sleipnir/optimization/solver/util/kkt_solver.hpp"
+#include "sleipnir/optimization/solver/util/manifold.hpp"
 
 namespace slp {
 
@@ -36,25 +37,26 @@ struct NewtonStep {
   /// to the iterate.
   ///
   /// @param x The decision variables.
+  /// @param manifold The manifold the decision variables lie on.
   /// @return The step size below which the primal step is negligible relative
   ///     to the iterate.
-  Scalar tiny_step_size(const DenseVector& x) const {
+  Scalar tiny_step_size(const DenseVector& x,
+                        const Manifold<Scalar>& manifold) const {
     // A primal step αpˣ is negligible if
     //
-    //   ‖αpˣ/(1 + |x|)‖_∞ < 10ε
+    //   ‖αJpˣ/(1 + |x|)‖_∞ < 10ε
     //
-    // where the absolute value and division are elementwise. Since α > 0, it
+    // where J is the retraction's Jacobian (the identity in Euclidean space),
+    // and the absolute value and division are elementwise. Since α > 0, it
     // factors out of the norm.
     //
-    //   α‖pˣ/(1 + |x|)‖_∞ < 10ε
+    //   α‖Jpˣ/(1 + |x|)‖_∞ < 10ε
     //
     // Dividing both sides by the norm gives
     //
-    //   α < 10ε / ‖pˣ/(1 + |x|)‖_∞
+    //   α < 10ε / ‖Jpˣ/(1 + |x|)‖_∞
     return Scalar(10) * std::numeric_limits<Scalar>::epsilon() /
-           (p_x.array().abs() / (Scalar(1) + x.array().abs()))
-               .matrix()
-               .template lpNorm<Eigen::Infinity>();
+           manifold.relative_step_inf_norm(x, p_x);
   }
 };
 
@@ -150,25 +152,26 @@ struct SQPStep {
   /// to the iterate.
   ///
   /// @param x The decision variables.
+  /// @param manifold The manifold the decision variables lie on.
   /// @return The step size below which the primal step is negligible relative
   ///     to the iterate.
-  Scalar tiny_step_size(const DenseVector& x) const {
+  Scalar tiny_step_size(const DenseVector& x,
+                        const Manifold<Scalar>& manifold) const {
     // A primal step αpˣ is negligible if
     //
-    //   ‖αpˣ/(1 + |x|)‖_∞ < 10ε
+    //   ‖αJpˣ/(1 + |x|)‖_∞ < 10ε
     //
-    // where the absolute value and division are elementwise. Since α > 0, it
+    // where J is the retraction's Jacobian (the identity in Euclidean space),
+    // and the absolute value and division are elementwise. Since α > 0, it
     // factors out of the norm.
     //
-    //   α‖pˣ/(1 + |x|)‖_∞ < 10ε
+    //   α‖Jpˣ/(1 + |x|)‖_∞ < 10ε
     //
     // Dividing both sides by the norm gives
     //
-    //   α < 10ε / ‖pˣ/(1 + |x|)‖_∞
+    //   α < 10ε / ‖Jpˣ/(1 + |x|)‖_∞
     return Scalar(10) * std::numeric_limits<Scalar>::epsilon() /
-           (p_x.array().abs() / (Scalar(1) + x.array().abs()))
-               .matrix()
-               .template lpNorm<Eigen::Infinity>();
+           manifold.relative_step_inf_norm(x, p_x);
   }
 };
 
@@ -308,25 +311,26 @@ struct IPMStep {
   ///
   /// @param x The decision variables.
   /// @param s The inequality constraint slack variables.
+  /// @param manifold The manifold the decision variables lie on.
   /// @return The step size below which the primal step is negligible relative
   ///     to the iterate.
-  Scalar tiny_step_size(const DenseVector& x, const DenseVector& s) const {
+  Scalar tiny_step_size(const DenseVector& x, const DenseVector& s,
+                        const Manifold<Scalar>& manifold) const {
     // A primal step α[pˣ pˢ] is negligible if
     //
-    //   max(‖αpˣ/(1 + |x|)‖_∞, ‖αpˢ/(1 + |s|)‖_∞) < 10ε
+    //   max(‖αJpˣ/(1 + |x|)‖_∞, ‖αpˢ/(1 + |s|)‖_∞) < 10ε
     //
-    // where the absolute values and division are elementwise. Since α > 0, it
+    // where J is the retraction's Jacobian (the identity in Euclidean space),
+    // and the absolute values and division are elementwise. Since α > 0, it
     // factors out of the norms and max.
     //
-    //   α max(‖pˣ/(1 + |x|)‖_∞, ‖pˢ/(1 + |s|)‖_∞) < 10ε
+    //   α max(‖Jpˣ/(1 + |x|)‖_∞, ‖pˢ/(1 + |s|)‖_∞) < 10ε
     //
     // Dividing both sides by the max gives
     //
-    //   α < 10ε / max(‖pˣ/(1 + |x|)‖_∞, ‖pˢ/(1 + |s|)‖_∞)
+    //   α < 10ε / max(‖Jpˣ/(1 + |x|)‖_∞, ‖pˢ/(1 + |s|)‖_∞)
     return Scalar(10) * std::numeric_limits<Scalar>::epsilon() /
-           std::max((p_x.array().abs() / (Scalar(1) + x.array().abs()))
-                        .matrix()
-                        .template lpNorm<Eigen::Infinity>(),
+           std::max(manifold.relative_step_inf_norm(x, p_x),
                     (p_s.array().abs() / (Scalar(1) + s.array().abs()))
                         .matrix()
                         .template lpNorm<Eigen::Infinity>());

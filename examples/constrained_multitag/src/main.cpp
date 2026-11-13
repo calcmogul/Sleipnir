@@ -10,6 +10,8 @@
 #include <vector>
 
 #include <Eigen/Core>
+#include <sleipnir/autodiff/pose2.hpp>
+#include <sleipnir/autodiff/translation2.hpp>
 #include <sleipnir/autodiff/variable.hpp>
 #include <sleipnir/autodiff/variable_matrix.hpp>
 #include <sleipnir/optimization/problem.hpp>
@@ -23,59 +25,45 @@ int main() {
   constexpr double cx = 300;
   constexpr double cy = 150;
 
-  // robot pose
-  auto robot_x = problem.decision_variable();
-  auto robot_y = problem.decision_variable();
-  constexpr double robot_z = 0.0;
-  auto robot_θ = problem.decision_variable();
-
-  // cache autodiff variables
-  auto sinθ = sin(robot_θ);
-  auto cosθ = cos(robot_θ);
-
-  slp::VariableMatrix<double> field2robot{
-      {cosθ, -sinθ, 0, robot_x},
-      {sinθ, cosθ, 0, robot_y},
-      {0, 0, 1, robot_z},
-      {0, 0, 0, 1},
-  };
+  // robot pose. The robot is on the floor, so its pose is 2D.
+  auto field2robot = problem.decision_variable(slp::se2);
 
   // robot is ENU, cameras are SDE
-  constexpr Eigen::Matrix4d robot2camera{
-      {0, 0, 1, 0},
-      {-1, 0, 0, 0},
-      {0, -1, 0, 0},
-      {0, 0, 0, 1},
+  constexpr Eigen::Matrix3d robot2camera{
+      {0, 0, 1},
+      {-1, 0, 0},
+      {0, -1, 0},
   };
 
-  auto field2camera = field2robot * robot2camera;
-
-  // list of points in field space to reproject. Each one is a 4x1 vector of
-  // (x,y,z,1)
-  std::vector field2points{Eigen::Vector4d{2, 0 - 0.08255, 0.4, 1},
-                           Eigen::Vector4d{2, 0 + 0.08255, 0.4, 1}};
+  // list of points in field space to reproject. Each one is a 3x1 vector of
+  // (x,y,z)
+  std::vector field2points{Eigen::Vector3d{2, 0 - 0.08255, 0.4},
+                           Eigen::Vector3d{2, 0 + 0.08255, 0.4}};
 
   // List of points we saw the target at. These are exactly what we expect for a
   // camera located at 0,0,0 (hand-calculated)
   std::vector point_observations{std::pair{325, 30}, std::pair{275, 30}};
 
   // initial guess at robot pose. We expect the robot to converge to 0,0,0
-  robot_x.set_value(-0.1);
-  robot_y.set_value(0.0);
-  robot_θ.set_value(0.2);
+  field2robot.translation().set_value(Eigen::Vector2d{-0.1, 0.0});
+  field2robot.rotation().set_value(0.2);
 
-  // field2camera * field2camera⁻¹ = I
-  auto camera2field = solve<double>(field2camera, Eigen::Matrix4d::Identity());
+  auto robot2field = field2robot.inverse();
 
   // Cost
   slp::Variable J = 0.0;
   for (const auto& [field2point, observation] :
        std::views::zip(field2points, point_observations)) {
-    // camera2point = field2camera⁻¹ * field2point
-    // field2camera * camera2point = field2point
-    auto camera2point = camera2field * field2point;
+    // point's coordinates in robot frame. The robot is on the floor, so only
+    // the point's x and y change.
+    auto robot2point_xy =
+        slp::Translation2<double>{field2point.head<2>()}.transform_by(
+            robot2field);
+    slp::VariableMatrix<double> robot2point{
+        {robot2point_xy.x()}, {robot2point_xy.y()}, {field2point.z()}};
 
     // point's coordinates in camera frame
+    auto camera2point = robot2camera.transpose() * robot2point;
     auto& x = camera2point[0];
     auto& y = camera2point[1];
     auto& z = camera2point[2];
@@ -105,7 +93,7 @@ int main() {
 
   problem.solve({.diagnostics = true});
 
-  std::println("x = {} m", robot_x.value());
-  std::println("y = {} m", robot_y.value());
-  std::println("θ = {} rad", robot_θ.value());
+  std::println("x = {} m", field2robot.translation().x().value());
+  std::println("y = {} m", field2robot.translation().y().value());
+  std::println("θ = {} rad", field2robot.rotation().value());
 }

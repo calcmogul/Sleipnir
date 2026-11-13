@@ -14,8 +14,14 @@
 #include <string_view>
 #include <utility>
 
+#include <sleipnir/autodiff/pose2.hpp>
+#include <sleipnir/autodiff/pose3.hpp>
+#include <sleipnir/autodiff/rotation2.hpp>
+#include <sleipnir/autodiff/rotation3.hpp>
+#include <sleipnir/autodiff/unit_vector.hpp>
 #include <sleipnir/autodiff/variable.hpp>
 #include <sleipnir/autodiff/variable_matrix.hpp>
+#include <sleipnir/optimization/manifold.hpp>
 #include <sleipnir/optimization/problem.hpp>
 #include <sleipnir/optimization/solver/iteration_info.hpp>
 #include <sleipnir/optimization/solver/options.hpp>
@@ -141,6 +147,36 @@ void bind_problem(nb::class_<Problem<double>>& cls) {
   cls.def("decision_variable",
           nb::overload_cast<int, int>(&Problem<double>::decision_variable),
           "rows"_a, "cols"_a = 1, DOC(slp, Problem, decision_variable, 2));
+  cls.def(
+      "decision_variable",
+      [](Problem<double>& self, sphere_t tag, int rows) {
+        return self.decision_variable(tag, rows);
+      },
+      "manifold"_a, "rows"_a, DOC(slp, Problem, decision_variable, 3));
+  cls.def(
+      "decision_variable",
+      [](Problem<double>& self, so2_t tag) {
+        return self.decision_variable(tag);
+      },
+      "manifold"_a, DOC(slp, Problem, decision_variable, 4));
+  cls.def(
+      "decision_variable",
+      [](Problem<double>& self, so3_t tag) {
+        return self.decision_variable(tag);
+      },
+      "manifold"_a, DOC(slp, Problem, decision_variable, 5));
+  cls.def(
+      "decision_variable",
+      [](Problem<double>& self, se2_t tag) {
+        return self.decision_variable(tag);
+      },
+      "manifold"_a, DOC(slp, Problem, decision_variable, 6));
+  cls.def(
+      "decision_variable",
+      [](Problem<double>& self, se3_t tag) {
+        return self.decision_variable(tag);
+      },
+      "manifold"_a, DOC(slp, Problem, decision_variable, 7));
   cls.def("symmetric_decision_variable",
           &Problem<double>::symmetric_decision_variable, "rows"_a,
           DOC(slp, Problem, symmetric_decision_variable));
