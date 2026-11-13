@@ -9,6 +9,11 @@ namespace slp {
 
 /// Solver iteration information exposed to an iteration callback.
 ///
+/// If some decision variables lie on a manifold (e.g., from
+/// Problem::decision_variable(so3)), x is the point in the ambient space, and
+/// the derivatives are with respect to the manifold's tangent space at x, so
+/// they have fewer columns than x has rows.
+///
 /// @tparam Scalar Scalar type.
 template <typename Scalar>
 struct IterationInfo {

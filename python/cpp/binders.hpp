@@ -8,9 +8,19 @@
 #include <sleipnir/autodiff/gradient.hpp>
 #include <sleipnir/autodiff/hessian.hpp>
 #include <sleipnir/autodiff/jacobian.hpp>
+#include <sleipnir/autodiff/pose2.hpp>
+#include <sleipnir/autodiff/pose3.hpp>
+#include <sleipnir/autodiff/rotation2.hpp>
+#include <sleipnir/autodiff/rotation3.hpp>
+#include <sleipnir/autodiff/translation2.hpp>
+#include <sleipnir/autodiff/translation3.hpp>
+#include <sleipnir/autodiff/twist2.hpp>
+#include <sleipnir/autodiff/twist3.hpp>
+#include <sleipnir/autodiff/unit_vector.hpp>
 #include <sleipnir/autodiff/variable.hpp>
 #include <sleipnir/autodiff/variable_block.hpp>
 #include <sleipnir/autodiff/variable_matrix.hpp>
+#include <sleipnir/optimization/manifold.hpp>
 #include <sleipnir/optimization/ocp.hpp>
 #include <sleipnir/optimization/ocp/dynamics_type.hpp>
 #include <sleipnir/optimization/ocp/timestep_method.hpp>
@@ -30,6 +40,15 @@ void bind_variable_matrix(nb::module_& autodiff,
                           nb::class_<VariableMatrix<double>>& cls);
 void bind_variable_block(
     nb::class_<VariableBlock<VariableMatrix<double>>>& cls);
+void bind_unit_vector(nb::class_<UnitVector<double>>& cls);
+void bind_rotation2(nb::class_<Rotation2<double>>& cls);
+void bind_rotation3(nb::class_<Rotation3<double>>& cls);
+void bind_pose2(nb::class_<Pose2<double>>& cls);
+void bind_pose3(nb::class_<Pose3<double>>& cls);
+void bind_twist2(nb::class_<Twist2<double>>& cls);
+void bind_twist3(nb::class_<Twist3<double>>& cls);
+void bind_translation2(nb::class_<Translation2<double>>& cls);
+void bind_translation3(nb::class_<Translation3<double>>& cls);
 
 void bind_gradient(nb::class_<Gradient<double>>& cls);
 void bind_hessian(nb::class_<Hessian<double>>& cls);
@@ -41,6 +60,8 @@ void bind_inequality_constraints(
 
 void bind_exit_status(nb::enum_<ExitStatus>& e);
 void bind_iteration_info(nb::class_<IterationInfo<double>>& cls);
+
+void bind_manifold_tags(nb::module_& optimization);
 
 void bind_problem(nb::class_<Problem<double>>& cls);
 

@@ -26,6 +26,7 @@
 #include "sleipnir/optimization/solver/util/filter.hpp"
 #include "sleipnir/optimization/solver/util/kkt_error.hpp"
 #include "sleipnir/optimization/solver/util/kkt_solver.hpp"
+#include "sleipnir/optimization/solver/util/tangent_space.hpp"
 #include "sleipnir/optimization/solver/util/time_trace.hpp"
 #include "sleipnir/util/assert.hpp"
 #include "sleipnir/util/print_diagnostics.hpp"
@@ -126,25 +127,26 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
     /// relative to the iterate.
     ///
     /// @param x The decision variables.
+    /// @param manifold The manifold the decision variables lie on.
     /// @return The step size below which the primal step is negligible
     ///     relative to the iterate.
-    Scalar tiny_step_size(const DenseVector& x) const {
+    Scalar tiny_step_size(const DenseVector& x,
+                          const Manifold<Scalar>& manifold) const {
       // A primal step αpˣ is negligible if
       //
-      //   ‖αpˣ/(1 + |x|)‖_∞ < 10ε
+      //   ‖αJpˣ/(1 + |x|)‖_∞ < 10ε
       //
-      // where the absolute value and division are elementwise. Since α > 0, it
+      // where J is the retraction's Jacobian (the identity in Euclidean space),
+      // and the absolute value and division are elementwise. Since α > 0, it
       // factors out of the norm.
       //
-      //   α‖pˣ/(1 + |x|)‖_∞ < 10ε
+      //   α‖Jpˣ/(1 + |x|)‖_∞ < 10ε
       //
       // Dividing both sides by the norm gives
       //
-      //   α < 10ε / ‖pˣ/(1 + |x|)‖_∞
+      //   α < 10ε / ‖Jpˣ/(1 + |x|)‖_∞
       return Scalar(10) * std::numeric_limits<Scalar>::epsilon() /
-             (p_x.array().abs() / (Scalar(1) + x.array().abs()))
-                 .matrix()
-                 .template lpNorm<Eigen::Infinity>();
+             manifold.relative_step_inf_norm(x, p_x);
     }
   };
 
@@ -173,12 +175,23 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
         traced(diagnostics[HESSIAN_CONSTRAINTS], matrix_callbacks.H_c),
         traced(diagnostics[EQUALITY_CONSTRAINTS], matrix_callbacks.c_e),
         traced(diagnostics[EQUALITY_JACOBIAN], matrix_callbacks.A_e),
-        matrix_callbacks.scaling);
+        matrix_callbacks.scaling, matrix_callbacks.manifold);
   }
-  const auto& matrices = traced_matrices ? *traced_matrices : matrix_callbacks;
+  const auto& ambient_matrices =
+      traced_matrices ? *traced_matrices : matrix_callbacks;
 #else
-  const auto& matrices = matrix_callbacks;
+  const auto& ambient_matrices = matrix_callbacks;
 #endif
+
+  // Take derivatives in the manifold's tangent space if it isn't Euclidean
+  const auto& manifold = matrix_callbacks.manifold;
+  TangentSpace<Scalar> tangent_space{manifold};
+  std::optional<SQPMatrixCallbacks<Scalar>> tangent_matrices;
+  if (!manifold.is_euclidean()) {
+    tangent_matrices.emplace(tangent_space.callbacks(ambient_matrices));
+  }
+  const auto& matrices =
+      tangent_matrices ? *tangent_matrices : ambient_matrices;
 
   ScopedTimeTracer setup_tracer{diagnostics[SETUP]};
 
@@ -289,9 +302,9 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
 
     // rhs = −[∇f − Aₑᵀy]
     //        [   cₑ    ]
-    DenseVector rhs{x.rows() + y.rows()};
-    rhs.segment(0, x.rows()) = -g + A_e.transpose() * y;
-    rhs.segment(x.rows(), y.rows()) = -c_e;
+    DenseVector rhs{matrices.num_decision_variables + y.rows()};
+    rhs.segment(0, matrices.num_decision_variables) = -g + A_e.transpose() * y;
+    rhs.segment(matrices.num_decision_variables, y.rows()) = -c_e;
 
     phase_tracer.next(diagnostics[KKT_MATRIX_DECOMP]);
 
@@ -314,8 +327,8 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
       // p = [ pˣ]
       //     [−pʸ]
       DenseVector p = solver.solve(rhs);
-      step.p_x = p.segment(0, x.rows());
-      step.p_y = -p.segment(x.rows(), y.rows());
+      step.p_x = p.segment(0, matrices.num_decision_variables);
+      step.p_y = -p.segment(matrices.num_decision_variables, y.rows());
     };
     compute_step(step);
 
@@ -331,11 +344,11 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
     // α_min can be zero (e.g., when the constraint violation is zero), so also
     // end the line search when the step becomes negligible relative to the
     // iterate. This bounds the number of step size reductions.
-    const Scalar α_tiny = step.tiny_step_size(x);
+    const Scalar α_tiny = step.tiny_step_size(x, manifold);
 
     // Loop until a step is accepted
     while (1) {
-      trial_x = x + α * step.p_x;
+      manifold.retract(x, α, step.p_x, trial_x);
       trial_y = y + α * step.p_y;
 
       trial_f = matrices.f(trial_x);
@@ -412,7 +425,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
           // Solve the Newton-KKT system
           compute_step(soc_step);
 
-          trial_x = x + α_soc * soc_step.p_x;
+          manifold.retract(x, α_soc, soc_step.p_x, trial_x);
           trial_y = y + α_soc * soc_step.p_y;
 
           trial_f = matrices.f(trial_x);
@@ -468,7 +481,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
         Scalar current_kkt_error = kkt_error<Scalar, KKTErrorType::ONE_NORM>(
             g, A_e, c_e, y, options.tolerance);
 
-        trial_x = x + α_max * step.p_x;
+        manifold.retract(x, α_max, step.p_x, trial_x);
         trial_y = y + α_max * step.p_y;
 
         trial_f = matrices.f(trial_x);
@@ -532,8 +545,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
           return false;
         }
 
-        DenseVector trial_x =
-            info.x.segment(0, matrices.num_decision_variables);
+        DenseVector trial_x = info.x.segment(0, x.rows());
 
         DenseVector trial_c_e = matrices.c_e(trial_x);
 
@@ -545,7 +557,7 @@ ExitStatus sqp(const SQPMatrixCallbacks<Scalar>& matrix_callbacks,
                    Scalar(0.9) * initial_entry.constraint_violation &&
                filter.is_acceptable(trial_entry);
       });
-      auto status = feasibility_restoration<Scalar>(matrices, callbacks,
+      auto status = feasibility_restoration<Scalar>(ambient_matrices, callbacks,
                                                     options, x, y, iterations);
 
       if (status != ExitStatus::SUCCESS) {

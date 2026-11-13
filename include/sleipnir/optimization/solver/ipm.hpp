@@ -28,6 +28,7 @@
 #include "sleipnir/optimization/solver/util/kkt_error.hpp"
 #include "sleipnir/optimization/solver/util/kkt_solver.hpp"
 #include "sleipnir/optimization/solver/util/regularization_limits.hpp"
+#include "sleipnir/optimization/solver/util/tangent_space.hpp"
 #include "sleipnir/optimization/solver/util/time_trace.hpp"
 #include "sleipnir/util/assert.hpp"
 #include "sleipnir/util/print_diagnostics.hpp"
@@ -173,27 +174,28 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
     ///
     /// @param x The decision variables.
     /// @param s The inequality constraint slack variables.
+    /// @param manifold The manifold the decision variables lie on.
     /// @return The step size below which the primal step is negligible
     ///     relative to the iterate.
-    Scalar tiny_step_size(const DenseVector& x, const DenseVector& s) const {
+    Scalar tiny_step_size(const DenseVector& x, const DenseVector& s,
+                          const Manifold<Scalar>& manifold) const {
       using std::max;
 
       // A primal step α[pˣ pˢ] is negligible if
       //
-      //   max(‖αpˣ/(1 + |x|)‖_∞, ‖αpˢ/(1 + |s|)‖_∞) < 10ε
+      //   max(‖αJpˣ/(1 + |x|)‖_∞, ‖αpˢ/(1 + |s|)‖_∞) < 10ε
       //
-      // where the absolute values and division are elementwise. Since α > 0,
-      // it factors out of the norms and max.
+      // where J is the retraction's Jacobian (the identity in Euclidean space),
+      // and the absolute values and division are elementwise. Since α > 0, it
+      // factors out of the norms and max.
       //
-      //   α max(‖pˣ/(1 + |x|)‖_∞, ‖pˢ/(1 + |s|)‖_∞) < 10ε
+      //   α max(‖Jpˣ/(1 + |x|)‖_∞, ‖pˢ/(1 + |s|)‖_∞) < 10ε
       //
       // Dividing both sides by the max gives
       //
-      //   α < 10ε / max(‖pˣ/(1 + |x|)‖_∞, ‖pˢ/(1 + |s|)‖_∞)
+      //   α < 10ε / max(‖Jpˣ/(1 + |x|)‖_∞, ‖pˢ/(1 + |s|)‖_∞)
       return Scalar(10) * std::numeric_limits<Scalar>::epsilon() /
-             max((p_x.array().abs() / (Scalar(1) + x.array().abs()))
-                     .matrix()
-                     .template lpNorm<Eigen::Infinity>(),
+             max(manifold.relative_step_inf_norm(x, p_x),
                  (p_s.array().abs() / (Scalar(1) + s.array().abs()))
                      .matrix()
                      .template lpNorm<Eigen::Infinity>());
@@ -230,12 +232,23 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
         traced(diagnostics[EQUALITY_JACOBIAN], matrix_callbacks.A_e),
         traced(diagnostics[INEQUALITY_CONSTRAINTS], matrix_callbacks.c_i),
         traced(diagnostics[INEQUALITY_JACOBIAN], matrix_callbacks.A_i),
-        matrix_callbacks.scaling);
+        matrix_callbacks.scaling, matrix_callbacks.manifold);
   }
-  const auto& matrices = traced_matrices ? *traced_matrices : matrix_callbacks;
+  const auto& ambient_matrices =
+      traced_matrices ? *traced_matrices : matrix_callbacks;
 #else
-  const auto& matrices = matrix_callbacks;
+  const auto& ambient_matrices = matrix_callbacks;
 #endif
+
+  // Take derivatives in the manifold's tangent space if it isn't Euclidean
+  const auto& manifold = matrix_callbacks.manifold;
+  TangentSpace<Scalar> tangent_space{manifold};
+  std::optional<IPMMatrixCallbacks<Scalar>> tangent_matrices;
+  if (!manifold.is_euclidean()) {
+    tangent_matrices.emplace(tangent_space.callbacks(ambient_matrices));
+  }
+  const auto& matrices =
+      tangent_matrices ? *tangent_matrices : ambient_matrices;
 
   ScopedTimeTracer setup_tracer{diagnostics[SETUP]};
 
@@ -425,11 +438,11 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
 
     // rhs = −[∇f − Aₑᵀy − Aᵢᵀ(−Σcᵢ + μS⁻¹e + z)]
     //        [               cₑ                ]
-    DenseVector rhs{x.rows() + y.rows()};
-    rhs.segment(0, x.rows()) =
+    DenseVector rhs{matrices.num_decision_variables + y.rows()};
+    rhs.segment(0, matrices.num_decision_variables) =
         -g + A_e.transpose() * y +
         A_i.transpose() * (-Σ * c_i + μ * s.cwiseInverse() + z);
-    rhs.segment(x.rows(), y.rows()) = -c_e;
+    rhs.segment(matrices.num_decision_variables, y.rows()) = -c_e;
 
     phase_tracer.next(diagnostics[KKT_MATRIX_DECOMP]);
 
@@ -453,8 +466,8 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
       // p = [ pˣ]
       //     [−pʸ]
       DenseVector p = solver.solve(rhs);
-      step.p_x = p.segment(0, x.rows());
-      step.p_y = -p.segment(x.rows(), y.rows());
+      step.p_x = p.segment(0, matrices.num_decision_variables);
+      step.p_y = -p.segment(matrices.num_decision_variables, y.rows());
 
       // pˢ = cᵢ − s + Aᵢpˣ
       // pᶻ = μS⁻¹e − z − Σpˢ
@@ -494,11 +507,11 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
     // α_min can be zero (e.g., when the constraint violation is zero), so also
     // end the line search when the step becomes negligible relative to the
     // iterate. This bounds the number of step size reductions.
-    const Scalar α_tiny = step.tiny_step_size(x, s);
+    const Scalar α_tiny = step.tiny_step_size(x, s, manifold);
 
     // Loop until a step is accepted
     while (!call_feasibility_restoration) {
-      trial_x = x + α * step.p_x;
+      manifold.retract(x, α, step.p_x, trial_x);
       trial_c_i = matrices.c_i(trial_x);
       if (options.feasible_ipm && c_i.cwiseGreater(Scalar(0)).all()) {
         // If the inequality constraints are all feasible, prevent them from
@@ -591,10 +604,10 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
           //     αˢᵒᶜ(cᵢ(xₖ) − sₖ) + cᵢ(xₖ + αˢᵒᶜpˣˢᵒᶜ) − (sₖ + αˢᵒᶜpˢˢᵒᶜ)
           c_e_soc = α_soc * c_e_soc + trial_c_e;
           c_i_minus_s_soc = α_soc * c_i_minus_s_soc + trial_c_i - trial_s;
-          rhs.segment(0, x.rows()) =
+          rhs.segment(0, matrices.num_decision_variables) =
               -g + A_e.transpose() * y +
               A_i.transpose() * (μ * s.cwiseInverse() - Σ * c_i_minus_s_soc);
-          rhs.segment(x.rows(), y.rows()) = -c_e_soc;
+          rhs.segment(matrices.num_decision_variables, y.rows()) = -c_e_soc;
 
           // Solve the Newton-KKT system
           compute_step(soc_step, c_i_minus_s_soc);
@@ -604,7 +617,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
           α_soc = fraction_to_the_boundary_rule<Scalar>(s, soc_step.p_s, τ);
           α_z_soc = fraction_to_the_boundary_rule<Scalar>(z, soc_step.p_z, τ);
 
-          trial_x = x + α_soc * soc_step.p_x;
+          manifold.retract(x, α_soc, soc_step.p_x, trial_x);
           trial_s = s + α_soc * soc_step.p_s;
           trial_y = y + α_soc * soc_step.p_y;
           trial_z = z + α_z_soc * soc_step.p_z;
@@ -665,7 +678,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
         Scalar current_kkt_error = kkt_error<Scalar, KKTErrorType::ONE_NORM>(
             g, A_e, c_e, A_i, c_i, s, y, z, μ, options.tolerance);
 
-        trial_x = x + α_max * step.p_x;
+        manifold.retract(x, α_max, step.p_x, trial_x);
         trial_s = s + α_max * step.p_s;
         trial_y = y + α_max * step.p_y;
         trial_z = z + α_z * step.p_z;
@@ -738,8 +751,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
           return false;
         }
 
-        DenseVector trial_x =
-            info.x.segment(0, matrices.num_decision_variables);
+        DenseVector trial_x = info.x.segment(0, x.rows());
 
         DenseVector trial_c_e = matrices.c_e(trial_x);
         DenseVector trial_c_i = matrices.c_i(trial_x);
@@ -760,7 +772,7 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks,
                filter.is_acceptable(trial_entry);
       });
       auto status =
-          feasibility_restoration<Scalar>(matrices, callbacks, options,
+          feasibility_restoration<Scalar>(ambient_matrices, callbacks, options,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
                                           bound_constraint_mask,
 #endif

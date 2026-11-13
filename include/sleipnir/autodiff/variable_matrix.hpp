@@ -31,6 +31,12 @@
 
 namespace slp {
 
+template <typename Scalar>
+class Rotation2;
+
+template <typename Scalar>
+class Rotation3;
+
 /// A matrix of autodiff variables.
 ///
 /// @tparam Scalar_ Scalar type.
@@ -909,6 +915,18 @@ class VariableMatrix : public SleipnirBase {
 
     return result;
   }
+
+  /// Returns this 3D vector rotated by a rotation.
+  ///
+  /// @param q The rotation.
+  /// @return The rotated vector.
+  VariableMatrix<Scalar> rotate_by(const Rotation3<Scalar>& q) const;
+
+  /// Returns this 2D vector rotated by a rotation.
+  ///
+  /// @param z The rotation.
+  /// @return The rotated vector.
+  VariableMatrix<Scalar> rotate_by(const Rotation2<Scalar>& z) const;
 
   /// Returns the number of rows in the matrix.
   ///

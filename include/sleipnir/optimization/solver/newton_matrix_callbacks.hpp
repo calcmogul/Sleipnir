@@ -7,6 +7,7 @@
 #include <Eigen/Core>
 #include <Eigen/SparseCore>
 
+#include "sleipnir/optimization/solver/util/manifold.hpp"
 #include "sleipnir/optimization/solver/util/problem_scaling.hpp"
 
 namespace slp {
@@ -96,6 +97,13 @@ struct NewtonMatrixCallbacks {
   /// Automatic problem scaling factors. Used to scale the cost and tolerance
   /// inside the Newton solver.
   ProblemScaling<Scalar> scaling;
+
+  /// The manifold the decision variables lie on.
+  ///
+  /// The other callbacks take derivatives with respect to the ambient decision
+  /// variables x. The solver steps in the manifold's tangent space and retracts
+  /// the steps onto the manifold.
+  Manifold<Scalar> manifold;
 };
 
 }  // namespace slp

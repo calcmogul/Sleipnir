@@ -21,6 +21,7 @@
 #include "sleipnir/optimization/solver/util/filter.hpp"
 #include "sleipnir/optimization/solver/util/kkt_error.hpp"
 #include "sleipnir/optimization/solver/util/kkt_solver.hpp"
+#include "sleipnir/optimization/solver/util/tangent_space.hpp"
 #include "sleipnir/optimization/solver/util/time_trace.hpp"
 #include "sleipnir/util/assert.hpp"
 #include "sleipnir/util/print_diagnostics.hpp"
@@ -79,12 +80,24 @@ ExitStatus newton(
                             traced(diagnostics[COST], matrix_callbacks.f),
                             traced(diagnostics[GRADIENT], matrix_callbacks.g),
                             traced(diagnostics[HESSIAN], matrix_callbacks.H),
-                            matrix_callbacks.scaling);
+                            matrix_callbacks.scaling,
+                            matrix_callbacks.manifold);
   }
-  const auto& matrices = traced_matrices ? *traced_matrices : matrix_callbacks;
+  const auto& ambient_matrices =
+      traced_matrices ? *traced_matrices : matrix_callbacks;
 #else
-  const auto& matrices = matrix_callbacks;
+  const auto& ambient_matrices = matrix_callbacks;
 #endif
+
+  // Take derivatives in the manifold's tangent space if it isn't Euclidean
+  const auto& manifold = matrix_callbacks.manifold;
+  TangentSpace<Scalar> tangent_space{manifold};
+  std::optional<NewtonMatrixCallbacks<Scalar>> tangent_matrices;
+  if (!manifold.is_euclidean()) {
+    tangent_matrices.emplace(tangent_space.callbacks(ambient_matrices));
+  }
+  const auto& matrices =
+      tangent_matrices ? *tangent_matrices : ambient_matrices;
 
   ScopedTimeTracer setup_tracer{diagnostics[SETUP]};
 
@@ -174,24 +187,23 @@ ExitStatus newton(
     //
     // A step αpˣ is negligible if
     //
-    //   ‖αpˣ/(1 + |x|)‖_∞ < 10ε
+    //   ‖αJpˣ/(1 + |x|)‖_∞ < 10ε
     //
-    // where the absolute value and division are elementwise. Since α > 0, it
+    // where J is the retraction's Jacobian (the identity in Euclidean space),
+    // and the absolute value and division are elementwise. Since α > 0, it
     // factors out of the norm.
     //
-    //   α‖pˣ/(1 + |x|)‖_∞ < 10ε
+    //   α‖Jpˣ/(1 + |x|)‖_∞ < 10ε
     //
     // Dividing both sides by the norm gives
     //
-    //   α < 10ε / ‖pˣ/(1 + |x|)‖_∞
+    //   α < 10ε / ‖Jpˣ/(1 + |x|)‖_∞
     const Scalar α_tiny = Scalar(10) * std::numeric_limits<Scalar>::epsilon() /
-                          (p_x.array().abs() / (Scalar(1) + x.array().abs()))
-                              .matrix()
-                              .template lpNorm<Eigen::Infinity>();
+                          manifold.relative_step_inf_norm(x, p_x);
 
     // Loop until a step is accepted
     while (1) {
-      trial_x = x + α * p_x;
+      manifold.retract(x, α, p_x, trial_x);
 
       trial_f = matrices.f(trial_x);
 
@@ -220,7 +232,7 @@ ExitStatus newton(
       if (α < α_min || α < α_tiny) {
         Scalar current_kkt_error = kkt_error<Scalar, KKTErrorType::ONE_NORM>(g);
 
-        trial_x = x + α_max * p_x;
+        manifold.retract(x, α_max, p_x, trial_x);
 
         trial_f = matrices.f(trial_x);
 

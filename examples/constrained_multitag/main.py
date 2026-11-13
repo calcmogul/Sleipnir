@@ -7,8 +7,8 @@ The robot pose is constrained to be on the floor (z = 0).
 """
 
 import numpy as np
-from sleipnir.autodiff import VariableMatrix, cos, sin, solve
-from sleipnir.optimization import Problem
+from sleipnir.autodiff import Translation2, VariableMatrix
+from sleipnir.optimization import Problem, se2
 
 
 def main() -> None:
@@ -20,35 +20,17 @@ def main() -> None:
     cx = 300
     cy = 150
 
-    # robot pose
-    robot_x = problem.decision_variable()
-    robot_y = problem.decision_variable()
-    robot_z = 0.0
-    robot_θ = problem.decision_variable()
-
-    # cache autodiff variables
-    sinθ = sin(robot_θ)
-    cosθ = cos(robot_θ)
-
-    field2robot = VariableMatrix(
-        [
-            [cosθ, -sinθ, 0, robot_x],
-            [sinθ, cosθ, 0, robot_y],
-            [0, 0, 1, robot_z],
-            [0, 0, 0, 1],
-        ]
-    )
+    # robot pose. The robot is on the floor, so its pose is 2D.
+    field2robot = problem.decision_variable(se2)
 
     # robot is ENU, cameras are SDE
-    robot2camera = np.array([[0, 0, 1, 0], [-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 0, 1]])
+    robot2camera = np.array([[0, 0, 1], [-1, 0, 0], [0, -1, 0]])
 
-    field2camera = field2robot @ robot2camera
-
-    # list of points in field space to reproject. Each one is a 4x1 vector of
-    # (x,y,z,1)
+    # list of points in field space to reproject. Each one is a 3x1 vector of
+    # (x,y,z)
     field2points = [
-        np.array([[2], [0 - 0.08255], [0.4], [1]]),
-        np.array([[2], [0 + 0.08255], [0.4], [1]]),
+        np.array([2, 0 - 0.08255, 0.4]),
+        np.array([2, 0 + 0.08255, 0.4]),
     ]
 
     # List of points we saw the target at. These are exactly what we expect for
@@ -56,21 +38,23 @@ def main() -> None:
     point_observations = [(325, 30), (275, 30)]
 
     # initial guess at robot pose. We expect the robot to converge to 0,0,0
-    robot_x.set_value(-0.1)
-    robot_y.set_value(0.0)
-    robot_θ.set_value(0.2)
+    field2robot.translation().set_value(np.array([-0.1, 0.0]))
+    field2robot.rotation().set_value(0.2)
 
-    # field2camera * field2camera⁻¹ = I
-    camera2field = solve(field2camera, np.identity(4))
+    robot2field = field2robot.inverse()
 
     # Cost
     J = 0
     for field2point, observation in zip(field2points, point_observations):
-        # camera2point = field2camera⁻¹ * field2point
-        # field2camera * camera2point = field2point
-        camera2point = camera2field @ field2point
+        # point's coordinates in robot frame. The robot is on the floor, so
+        # only the point's x and y change.
+        robot2point_xy = Translation2(field2point[:2]).transform_by(robot2field)
+        robot2point = VariableMatrix(
+            [[robot2point_xy.x()], [robot2point_xy.y()], [field2point[2]]]
+        )
 
         # point's coordinates in camera frame
+        camera2point = robot2camera.T @ robot2point
         x = camera2point[0]
         y = camera2point[1]
         z = camera2point[2]
@@ -99,9 +83,10 @@ def main() -> None:
 
     problem.solve(diagnostics=True)
 
-    print(f"x = {robot_x.value()} m")
-    print(f"y = {robot_y.value()} m")
-    print(f"θ = {robot_θ.value()} rad")
+    x, y = field2robot.translation().value()
+    print(f"x = {x} m")
+    print(f"y = {y} m")
+    print(f"θ = {field2robot.rotation().value()} rad")
 
 
 if __name__ == "__main__":

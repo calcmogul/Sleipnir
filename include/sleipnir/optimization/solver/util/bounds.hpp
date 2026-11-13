@@ -13,6 +13,7 @@
 
 #include "sleipnir/autodiff/expression_type.hpp"
 #include "sleipnir/autodiff/variable.hpp"
+#include "sleipnir/optimization/solver/util/manifold.hpp"
 #include "sleipnir/util/assert.hpp"
 
 // See docs/algorithms.md#Works_cited for citation definitions
@@ -42,6 +43,11 @@ struct Bounds {
 /// bounds on each decision variable, and whether or not they're feasible (given
 /// previously encountered bounds),
 ///
+/// Constraints on decision variables in a manifold block participate in
+/// conflict detection, but they aren't bound constraints, and their decision
+/// variables are reported as unbounded. Retractions move a block's decision
+/// variables nonlinearly, so the solver can't keep them within their bounds.
+///
 /// @tparam Scalar Scalar type.
 /// @param decision_variables Decision variables corresponding to each column of
 ///     A_i.
@@ -49,10 +55,12 @@ struct Bounds {
 ///     cᵢ(decision_variables) ≥ 0.
 /// @param A_i The Jacobian of inequality_constraints wrt decision_variables,
 ///     evaluated anywhere.
+/// @param manifold_blocks The manifold blocks of decision_variables.
 template <typename Scalar>
 Bounds<Scalar> get_bounds(std::span<Variable<Scalar>> decision_variables,
                           std::span<Variable<Scalar>> inequality_constraints,
-                          const Eigen::SparseMatrix<Scalar>& A_i) {
+                          const Eigen::SparseMatrix<Scalar>& A_i,
+                          std::span<const ManifoldBlock> manifold_blocks = {}) {
   // NB: Casting to long is unspecified if the size of decision_variable.size()
   // is greater than the max long value, but then we wouldn't be able to fill
   // A_i correctly anyway.
@@ -100,6 +108,12 @@ Bounds<Scalar> get_bounds(std::span<Variable<Scalar>> decision_variables,
   // is 1 if the i-th inequality constraint is a bound and 0 otherwise.
   Eigen::ArrayX<bool> bound_constraint_mask{inequality_constraints.size()};
   bound_constraint_mask.fill(false);
+
+  // Whether each decision variable is in a manifold block
+  gch::small_vector<bool> on_manifold(decision_variables.size(), false);
+  for (const auto& block : manifold_blocks) {
+    std::fill_n(on_manifold.begin() + block.offset, block.size, true);
+  }
 
   for (typename decltype(inequality_constraints)::size_type constraint_index =
            0;
@@ -182,8 +196,18 @@ Bounds<Scalar> get_bounds(std::span<Variable<Scalar>> decision_variables,
     }
 
     // Set the bound constraint mask appropriately.
-    bound_constraint_mask[constraint_index] = true;
+    bound_constraint_mask[constraint_index] =
+        !on_manifold[decision_variable_index];
   }
+
+  for (size_t i = 0; i < on_manifold.size(); ++i) {
+    if (on_manifold[i]) {
+      decision_var_indices_to_bounds[i] = {
+          -std::numeric_limits<Scalar>::infinity(),
+          std::numeric_limits<Scalar>::infinity()};
+    }
+  }
+
   return {bound_constraint_mask, decision_var_indices_to_bounds,
           conflicting_bound_indices};
 }

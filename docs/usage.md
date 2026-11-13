@@ -473,3 +473,103 @@ problem.minimize(sum(dt))
 
 problem.solve()
 ```
+
+### Manifold optimization
+
+Unit vectors, rotations, and poses can be decision variables. Instead of constraining their unit-length parts with `n.T @ n == 1`, the solver steps along the set of valid values, so every iterate is valid, and the problem has fewer constraints and multipliers. Use them instead of angle decision variables too: rotations have no discontinuity at ±π, and they don't need `atan2()`.
+
+| Decision variable                         | Type         | Value                                      | Initial value      |
+|-------------------------------------------|--------------|--------------------------------------------|--------------------|
+| `problem.decision_variable(sphere, rows)` | `UnitVector` | unit vector                                | e₁ = [1, 0, …, 0]ᵀ |
+| `problem.decision_variable(so2)`          | `Rotation2`  | angle in radians, in (−π, π]               | 0                  |
+| `problem.decision_variable(so3)`          | `Rotation3`  | unit quaternion [w, x, y, z]               | identity           |
+| `problem.decision_variable(se2)`          | `Pose2`      | `Translation2` and `Rotation2`             | identity           |
+| `problem.decision_variable(se3)`          | `Pose3`      | `Translation3` and `Rotation3`             | identity           |
+
+`set_value()` takes the same form as `value()` and normalizes unit vectors and quaternions. The tags are in `sleipnir.optimization` (`slp::sphere`, etc. in C++), and the types are in `sleipnir.autodiff`.
+
+```python
+import math
+
+import numpy as np
+from sleipnir.autodiff import Pose2
+from sleipnir.optimization import Problem, se2
+
+problem = Problem()
+
+robot = problem.decision_variable(se2)
+robot.translation().set_value(np.array([-0.1, 0.0]))
+robot.rotation().set_value(0.2)
+
+goal = Pose2(np.array([3.0, 1.0]), math.pi / 2)
+problem.minimize(robot.translation().squared_distance(goal.translation()))
+problem.subject_to(robot.rotation() == goal.rotation())
+
+problem.solve()
+
+x, y = robot.translation().value()
+θ = robot.rotation().value()
+```
+
+The types support these operations:
+
+* Rotations and poses compose with `*` (`a * b` applies `b`, then `a`), and have `inverse()` and `relative_to(other)`, which is `other.inverse() * self`.
+* Vectors rotate with `v.rotate_by(rotation)`, and points transform with `p.transform_by(pose)`.
+* `Rotation2` has `cos()`, `sin()`, and `angle()`. `Rotation3` has `w()`, `x()`, `y()`, `z()`, and `to_vector()`, which returns the rotation vector (axis times angle). Both have `to_matrix()`.
+* `Rotation2(angle)` and `Rotation3(rvec)` construct rotations from an angle or rotation vector, which can be constants or autodiff variables. `Rotation3(w, x, y, z)` constructs one from a quaternion.
+* `Translation2` and `Translation3` have `x()`, `y()`, `z()`, `distance()`, and `squared_distance()`.
+
+#### Constraints
+
+Use `==` between two values of the same type to constrain them equal. It constrains their relative angle or rotation vector, which is one equation per degree of freedom with no spurious solutions. Elementwise alternatives are worse:
+
+* `n == d` with `n` and `d` as `VariableMatrix` gives n equations for a unit vector with n − 1 degrees of freedom, so the constraints are redundant.
+* `rotation.cos() == math.cos(θ)` and `rotation.sin() == math.sin(θ)` gives two equations for one degree of freedom.
+* `rotation.sin() == 0` is also satisfied by the opposite heading.
+
+If both sides of a `UnitVector` equality are decision variables, set their initial values before creating the constraint, and don't start them exactly opposite each other.
+
+For tolerances, use quantities that are smooth near the bound. Angles and distances themselves have a kink at zero, where their derivatives are undefined, so compare squares instead.
+
+```python
+from sleipnir.autodiff import VariableMatrix
+from sleipnir.optimization import bounds
+
+# Heading within ±tol of target. The relative angle only wraps when the
+# rotations are opposite, so ranges that cross ±π work.
+problem.subject_to(bounds(-tol, z.relative_to(target).angle(), tol))
+
+# 3D rotation within tol of target
+e = q.relative_to(target).to_vector()
+problem.subject_to(e.T @ e <= tol**2)
+
+# Position within tol of target
+problem.subject_to(t.squared_distance(target) <= tol**2)
+
+# Unit vector within angle tol of the constant direction d, an n×1 array
+problem.subject_to(n.dot(VariableMatrix(d)) >= math.cos(tol))
+```
+
+A heading range [θ_min, θ_max] is a center (θ_min + θ_max)/2 and a tolerance (θ_max − θ_min)/2.
+
+#### Twists
+
+A twist is a change in pose along a constant-curvature arc (2D) or screw motion (3D), in the frame of the pose it starts from. `Twist2(linear, angular)` has a 2D linear part and a scalar angular part, and `Twist3(linear, angular)` has 3D linear and angular parts. `twist.exp()` returns the pose reached by moving along the twist from the identity, and `pose.log()` is its inverse.
+
+Since a body-frame velocity times a timestep is a twist, `pose * (velocity * dt).exp()` integrates a constant velocity exactly. For example, a differential drive's dynamics are
+
+```python
+from sleipnir.autodiff import Twist2, VariableMatrix
+
+for k in range(N):
+    twist = Twist2(VariableMatrix([[v[k]], [0.0]]), ω[k])
+    problem.subject_to(poses[k + 1] == poses[k] * (twist * dt).exp())
+```
+
+and angular velocity integrates with `q[k + 1] == q[k] * Rotation3(ω[k] * dt)`. `log()` of a relative pose, `pose.relative_to(reference).log()`, is a residual for pose errors.
+
+#### Iteration callbacks
+
+`IterationInfo.x` contains the decision variables' values, with each manifold variable's components in order: a `Rotation2`'s cos θ and sin θ, a `Rotation3`'s w, x, y, and z, and a pose's translation followed by its rotation. The gradient, Hessian, and Jacobians are with respect to the manifold's tangent space, which has one dimension per degree of freedom, so they have fewer columns than `x` has rows when the problem has manifold variables.
+
+See [algorithms.md](algorithms.md#manifold-optimization) for how the solver handles manifold variables.

@@ -297,7 +297,8 @@ ExitStatus feasibility_restoration(
         A_i_p.setFromSortedTriplets(triplets.begin(), triplets.end());
         return A_i_p;
       },
-      fr_scaling};
+      fr_scaling,
+      matrices.manifold};
 
   auto status =
       ipm<Scalar>(fr_matrix_callbacks, iteration_callbacks, options, true,
@@ -620,7 +621,8 @@ ExitStatus feasibility_restoration(
         A_i_p.setFromSortedTriplets(triplets.begin(), triplets.end());
         return A_i_p;
       },
-      fr_scaling};
+      fr_scaling,
+      matrices.manifold};
 
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
   Eigen::ArrayX<bool> fr_bound_constraint_mask{2 * num_eq + 3 * num_ineq};

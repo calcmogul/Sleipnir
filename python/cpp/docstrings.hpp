@@ -372,6 +372,11 @@ constexpr char mkd_doc_slp_InequalityConstraints_operator_bool[] = R"doc(Implici
 constexpr char mkd_doc_slp_IterationInfo[] =
 R"doc(Solver iteration information exposed to an iteration callback.
 
+If some decision variables lie on a manifold (e.g., from
+Problem::decision_variable(so3)), x is the point in the ambient space,
+and the derivatives are with respect to the manifold's tangent space
+at x, so they have fewer columns than x has rows.
+
 Template Args:
     Scalar: Scalar type.)doc";
 
@@ -751,6 +756,236 @@ R"doc(The solver will stop once the error is below this tolerance.
 
 Defaults to the square root of the scalar type's machine epsilon.)doc";
 
+constexpr char mkd_doc_slp_Pose2[] =
+R"doc(A 2D pose of autodiff variables, which represents a rigid transform in
+SE(2).
+
+A pose is a translation t and a rotation R. It maps a point p in its
+own frame to R p + t in the parent frame.
+
+Poses are created by Problem::decision_variable(se2), from constants,
+and from a translation and a Rotation2.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_Pose2_2[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Pose2_3[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Pose2_Pose2[] =
+R"doc(Constructs a constant pose.
+
+Args:
+    translation: The translation.
+    angle: The rotation angle in radians.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose2_Pose2_2[] =
+R"doc(Constructs a pose from a translation and a rotation.
+
+Args:
+    translation: The translation.
+    rotation: The rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose2_inverse[] =
+R"doc(Returns the inverse pose.
+
+It maps points in the parent frame to this pose's frame.
+
+Returns:
+    The inverse pose.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose2_log[] =
+R"doc(Returns the twist that moves from the identity to this pose.
+
+This is the inverse of Twist2::exp(), and the logarithm map of SE(2).
+The twist's angular part is in (−π, π].
+
+Returns:
+    The twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose2_m_rotation[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Pose2_m_translation[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Pose2_relative_to[] =
+R"doc(Returns this pose relative to another pose.
+
+The result is this pose expressed in the other pose's frame, other⁻¹ *
+this. It's often used as the error between a pose and a reference.
+
+Args:
+    other: The pose whose frame the result is expressed in.
+
+Returns:
+    This pose relative to the other pose.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose2_rotation[] =
+R"doc(Returns the rotation.
+
+Returns:
+    The rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose2_rotation_2[] =
+R"doc(Returns the rotation.
+
+Returns:
+    The rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose2_to_matrix[] =
+R"doc(Returns the 3x3 homogeneous transformation matrix.
+
+Returns:
+    The 3x3 homogeneous transformation matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose2_translation[] =
+R"doc(Returns the translation.
+
+Returns:
+    The translation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose2_translation_2[] =
+R"doc(Returns the translation.
+
+Returns:
+    The translation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose3[] =
+R"doc(A 3D pose of autodiff variables, which represents a rigid transform in
+SE(3).
+
+A pose is a translation t and a rotation R. It maps a point p in its
+own frame to R p + t in the parent frame.
+
+Poses are created by Problem::decision_variable(se3), from constants,
+and from a translation and a Rotation3.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_Pose3_2[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Pose3_3[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Pose3_Pose3[] =
+R"doc(Constructs a constant pose.
+
+Args:
+    translation: The translation.
+    rotation: The rotation. It's normalized, so it must have nonzero
+              norm.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose3_Pose3_2[] =
+R"doc(Constructs a pose from a translation and a rotation.
+
+Args:
+    translation: The translation.
+    rotation: The rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose3_inverse[] =
+R"doc(Returns the inverse pose.
+
+It maps points in the parent frame to this pose's frame.
+
+Returns:
+    The inverse pose.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose3_log[] =
+R"doc(Returns the twist that moves from the identity to this pose.
+
+This is the inverse of Twist3::exp(), and the logarithm map of SE(3).
+The twist's angular part is the rotation's to_vector(), whose angle is
+in [0, π].
+
+Returns:
+    The twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose3_m_rotation[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Pose3_m_translation[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Pose3_relative_to[] =
+R"doc(Returns this pose relative to another pose.
+
+The result is this pose expressed in the other pose's frame, other⁻¹ *
+this. It's often used as the error between a pose and a reference.
+
+Args:
+    other: The pose whose frame the result is expressed in.
+
+Returns:
+    This pose relative to the other pose.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose3_rotation[] =
+R"doc(Returns the rotation.
+
+Returns:
+    The rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose3_rotation_2[] =
+R"doc(Returns the rotation.
+
+Returns:
+    The rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose3_to_matrix[] =
+R"doc(Returns the 4x4 homogeneous transformation matrix.
+
+Returns:
+    The 4x4 homogeneous transformation matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose3_translation[] =
+R"doc(Returns the translation.
+
+Returns:
+    The translation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose3_translation_2[] =
+R"doc(Returns the translation.
+
+Returns:
+    The translation.
+
+)doc";
+
 constexpr char mkd_doc_slp_Problem[] =
 R"doc(This class allows the user to pose a constrained nonlinear
 optimization problem in natural mathematical notation and solve it.
@@ -856,6 +1091,79 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_Problem_decision_variable_3[] =
+R"doc(Creates a unit vector of decision variables in the optimization
+problem.
+
+The solver keeps the vector on the unit sphere by stepping along the
+sphere instead of through ℝⁿ, so no equality constraint is needed.
+
+The vector has an initial value of e₁ = [1, 0, …, 0]ᵀ. Values set
+elsewhere are normalized when the solve starts.
+
+Args:
+    rows: The vector's dimension. Must be at least 2.
+
+Returns:
+    A unit vector of decision variables in the optimization problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_decision_variable_4[] =
+R"doc(Creates a 2D rotation decision variable in the optimization problem.
+
+The solver keeps the rotation's complex number unit-length by stepping
+along SO(2) instead of through ℝ², so no equality constraint is
+needed.
+
+The rotation has an initial value of zero radians. Values set
+elsewhere are normalized when the solve starts.
+
+Returns:
+    A 2D rotation of decision variables in the optimization problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_decision_variable_5[] =
+R"doc(Creates a 3D rotation decision variable in the optimization problem.
+
+The solver keeps the quaternion unit-length by stepping along SO(3)
+instead of through ℝ⁴, so no equality constraint is needed.
+
+The rotation has an initial value of the identity. Values set
+elsewhere are normalized when the solve starts.
+
+Returns:
+    A 3D rotation of decision variables in the optimization problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_decision_variable_6[] =
+R"doc(Creates a 2D pose decision variable in the optimization problem.
+
+The translation is two ordinary decision variables, and the rotation
+is a 2D rotation decision variable (see decision_variable(so2)).
+
+The pose has an initial value of the identity.
+
+Returns:
+    A 2D pose of decision variables in the optimization problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_decision_variable_7[] =
+R"doc(Creates a 3D pose decision variable in the optimization problem.
+
+The translation is three ordinary decision variables, and the rotation
+is a 3D rotation decision variable (see decision_variable(so3)).
+
+The pose has an initial value of the identity.
+
+Returns:
+    A 3D pose of decision variables in the optimization problem.
+
+)doc";
+
 constexpr char mkd_doc_slp_Problem_equality_constraint_type[] =
 R"doc(Returns the type of the highest order equality constraint.
 
@@ -881,6 +1189,8 @@ constexpr char mkd_doc_slp_Problem_m_f[] = R"doc()doc";
 constexpr char mkd_doc_slp_Problem_m_inequality_constraints[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Problem_m_iteration_callbacks[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Problem_m_manifold_blocks[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Problem_m_persistent_iteration_callbacks[] = R"doc()doc";
 
@@ -1021,6 +1331,309 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_Rotation2[] =
+R"doc(A 2D rotation of autodiff variables.
+
+The rotation by θ is stored as the unit complex number cos θ + i sin
+θ, so it has no discontinuity at ±π.
+
+Rotations are created by Problem::decision_variable(so2), which keeps
+them unit-length during the solve, from constant angles, and by
+composition and inversion.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_Rotation2_2[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation2_3[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation2_Rotation2[] =
+R"doc(Constructs a constant rotation.
+
+Args:
+    angle: The rotation angle in radians.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation2_Rotation2_2[] =
+R"doc(Constructs a rotation from unit complex number components that are
+already unit length.
+
+This is for internal use. The variables aren't normalized.
+
+Args:
+    cos: The real component cos θ.
+    sin: The imaginary component sin θ.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation2_Rotation2_3[] =
+R"doc(Constructs a rotation from an angle that depends on other variables.
+
+This is the inverse of angle() for angles in (−π, π]. It's the
+exponential map of SO(2).
+
+Args:
+    angle: The rotation angle in radians.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation2_Rotation2_4[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation2_angle[] =
+R"doc(Returns the rotation angle in radians.
+
+The angle is in (−π, π]. It's discontinuous at ±π, so prefer cos() and
+sin() in costs and constraints whose solutions may be near ±π.
+
+Returns:
+    The rotation angle in radians.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation2_cos[] =
+R"doc(Returns the real component cos θ.
+
+Returns:
+    The real component cos θ.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation2_inverse[] =
+R"doc(Returns the inverse rotation.
+
+For a unit complex number, this is the conjugate.
+
+Returns:
+    The inverse rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation2_m_cos[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation2_m_sin[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation2_relative_to[] =
+R"doc(Returns this rotation relative to another rotation.
+
+The result is the rotation that takes the other rotation to this one,
+other⁻¹ * this. Its angle() is the angle from the other rotation to
+this one, in (−π, π], so it only wraps when the rotations are
+opposite.
+
+Args:
+    other: The rotation this one is expressed relative to.
+
+Returns:
+    This rotation relative to the other rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation2_scalar_cos[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation2_scalar_sin[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation2_set_value[] =
+R"doc(Sets the rotation angle.
+
+This is only meaningful for rotations created by
+Problem::decision_variable(so2).
+
+Args:
+    angle: The rotation angle in radians.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation2_sin[] =
+R"doc(Returns the imaginary component sin θ.
+
+Returns:
+    The imaginary component sin θ.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation2_to_matrix[] =
+R"doc(Returns the 2x2 rotation matrix.
+
+Returns:
+    The 2x2 rotation matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation2_value[] =
+R"doc(Returns the rotation angle's value in radians, in (−π, π].
+
+Returns:
+    The rotation angle's value in radians.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3[] =
+R"doc(A 3D rotation of autodiff variables.
+
+The rotation is stored as a unit quaternion with components ordered
+(w, x, y, z), where w is the scalar part.
+
+Rotations are created by Problem::decision_variable(so3), which keeps
+them unit-length during the solve, from constant Eigen quaternions,
+and by composition and inversion.
+
+q and −q represent the same rotation.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_Rotation3_2[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation3_3[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation3_Rotation3[] =
+R"doc(Constructs a constant rotation from a quaternion, which is normalized.
+
+Args:
+    q: The value. It must have nonzero norm.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3_Rotation3_2[] =
+R"doc(Constructs a rotation from unit quaternion components that are already
+unit length.
+
+This is for internal use. The variables aren't normalized.
+
+Args:
+    w: The scalar component w.
+    x: The vector component x.
+    y: The vector component y.
+    z: The vector component z.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3_Rotation3_3[] =
+R"doc(Constructs a rotation from a rotation vector (axis times angle in
+radians).
+
+This is the inverse of to_vector() for angles in [0, π]. It's the
+exponential map of SO(3). Its value and derivatives are accurate for
+all rotation vectors, including zero.
+
+Args:
+    rvec: The rotation vector. Must be 3x1.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3_Rotation3_4[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation3_components[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation3_from_rotation_vector[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation3_inverse[] =
+R"doc(Returns the inverse rotation.
+
+For a unit quaternion, this is the conjugate.
+
+Returns:
+    The inverse rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3_m_w[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation3_m_x[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation3_m_y[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation3_m_z[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation3_relative_to[] =
+R"doc(Returns this rotation relative to another rotation.
+
+The result is the rotation that takes the other rotation to this one
+in the other rotation's frame, other⁻¹ * this. Its to_vector() is the
+rotation vector from the other rotation to this one.
+
+Args:
+    other: The rotation this one is expressed relative to.
+
+Returns:
+    This rotation relative to the other rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3_set_value[] =
+R"doc(Sets the rotation's value to a quaternion, which is normalized.
+
+This is only meaningful for rotations created by
+Problem::decision_variable(so3).
+
+Args:
+    q: The value. It must have nonzero norm.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3_to_matrix[] =
+R"doc(Returns the 3x3 rotation matrix.
+
+Returns:
+    The 3x3 rotation matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3_to_vector[] =
+R"doc(Returns the rotation vector (axis times angle in radians).
+
+The angle is in [0, π]. The rotation vector is discontinuous at π,
+where the axis flips, so it's meant for rotations well below π, like
+residuals between nearby rotations. Its value, gradient, and Hessian
+are accurate near the identity.
+
+Returns:
+    The rotation vector.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3_value[] =
+R"doc(Returns the rotation's value as a unit quaternion.
+
+Returns:
+    The quaternion's value.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3_w[] =
+R"doc(Returns the scalar component w.
+
+Returns:
+    The scalar component w.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3_x[] =
+R"doc(Returns the vector component x.
+
+Returns:
+    The vector component x.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3_y[] =
+R"doc(Returns the vector component y.
+
+Returns:
+    The vector component y.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3_z[] =
+R"doc(Returns the vector component z.
+
+Returns:
+    The vector component z.
+
+)doc";
+
 constexpr char mkd_doc_slp_TimestepMethod[] = R"doc(Enum describing the type of system timestep.)doc";
 
 constexpr char mkd_doc_slp_TimestepMethod_FIXED[] = R"doc(The timestep is a fixed constant.)doc";
@@ -1044,6 +1657,658 @@ dynamics of the previous state.)doc";
 constexpr char mkd_doc_slp_TranscriptionMethod_SINGLE_SHOOTING[] =
 R"doc(States depend explicitly as a function of all previous states and all
 previous inputs.)doc";
+
+constexpr char mkd_doc_slp_Translation2[] =
+R"doc(A 2D translation of autodiff variables.
+
+A translation is a point or a displacement (x, y). It converts
+implicitly to a 2x1 VariableMatrix.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_Translation2_Translation2[] =
+R"doc(Constructs a translation from its components.
+
+Args:
+    x: The x component.
+    y: The y component.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_Translation2_2[] =
+R"doc(Constructs a translation from a vector.
+
+Args:
+    vector: The vector (x, y). Must be 2x1.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_Translation2_3[] =
+R"doc(Constructs a constant translation.
+
+Args:
+    vector: The vector (x, y). Must be 2x1.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_distance[] =
+R"doc(Returns the distance to another translation.
+
+The distance isn't differentiable where it's zero. For constraints and
+costs that can reach zero distance, use squared_distance().
+
+Args:
+    other: The other translation.
+
+Returns:
+    The distance.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_m_x[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Translation2_m_y[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Translation2_operator_slp_VariableMatrix[] =
+R"doc(Implicit conversion to a 2x1 VariableMatrix.
+
+Returns:
+    The translation as a 2x1 VariableMatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_rotate_by[] =
+R"doc(Returns this translation rotated by a rotation.
+
+Args:
+    rotation: The rotation.
+
+Returns:
+    The rotated translation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_set_value[] =
+R"doc(Sets the translation's value.
+
+This is only meaningful for translations of decision variables.
+
+Args:
+    value: The value.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_squared_distance[] =
+R"doc(Returns the squared distance to another translation.
+
+Args:
+    other: The other translation.
+
+Returns:
+    The squared distance.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_transform_by[] =
+R"doc(Returns this point transformed by a pose.
+
+The result is R p + t, where p is this point, and R and t are the
+pose's rotation and translation.
+
+Args:
+    pose: The pose.
+
+Returns:
+    The transformed point.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_value[] =
+R"doc(Returns the translation's value.
+
+Returns:
+    The translation's value.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_x[] =
+R"doc(Returns the x component.
+
+Returns:
+    The x component.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_x_2[] =
+R"doc(Returns the x component.
+
+Returns:
+    The x component.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_y[] =
+R"doc(Returns the y component.
+
+Returns:
+    The y component.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_y_2[] =
+R"doc(Returns the y component.
+
+Returns:
+    The y component.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3[] =
+R"doc(A 3D translation of autodiff variables.
+
+A translation is a point or a displacement (x, y, z). It converts
+implicitly to a 3x1 VariableMatrix.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_Translation3_Translation3[] =
+R"doc(Constructs a translation from its components.
+
+Args:
+    x: The x component.
+    y: The y component.
+    z: The z component.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_Translation3_2[] =
+R"doc(Constructs a translation from a vector.
+
+Args:
+    vector: The vector (x, y, z). Must be 3x1.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_Translation3_3[] =
+R"doc(Constructs a constant translation.
+
+Args:
+    vector: The vector (x, y, z). Must be 3x1.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_distance[] =
+R"doc(Returns the distance to another translation.
+
+The distance isn't differentiable where it's zero. For constraints and
+costs that can reach zero distance, use squared_distance().
+
+Args:
+    other: The other translation.
+
+Returns:
+    The distance.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_m_x[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Translation3_m_y[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Translation3_m_z[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Translation3_operator_slp_VariableMatrix[] =
+R"doc(Implicit conversion to a 3x1 VariableMatrix.
+
+Returns:
+    The translation as a 3x1 VariableMatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_rotate_by[] =
+R"doc(Returns this translation rotated by a rotation.
+
+Args:
+    rotation: The rotation.
+
+Returns:
+    The rotated translation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_set_value[] =
+R"doc(Sets the translation's value.
+
+This is only meaningful for translations of decision variables.
+
+Args:
+    value: The value.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_squared_distance[] =
+R"doc(Returns the squared distance to another translation.
+
+Args:
+    other: The other translation.
+
+Returns:
+    The squared distance.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_transform_by[] =
+R"doc(Returns this point transformed by a pose.
+
+The result is R p + t, where p is this point, and R and t are the
+pose's rotation and translation.
+
+Args:
+    pose: The pose.
+
+Returns:
+    The transformed point.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_value[] =
+R"doc(Returns the translation's value.
+
+Returns:
+    The translation's value.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_x[] =
+R"doc(Returns the x component.
+
+Returns:
+    The x component.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_x_2[] =
+R"doc(Returns the x component.
+
+Returns:
+    The x component.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_y[] =
+R"doc(Returns the y component.
+
+Returns:
+    The y component.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_y_2[] =
+R"doc(Returns the y component.
+
+Returns:
+    The y component.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_z[] =
+R"doc(Returns the z component.
+
+Returns:
+    The z component.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_z_2[] =
+R"doc(Returns the z component.
+
+Returns:
+    The z component.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist2[] =
+R"doc(A 2D twist of autodiff variables.
+
+A twist is a change in pose along an arc of constant curvature,
+expressed in the frame of the pose it starts from. It's a linear part
+(dx, dy) and an angular part dθ in radians.
+
+exp() returns the pose reached by moving along the twist from the
+identity, and Pose2::log() is its inverse. A body-frame velocity times
+a timestep is a twist, so pose * (velocity * dt).exp() integrates a
+constant velocity for dt.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_Twist2_Twist2[] =
+R"doc(Constructs a twist from its linear and angular parts.
+
+Args:
+    linear: The linear part (dx, dy). Must be 2x1.
+    angular: The angular part dθ in radians.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist2_angular[] =
+R"doc(Returns the angular part dθ in radians.
+
+Returns:
+    The angular part.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist2_angular_2[] =
+R"doc(Returns the angular part dθ in radians.
+
+Returns:
+    The angular part.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist2_exp[] =
+R"doc(Returns the pose reached by moving along this twist from the identity.
+
+This is the exponential map of SE(2). Its value and derivatives are
+accurate for all twists, including those with zero angular part.
+
+Returns:
+    The pose.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist2_linear[] =
+R"doc(Returns the linear part (dx, dy).
+
+Returns:
+    The linear part.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist2_linear_2[] =
+R"doc(Returns the linear part (dx, dy).
+
+Returns:
+    The linear part.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist2_m_angular[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Twist2_m_linear[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Twist3[] =
+R"doc(A 3D twist of autodiff variables.
+
+A twist is a change in pose along a screw motion, expressed in the
+frame of the pose it starts from. It's a linear part (dx, dy, dz) and
+an angular part (rx, ry, rz), a rotation vector in radians.
+
+exp() returns the pose reached by moving along the twist from the
+identity, and Pose3::log() is its inverse. A body-frame velocity times
+a timestep is a twist, so pose * (velocity * dt).exp() integrates a
+constant velocity for dt.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_Twist3_Twist3[] =
+R"doc(Constructs a twist from its linear and angular parts.
+
+Args:
+    linear: The linear part (dx, dy, dz). Must be 3x1.
+    angular: The angular part (rx, ry, rz) in radians. Must be 3x1.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist3_angular[] =
+R"doc(Returns the angular part (rx, ry, rz) in radians.
+
+Returns:
+    The angular part.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist3_angular_2[] =
+R"doc(Returns the angular part (rx, ry, rz) in radians.
+
+Returns:
+    The angular part.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist3_exp[] =
+R"doc(Returns the pose reached by moving along this twist from the identity.
+
+This is the exponential map of SE(3). Its value and derivatives are
+accurate for all twists, including those with zero angular part.
+
+Returns:
+    The pose.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist3_linear[] =
+R"doc(Returns the linear part (dx, dy, dz).
+
+Returns:
+    The linear part.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist3_linear_2[] =
+R"doc(Returns the linear part (dx, dy, dz).
+
+Returns:
+    The linear part.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist3_m_angular[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Twist3_m_linear[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_UnitVector[] =
+R"doc(A unit-length column vector of autodiff variables.
+
+UnitVectors are created by Problem::decision_variable(sphere, n),
+which keeps them on the unit sphere during the solve, from constant
+Eigen vectors, and by operations that preserve unit length, like
+negation and rotate_by(). Operations that don't preserve unit length,
+like addition and scaling, return a VariableMatrix.
+
+Elements are read-only. A UnitVector converts implicitly to a
+VariableMatrix for use in general expressions.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_UnitVector_2[] =
+R"doc(A unit-length column vector of autodiff variables.
+
+UnitVectors are created by Problem::decision_variable(sphere, n),
+which keeps them on the unit sphere during the solve, from constant
+Eigen vectors, and by operations that preserve unit length, like
+negation and rotate_by(). Operations that don't preserve unit length,
+like addition and scaling, return a VariableMatrix.
+
+Elements are read-only. A UnitVector converts implicitly to a
+VariableMatrix for use in general expressions.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_UnitVector_T[] =
+R"doc(Returns the transpose.
+
+Returns:
+    The transpose.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_UnitVector[] =
+R"doc(Constructs a constant unit vector from the normalized values.
+
+Args:
+    values: The values. They must form a column vector with nonzero
+            norm.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_UnitVector_2[] =
+R"doc(Constructs a unit vector from variables that are already unit length.
+
+This is for internal use. The variables aren't normalized.
+
+Args:
+    storage: The variables. They must form a column vector.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_UnitVector_3[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_UnitVector_begin[] =
+R"doc(Returns an iterator to the beginning of the vector.
+
+Returns:
+    An iterator to the beginning of the vector.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_cols[] =
+R"doc(Returns the number of columns, which is always 1.
+
+Returns:
+    The number of columns.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_cross[] =
+R"doc(Returns the cross product with another vector. Both vectors must be
+3D.
+
+Args:
+    rhs: The other vector.
+
+Returns:
+    The cross product.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_dot[] =
+R"doc(Returns the dot product with another vector.
+
+Args:
+    rhs: The other vector.
+
+Returns:
+    The dot product.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_end[] =
+R"doc(Returns an iterator to the end of the vector.
+
+Returns:
+    An iterator to the end of the vector.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_m_storage[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_UnitVector_operator_array[] =
+R"doc(Returns an element.
+
+Args:
+    row: The row of the element to return.
+
+Returns:
+    An element.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_operator_array_2[] =
+R"doc(Returns an element.
+
+Args:
+    row: The row of the element to return.
+    col: The column of the element to return, which must be 0.
+
+Returns:
+    An element.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_operator_slp_VariableMatrix[] =
+R"doc(Converts the vector to a VariableMatrix.
+
+Returns:
+    The vector as a VariableMatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_rotate_by[] =
+R"doc(Returns this 3D unit vector rotated by a rotation.
+
+Args:
+    q: The rotation.
+
+Returns:
+    The rotated unit vector.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_rotate_by_2[] =
+R"doc(Returns this 2D unit vector rotated by a rotation.
+
+Args:
+    z: The rotation.
+
+Returns:
+    The rotated unit vector.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_rows[] =
+R"doc(Returns the number of rows.
+
+Returns:
+    The number of rows.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_set_value[] =
+R"doc(Sets the vector's values to the normalized values.
+
+This is only meaningful for UnitVectors created by
+Problem::decision_variable(sphere, n).
+
+Args:
+    values: The values. They must have nonzero norm.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_value[] =
+R"doc(Returns an element's value.
+
+Args:
+    row: The row of the element whose value to return.
+
+Returns:
+    An element's value.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_value_2[] =
+R"doc(Returns the vector's values.
+
+Returns:
+    The vector's values.
+
+)doc";
 
 constexpr char mkd_doc_slp_Variable[] =
 R"doc(An autodiff variable pointing to an expression node.
@@ -2296,6 +3561,28 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_VariableMatrix_rotate_by[] =
+R"doc(Returns this 3D vector rotated by a rotation.
+
+Args:
+    q: The rotation.
+
+Returns:
+    The rotated vector.
+
+)doc";
+
+constexpr char mkd_doc_slp_VariableMatrix_rotate_by_2[] =
+R"doc(Returns this 2D vector rotated by a rotation.
+
+Args:
+    z: The rotation.
+
+Returns:
+    The rotated vector.
+
+)doc";
+
 constexpr char mkd_doc_slp_VariableMatrix_row[] =
 R"doc(Returns a row slice of the variable matrix.
 
@@ -2727,6 +4014,42 @@ Template Args:
 
 )doc";
 
+constexpr char mkd_doc_slp_detail_atan2_over_norm[] =
+R"doc(Returns atan2(n, w)/n, where n = √n².
+
+Near n = 0, atan2(n, w)/n loses precision, and its derivatives are
+infinite at n = 0. Where w > 0 and n is small relative to w, this uses
+
+  atan2(n, w)/n = 1/w atan(√t)/√t
+                = 1/w (1 − t/3 + t²/5 − t³/7 + …)
+
+with t = n²/w², a series in n² that's smooth at n = 0. Truncating it
+after t⁷ makes its Hessian error grow like n¹⁴, and the atan2 form's
+Hessian roundoff grows like ε/n³, so they cross at t ≈ ε^(2/17).
+
+The result is infinite at n = 0 with w < 0.
+
+Args:
+    n_sq: n².
+    w: w.
+
+Returns:
+    atan2(n, w)/n.
+
+)doc";
+
+constexpr char mkd_doc_slp_detail_cross[] =
+R"doc(Returns the cross product of two 3D vectors.
+
+Args:
+    a: The first vector.
+    b: The second vector.
+
+Returns:
+    a × b.
+
+)doc";
+
 constexpr char mkd_doc_slp_detail_gradient_tree[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_detail_gradient_tree_2[] =
@@ -2749,6 +4072,43 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_detail_is_constant[] =
+R"doc(Returns whether every element of a unit vector is constant.
+
+Args:
+    v: The unit vector.
+
+Returns:
+    Whether every element is constant.
+
+)doc";
+
+constexpr char mkd_doc_slp_detail_sphere_log[] =
+R"doc(Returns the sphere's logarithm map log_b(a) in an orthonormal basis of
+b's tangent space.
+
+log_b(a) is the tangent vector at b that points toward a, with length
+equal to the angle between a and b. Its only zero is a = b.
+
+The basis comes from a Householder reflection built around b's current
+value. It's valid unless b later moves to that reflection's one
+singular point, which is more than 90° from b's current value.
+
+Args:
+    a: The unit vector the logarithm points to.
+    b: The unit vector whose tangent space the logarithm is in.
+
+Returns:
+    The n − 1 components of log_b(a).
+
+)doc";
+
+constexpr char mkd_doc_slp_detail_unit_length_t[] =
+R"doc(Tag type for constructing a unit-length type from values that are
+already unit length.)doc";
+
+constexpr char mkd_doc_slp_detail_unit_length_t_unit_length_t[] = R"doc(Constructs the tag.)doc";
+
 constexpr char mkd_doc_slp_erf[] =
 R"doc(erf() for Variables.
 
@@ -2761,6 +4121,28 @@ Template Args:
 )doc";
 
 constexpr char mkd_doc_slp_exp[] =
+R"doc(Returns the pose reached by moving along this twist from the identity.
+
+This is the exponential map of SE(2). Its value and derivatives are
+accurate for all twists, including those with zero angular part.
+
+Returns:
+    The pose.
+
+)doc";
+
+constexpr char mkd_doc_slp_exp_2[] =
+R"doc(Returns the pose reached by moving along this twist from the identity.
+
+This is the exponential map of SE(3). Its value and derivatives are
+accurate for all twists, including those with zero angular part.
+
+Returns:
+    The pose.
+
+)doc";
+
+constexpr char mkd_doc_slp_exp_3[] =
 R"doc(exp() for Variables.
 
 Args:
@@ -3124,6 +4506,64 @@ Template Args:
 
 )doc";
 
+constexpr char mkd_doc_slp_rotate_by[] =
+R"doc(Returns this 2D vector rotated by a rotation.
+
+Args:
+    z: The rotation.
+
+Returns:
+    The rotated vector.
+
+)doc";
+
+constexpr char mkd_doc_slp_rotate_by_2[] =
+R"doc(Returns this 2D unit vector rotated by a rotation.
+
+Args:
+    z: The rotation.
+
+Returns:
+    The rotated unit vector.
+
+)doc";
+
+constexpr char mkd_doc_slp_rotate_by_3[] =
+R"doc(Returns this 3D vector rotated by a rotation.
+
+Args:
+    q: The rotation.
+
+Returns:
+    The rotated vector.
+
+)doc";
+
+constexpr char mkd_doc_slp_rotate_by_4[] =
+R"doc(Returns this 3D unit vector rotated by a rotation.
+
+Args:
+    q: The rotation.
+
+Returns:
+    The rotated unit vector.
+
+)doc";
+
+constexpr char mkd_doc_slp_se2_t[] =
+R"doc(Tag type for decision variables in the rigid transform group SE(2).
+
+Problem::decision_variable(se2) returns a Pose2.)doc";
+
+constexpr char mkd_doc_slp_se2_t_se2_t[] = R"doc(Constructs the tag.)doc";
+
+constexpr char mkd_doc_slp_se3_t[] =
+R"doc(Tag type for decision variables in the rigid transform group SE(3).
+
+Problem::decision_variable(se3) returns a Pose3.)doc";
+
+constexpr char mkd_doc_slp_se3_t_se3_t[] = R"doc(Constructs the tag.)doc";
+
 constexpr char mkd_doc_slp_sign[] =
 R"doc(sign() for Variables.
 
@@ -3157,6 +4597,20 @@ Template Args:
 
 )doc";
 
+constexpr char mkd_doc_slp_so2_t[] =
+R"doc(Tag type for decision variables in the rotation group SO(2).
+
+Problem::decision_variable(so2) returns a Rotation2.)doc";
+
+constexpr char mkd_doc_slp_so2_t_so2_t[] = R"doc(Constructs the tag.)doc";
+
+constexpr char mkd_doc_slp_so3_t[] =
+R"doc(Tag type for decision variables in the rotation group SO(3).
+
+Problem::decision_variable(so3) returns a Rotation3.)doc";
+
+constexpr char mkd_doc_slp_so3_t_so3_t[] = R"doc(Constructs the tag.)doc";
+
 constexpr char mkd_doc_slp_solve[] =
 R"doc(Solves the VariableMatrix equation AX = B for X.
 
@@ -3171,6 +4625,13 @@ Returns:
     The solution X.
 
 )doc";
+
+constexpr char mkd_doc_slp_sphere_t[] =
+R"doc(Tag type for decision variables on the unit sphere.
+
+Problem::decision_variable(sphere, n) returns a UnitVector in ℝⁿ.)doc";
+
+constexpr char mkd_doc_slp_sphere_t_sphere_t[] = R"doc(Constructs the tag.)doc";
 
 constexpr char mkd_doc_slp_sqrt[] =
 R"doc(sqrt() for Variables.
@@ -3202,6 +4663,34 @@ Args:
 
 Template Args:
     Scalar: Scalar type.
+
+)doc";
+
+constexpr char mkd_doc_slp_transform_by[] =
+R"doc(Returns this point transformed by a pose.
+
+The result is R p + t, where p is this point, and R and t are the
+pose's rotation and translation.
+
+Args:
+    pose: The pose.
+
+Returns:
+    The transformed point.
+
+)doc";
+
+constexpr char mkd_doc_slp_transform_by_2[] =
+R"doc(Returns this point transformed by a pose.
+
+The result is R p + t, where p is this point, and R and t are the
+pose's rotation and translation.
+
+Args:
+    pose: The pose.
+
+Returns:
+    The transformed point.
 
 )doc";
 

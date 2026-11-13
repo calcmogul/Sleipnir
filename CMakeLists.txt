@@ -550,9 +550,19 @@ if(SLEIPNIR_BUILD_PYTHON)
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/gradient.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/hessian.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/jacobian.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/pose2.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/pose3.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/rotation2.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/rotation3.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/translation2.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/translation3.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/twist2.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/twist3.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/unit_vector.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/variable.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/variable_block.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/variable_matrix.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/optimization/manifold.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/optimization/ocp.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/optimization/ocp/dynamics_type.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/optimization/ocp/timestep_method.hpp

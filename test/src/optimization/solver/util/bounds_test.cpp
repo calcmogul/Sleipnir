@@ -19,6 +19,7 @@
 #include <sleipnir/autodiff/variable.hpp>
 #include <sleipnir/autodiff/variable_matrix.hpp>
 #include <sleipnir/optimization/solver/util/bounds.hpp>
+#include <sleipnir/optimization/solver/util/manifold.hpp>
 
 #include "scalar_types.hpp"
 
@@ -91,6 +92,50 @@ TEMPLATE_TEST_CASE("Bounds - Detection", "[Bounds]", SCALAR_TYPES) {
   CHECK_THAT(bound_constraint_mask, RangeEquals(correct_bound_constraint_mask));
   CHECK_THAT(conflicting_bounds,
              UnorderedRangeEquals(correct_conflicting_bounds));
+}
+
+TEMPLATE_TEST_CASE("Bounds - Detection with manifold blocks", "[Bounds]",
+                   SCALAR_TYPES) {
+  using T = TestType;
+
+  constexpr auto inf = std::numeric_limits<T>::infinity();
+
+  slp::Variable<T> x, n0, n1, n2;
+  std::array decision_variables{x, n0, n1, n2};
+  const std::array manifold_blocks{
+      slp::ManifoldBlock{slp::ManifoldType::SPHERE, 1, 3}};
+
+  // We assume these imply constraints in the form c(x) ≥ 0
+  auto inequality_constraint_variables = std::to_array<slp::Variable<T>>({
+      x - T(1),
+      n2 - T(0.6),
+      n0 - T(2),
+      -n0 + T(1),
+  });
+
+  constexpr auto correct_bounds = std::to_array<std::pair<T, T>>({
+      {T(1), inf},
+      {-inf, inf},
+      {-inf, inf},
+      {-inf, inf},
+  });
+  const Eigen::Vector<bool, inequality_constraint_variables.size()>
+      correct_bound_constraint_mask{true, false, false, false};
+  constexpr auto correct_conflicting_bounds =
+      std::to_array<std::pair<Eigen::Index, Eigen::Index>>({{2, 3}});
+
+  slp::VariableMatrix<T> x_ad{decision_variables};
+  slp::VariableMatrix<T> c_i_ad{inequality_constraint_variables};
+  slp::Jacobian A_i{c_i_ad, x_ad};
+  const auto [bound_constraint_mask, decision_var_indices_to_bounds,
+              conflicting_bounds] =
+      slp::get_bounds<T>(decision_variables, inequality_constraint_variables,
+                         A_i.value(), manifold_blocks);
+
+  using Catch::Matchers::RangeEquals;
+  CHECK_THAT(decision_var_indices_to_bounds, RangeEquals(correct_bounds));
+  CHECK_THAT(bound_constraint_mask, RangeEquals(correct_bound_constraint_mask));
+  CHECK_THAT(conflicting_bounds, RangeEquals(correct_conflicting_bounds));
 }
 
 TEMPLATE_TEST_CASE("Bounds - Projection", "[Bounds]", SCALAR_TYPES) {
