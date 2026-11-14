@@ -176,8 +176,8 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
     Scalar tiny_step_size(const DenseVector& x, const DenseVector& s) const {
       using std::max;
 
-      // The slack variables take a linear step in s-space with pˢ = −s∘pᵛ. A
-      // primal step α[pˣ pˢ] is negligible if
+      // The linearized slack step is pˢ = −s∘pᵛ. A primal step α[pˣ pˢ] is
+      // negligible if
       //
       //   max(‖αpˣ/(1 + |x|)‖_∞, ‖αpˢ/(1 + |s|)‖_∞) < 10ε
       //
@@ -397,19 +397,25 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
     return step;
   };
 
-  // The slack variables s = √(μ)e⁻ᵛ take a linear step in s-space,
+  // The step in v is taken as a linear step in u = z − s, then mapped back onto
+  // the central path Sz = μe with the softplus map
   //
-  //   pˢ = −s∘pᵛ
-  //   s⁺ = s + αpˢ = s∘(e − αpᵛ)
-  //   v⁺ = v − ln(e − αpᵛ)
+  //   z = (u + √(u² + 4μ))/2
+  //   s = (−u + √(u² + 4μ))/2
   //
-  // rather than the exponential step s∘exp(−αpᵛ). The linear step matches the
-  // Newton linearization, so cᵢ − s decreases by exactly (1 − α) per step for
-  // linear constraints instead of being thrown off by the overshoot of the
-  // exponential.
+  // from [4]. Since s = √(μ)e⁻ᵛ and z = √(μ)eᵛ, u = 2√(μ)sinh(v), and the
+  // Newton step in u is pᵘ = (z + s)∘pᵛ = 2√(μ)cosh(v)∘pᵛ. Therefore,
   //
-  // Fraction-to-the-boundary rule for the slack step. Slacks only approach the
-  // boundary where pᵛ > 0, so
+  //   u⁺ = u + αpᵘ
+  //   v⁺ = asinh(u⁺/(2√(μ)))
+  //      = asinh(sinh(v) + α cosh(v)∘pᵛ)
+  //
+  // The step is approximately linear in whichever of s and z is larger, and the
+  // smaller one follows from the central path.
+  //
+  // The step size is capped by the fraction-to-the-boundary rule for the
+  // linearized slack step pˢ = −s∘pᵛ. Slacks only approach the boundary where
+  // pᵛ > 0, so
   //
   //   αᵐᵃˣ = max(α ∈ (0, 1] : s + αpˢ ≥ (1−τ)s)
   //        = min(1, τ/max(pᵛ))
@@ -419,8 +425,13 @@ ExitStatus ipm(const IPMMatrixCallbacks<Scalar>& matrix_callbacks, bool is_nlp,
     return p_v_max > Scalar(0) ? std::min(Scalar(1), τ / p_v_max) : Scalar(1);
   };
   auto step_v = [&](const DenseVector& p_v, Scalar α) -> DenseVector {
-    // v⁺ = v − ln(e − αpᵛ)
-    return v - (-α * p_v).array().log1p().matrix();
+    // v⁺ = asinh(sinh(v) + α cosh(v)∘pᵛ)
+    return (v.array().sinh() + α * v.array().cosh() * p_v.array())
+        .unaryExpr([](Scalar t) {
+          using std::asinh;
+          return asinh(t);
+        })
+        .matrix();
   };
 
   // Initializes the barrier parameter for the current iterate.
