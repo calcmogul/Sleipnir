@@ -186,7 +186,7 @@ This is a primal-dual interior-point method whose slack and dual variables are p
 
 This keeps s and z positive and satisfies the complementarity condition s∘z = μe exactly, so z is tied to the slacks via z = μS⁻¹e and no fraction-to-the-boundary rule is needed for the dual variables. The barrier parameter update also follows [^3].
 
-[^3] is for convex QPs, though, and its convergence guarantees depend on that structure. With a quadratic cost and linear constraints, x is eliminated exactly by the linear solve, so the method reduces to Newton's method on v alone with a simple step size rule. That doesn't hold for nonlinear programs, so the step rules follow the filter line-search method of [^2] instead. The slacks take a linear step in s rather than an additive step in v, the step size is capped by a fraction-to-the-boundary rule on the slacks, and step acceptance is determined by a filter. The resulting algorithm is closer to a standard primal-dual interior-point method than to the method of [^3], and it doesn't inherit the latter's convergence guarantees.
+[^3] is for convex QPs, though, and its convergence guarantees depend on that structure. With a quadratic cost and linear constraints, x is eliminated exactly by the linear solve, so the method reduces to Newton's method on v alone with a simple step size rule. That doesn't hold for nonlinear programs, so the step rules follow the filter line-search method of [^2] instead. The step in v is taken linearly in z − s and mapped back onto the central path with the softplus map of [^4] rather than taken additively in v, the step size is capped by a fraction-to-the-boundary rule on the slacks, and step acceptance is determined by a filter. The resulting algorithm is closer to a standard primal-dual interior-point method than to the method of [^3], and it doesn't inherit the latter's convergence guarantees.
 
 We want to solve the following optimization problem.
 
@@ -381,19 +381,26 @@ The iterates are applied like so
 ```
   xₖ₊₁ = xₖ + αₖpₖˣ
   yₖ₊₁ = yₖ + αₖpₖʸ
-  vₖ₊₁ = vₖ − ln(e − αₖpₖᵛ)
+  vₖ₊₁ = asinh(sinh(vₖ) + αₖ cosh(vₖ)∘pₖᵛ)
 ```
 
-The v update corresponds to a linear step in the slack variables
+The v update is a linear step in u = z − s followed by the softplus retraction of [^4] back onto the central path Sz = μe.
+
+```
+  u = z − s = 2√(μ)sinh(v)
+  pᵘ = (z + s)∘pᵛ = 2√(μ)cosh(v)∘pᵛ
+  uₖ₊₁ = uₖ + αₖpₖᵘ
+  zₖ₊₁ = (uₖ₊₁ + √(uₖ₊₁² + 4μ))/2
+  sₖ₊₁ = (−uₖ₊₁ + √(uₖ₊₁² + 4μ))/2
+```
+
+The step is approximately linear in whichever of s and z is larger, and the smaller one follows from Sz = μe. The linearized slack step is
 
 ```
   pˢ = −s∘pᵛ
-  sₖ₊₁ = sₖ + αₖpₖˢ = sₖ∘(e − αₖpₖᵛ)
 ```
 
-instead of the exponential step sₖ∘exp(−αₖpₖᵛ). The linear step matches the Newton linearization, so for linear constraints cᵢ − s decreases by exactly a factor of (1 − αₖ) per step. With the exponential step, the overshoot of exp(−αₖpₖᵛ) relative to its linearization can make cᵢ − s grow. The dual variables follow from z = μS⁻¹e.
-
-x and v share a step size because v parameterizes the slack variables s = √(μ)e⁻ᵛ, which are part of the primal step. αₖ is found via backtracking line search starting from the fraction-to-the-boundary rule for the slack step
+x and v share a step size because v parameterizes the slack variables s = √(μ)e⁻ᵛ, which are part of the primal step. αₖ is found via backtracking line search starting from the fraction-to-the-boundary rule for the linearized slack step
 
 ```
   αₖᵐᵃˣ = max(α ∈ (0, 1] : sₖ + αpₖˢ ≥ (1−τ)sₖ)
@@ -469,3 +476,5 @@ The algorithm is described in more detail in section 3.8 of [^2].
 [^2]: Wächter, A. and Biegler, L. "On the implementation of an interior-point filter line-search algorithm for large-scale nonlinear programming", 2005. [http://cepac.cheme.cmu.edu/pasilectures/biegler/ipopt.pdf](http://cepac.cheme.cmu.edu/pasilectures/biegler/ipopt.pdf)
 
 [^3]: Permenter, F. "Log-domain interior-point methods for convex quadratic programming", 2022. [https://arxiv.org/pdf/2212.02294](https://arxiv.org/pdf/2212.02294)
+
+[^4]: Arrizabalaga, J., Tracy, K., and Manchester, Z. "A Differentiable Interior-Point Method in Single Precision", 2026. [https://arxiv.org/pdf/2605.17913](https://arxiv.org/pdf/2605.17913)

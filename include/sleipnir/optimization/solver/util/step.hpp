@@ -144,8 +144,8 @@ struct IPMStep {
   /// @return The step size below which the primal step is negligible relative
   ///     to the iterate.
   Scalar tiny_step_size(const DenseVector& x, const DenseVector& s) const {
-    // The slack variables take a linear step in s-space with pˢ = −s∘pᵛ. A
-    // primal step α[pˣ pˢ] is negligible if
+    // The linearized slack step is pˢ = −s∘pᵛ. A primal step α[pˣ pˢ] is
+    // negligible if
     //
     //   max(‖αpˣ/(1 + |x|)‖_∞, ‖αpˢ/(1 + |s|)‖_∞) < 10ε
     //
