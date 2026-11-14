@@ -58,6 +58,7 @@ Checks:
   google-readability-casting,
   google-runtime-operator,
   misc-definitions-in-headers,
+  misc-include-cleaner,
   misc-misplaced-const,
   misc-new-delete-overloads,
   misc-non-copyable-objects,

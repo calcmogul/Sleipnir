@@ -2,6 +2,11 @@
 
 #pragma once
 
+// IWYU pragma: always_keep
+
+#include <functional>
+#include <span>
+
 #include <Eigen/Core>
 #include <sleipnir/autodiff/gradient.hpp>
 #include <sleipnir/autodiff/hessian.hpp>
@@ -9,9 +14,15 @@
 #include <sleipnir/autodiff/variable_matrix.hpp>
 #include <sleipnir/optimization/ocp.hpp>
 #include <sleipnir/optimization/problem.hpp>
-#include <sleipnir/optimization/solver/ipm.hpp>
-#include <sleipnir/optimization/solver/newton.hpp>
-#include <sleipnir/optimization/solver/sqp.hpp>
+#include <sleipnir/optimization/solver/exit_status.hpp>
+#include <sleipnir/optimization/solver/ipm.hpp>  // IWYU pragma: keep
+#include <sleipnir/optimization/solver/ipm_matrix_callbacks.hpp>
+#include <sleipnir/optimization/solver/iteration_info.hpp>
+#include <sleipnir/optimization/solver/newton.hpp>  // IWYU pragma: keep
+#include <sleipnir/optimization/solver/newton_matrix_callbacks.hpp>
+#include <sleipnir/optimization/solver/options.hpp>
+#include <sleipnir/optimization/solver/sqp.hpp>  // IWYU pragma: keep
+#include <sleipnir/optimization/solver/sqp_matrix_callbacks.hpp>
 
 #include "explicit_double.hpp"
 

@@ -1,5 +1,6 @@
 // Copyright (c) Sleipnir contributors
 
+#include <chrono>  // IWYU pragma: keep
 #include <format>
 
 #include <catch2/catch_template_test_macros.hpp>
@@ -296,6 +297,7 @@ TEMPLATE_TEST_CASE("ExitStatus - Timeout", "[ExitStatus]", SCALAR_TYPES) {
   CHECK(problem.equality_constraint_type() == slp::ExpressionType::NONE);
   CHECK(problem.inequality_constraint_type() == slp::ExpressionType::NONE);
 
+  // NOLINTNEXTLINE(misc-include-cleaner)
   CHECK(problem.solve({.timeout = 0s, .diagnostics = true}) ==
         slp::ExitStatus::TIMEOUT);
 }

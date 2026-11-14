@@ -3,6 +3,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <span>
 #include <utility>

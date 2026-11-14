@@ -3,6 +3,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 
 #include <Eigen/Core>
 #include <Eigen/SparseCore>

@@ -1,6 +1,14 @@
 // Copyright (c) Sleipnir contributors
 
-#include <sleipnir/optimization/solver/ipm.hpp>
+#include <functional>
+#include <span>
+
+#include <Eigen/Core>
+#include <sleipnir/optimization/solver/exit_status.hpp>
+#include <sleipnir/optimization/solver/ipm.hpp>  // IWYU pragma: keep
+#include <sleipnir/optimization/solver/ipm_matrix_callbacks.hpp>
+#include <sleipnir/optimization/solver/iteration_info.hpp>
+#include <sleipnir/optimization/solver/options.hpp>
 
 #include "explicit_double.hpp"
 

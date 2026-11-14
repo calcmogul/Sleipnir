@@ -3,9 +3,11 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 
 #include <Eigen/Core>
+#include <Eigen/OrderingMethods>
 #include <Eigen/SparseCholesky>
 #include <Eigen/SparseCore>
 

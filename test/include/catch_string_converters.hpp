@@ -2,6 +2,8 @@
 
 #pragma once
 
+// IWYU pragma: always_keep
+
 #include <format>
 #include <string>
 

@@ -14,8 +14,8 @@
 #include <vector>
 
 #include <Eigen/Core>
-#include <Eigen/LU>
-#include <Eigen/QR>
+#include <Eigen/LU>  // IWYU pragma: keep
+#include <Eigen/QR>  // IWYU pragma: keep
 #include <gch/small_vector.hpp>
 
 #include "sleipnir/autodiff/expression_graph.hpp"

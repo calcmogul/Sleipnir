@@ -5,7 +5,7 @@
 #include <cmath>
 
 #include <Eigen/Core>
-#include <Eigen/QR>
+#include <Eigen/QR>  // IWYU pragma: keep
 #include <sleipnir/autodiff/variable_matrix.hpp>
 
 template <typename Scalar>
