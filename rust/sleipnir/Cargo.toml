@@ -1,0 +1,27 @@
+[package]
+name = "sleipnir"
+description = "Reverse mode autodiff library and NLP solver DSL"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords = ["optimization", "autodiff", "nlp", "optimal-control", "solver"]
+categories = ["mathematics", "science::robotics"]
+# The C++ sources are vendored into cpp-src/ by vendor_cpp.py before publishing
+include = ["build.rs", "src/**", "cpp/**", "cpp-src/**", "tests/**", "examples/**", "README.md"]
+
+[dependencies]
+sleipnir-macros = { path = "../sleipnir-macros", version = "=0.1.0" }
+cxx = "1"
+nalgebra = { version = "0.34", default-features = false, features = ["std"] }
+nalgebra-sparse = { version = "0.11", default-features = false }
+
+[build-dependencies]
+cmake = "0.1"
+cxx-build = "1"
+
+# Runs the example's tests, ported from the C++ example's
+[[example]]
+name = "current_manager"
+test = true

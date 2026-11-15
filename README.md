@@ -8,7 +8,7 @@
 [![Python API](https://img.shields.io/badge/documentation-Python-blue?label=API%20Docs)](https://sleipnirgroup.github.io/Sleipnir/docs/py)
 [![Discord](https://img.shields.io/discord/975739302933856277?color=%23738ADB&label=Join%20our%20Discord&logo=discord&logoColor=white)](https://discord.gg/ad2EEZZwsS)
 
-Sleipnir is a reverse mode autodiff library, interior-point method, and NLP solver DSL for C++23 and Python. The DSL automatically chooses the best solver based on the problem structure.
+Sleipnir is a reverse mode autodiff library, interior-point method, and NLP solver DSL for C++23, Python, and Rust. The DSL automatically chooses the best solver based on the problem structure.
 
 ```cpp
 #include <print>
@@ -92,6 +92,12 @@ target_link_libraries(MyApp PUBLIC Sleipnir::Sleipnir)
 To use Sleipnir in Python, install `sleipnirgroup-jormungandr` from PyPI:
 ```bash
 pip install sleipnirgroup-jormungandr
+```
+
+To use Sleipnir in Rust, add the `sleipnir` crate from this repository to Cargo.toml. It builds the C++ library from source, which also requires CMake 3.28 or newer and the toolchain listed above. See [its README](https://github.com/SleipnirGroup/Sleipnir/blob/main/rust/sleipnir/README.md) for details.
+```toml
+[dependencies]
+sleipnir = { git = "https://github.com/SleipnirGroup/Sleipnir.git" }
 ```
 
 If necessary, follow [these instructions](https://sleipnirgroup.github.io/Sleipnir/md_contributing.html) to build from source.

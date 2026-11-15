@@ -1,0 +1,9 @@
+[workspace]
+members = ["sleipnir", "sleipnir-macros"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "BSD-3-Clause"
+repository = "https://github.com/SleipnirGroup/Sleipnir"
