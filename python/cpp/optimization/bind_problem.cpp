@@ -1,5 +1,6 @@
 // Copyright (c) Sleipnir contributors
 
+#include <nanobind/eigen/dense.h>
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/function.h>
 
@@ -169,6 +170,24 @@ void bind_problem(nb::class_<Problem<double>>& cls) {
           nb::overload_cast<const InequalityConstraints<double>&>(
               &Problem<double>::subject_to),
           "constraint"_a, DOC(slp, Problem, subject_to, 3));
+  cls.def("set_dual",
+          nb::overload_cast<const EqualityConstraints<double>&,
+                            const Eigen::Ref<const Eigen::VectorXd>&>(
+              &Problem<double>::set_dual),
+          "constraint"_a, "dual"_a, DOC(slp, Problem, set_dual));
+  cls.def("dual",
+          nb::overload_cast<const EqualityConstraints<double>&>(
+              &Problem<double>::dual, nb::const_),
+          "constraint"_a, DOC(slp, Problem, dual));
+  cls.def("set_dual",
+          nb::overload_cast<const InequalityConstraints<double>&,
+                            const Eigen::Ref<const Eigen::VectorXd>&>(
+              &Problem<double>::set_dual),
+          "constraint"_a, "dual"_a, DOC(slp, Problem, set_dual, 2));
+  cls.def("dual",
+          nb::overload_cast<const InequalityConstraints<double>&>(
+              &Problem<double>::dual, nb::const_),
+          "constraint"_a, DOC(slp, Problem, dual, 2));
   cls.def("cost_function_type", &Problem<double>::cost_function_type,
           DOC(slp, Problem, cost_function_type));
   cls.def("equality_constraint_type",

@@ -754,7 +754,9 @@ R"doc(The solver will stop once the error is below this tolerance.
 
 Defaults to the square root of the scalar type's machine epsilon.)doc";
 
-constexpr char mkd_doc_slp_Problem[] =
+constexpr char mkd_doc_slp_Problem[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Problem_2[] =
 R"doc(This class allows the user to pose a constrained nonlinear
 optimization problem in natural mathematical notation and solve it.
 
@@ -782,7 +784,7 @@ mathematical form and it'll be converted for them.
 Template Args:
     Scalar: Scalar type.)doc";
 
-constexpr char mkd_doc_slp_Problem_2[] = R"doc()doc";
+constexpr char mkd_doc_slp_Problem_3[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Problem_Problem[] = R"doc(Constructs the optimization problem.)doc";
 
@@ -866,11 +868,99 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_Problem_dual[] =
+R"doc(Returns the dual variables (Lagrange multipliers) of the given
+equality constraints from the most recent solve, or from set_dual() if
+it was called since.
+
+The solver's Lagrangian is
+
+```
+L(x, y, z) = f(x) − yᵀcₑ(x) − zᵀcᵢ(x)
+```
+
+
+
+where f(x) is the cost function being minimized (the negated objective
+for maximize()) and the equality constraint `lhs == rhs` is cₑ(x) =
+lhs − rhs. A positive dual variable means increasing rhs would
+increase the optimal cost.
+
+Args:
+    constraint: Equality constraints that were passed to subject_to().
+
+Returns:
+    The dual variables y of the given constraints, with one per scalar
+    constraint in the same order. Unset entries are zero, which
+    includes constraints added since the most recent solve and all
+    constraints if that solve failed.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_dual_2[] =
+R"doc(Returns the dual variables (Lagrange multipliers) of the given
+inequality constraints from the most recent solve, or from set_dual()
+if it was called since.
+
+The solver's Lagrangian is
+
+```
+L(x, y, z) = f(x) − yᵀcₑ(x) − zᵀcᵢ(x)
+```
+
+
+
+where f(x) is the cost function being minimized (the negated objective
+for maximize()), the inequality constraint `lhs >= rhs` is cᵢ(x) = lhs
+− rhs, and `lhs <= rhs` is cᵢ(x) = rhs − lhs. The dual variables are
+nonnegative, and are near zero for constraints that are inactive at
+the solution.
+
+Args:
+    constraint: Inequality constraints that were passed to
+                subject_to().
+
+Returns:
+    The dual variables z of the given constraints, with one per scalar
+    constraint in the same order. Unset entries are zero, which
+    includes constraints added since the most recent solve and all
+    constraints if that solve failed.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_duals[] =
+R"doc(Returns the dual variables of the given constraints.
+
+Args:
+    constraints: The constraints to return the dual variables of.
+    problem_constraints: The problem's list of constraints.
+    problem_duals: The dual variables of the problem's constraints
+                   from the most recent solve, with NaN for
+                   unavailable entries.
+
+Returns:
+    The dual variables of the given constraints, with zero for
+    unavailable entries.
+
+)doc";
+
 constexpr char mkd_doc_slp_Problem_equality_constraint_type[] =
 R"doc(Returns the type of the highest order equality constraint.
 
 Returns:
     The type of the highest order equality constraint.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_for_each_row[] =
+R"doc(Calls a function with each given constraint's row in the problem's
+list of constraints.
+
+Args:
+    constraints: The constraints to find the rows of.
+    problem_constraints: The problem's list of constraints.
+    func: Function called with the index of each given constraint and
+          its row in the problem's list of constraints.
 
 )doc";
 
@@ -1002,6 +1092,48 @@ Returns:
 constexpr char mkd_doc_slp_Problem_print_exit_conditions[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Problem_print_problem_analysis[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Problem_set_dual[] =
+R"doc(Sets the dual variables (Lagrange multipliers) of the given equality
+constraints for the next solve to start from.
+
+The dual variables use the same convention as dual(), so passing the
+output of dual() from a related problem warm starts this one.
+
+Args:
+    constraint: Equality constraints that were passed to subject_to().
+    dual: The dual variables y of the given constraints, with one per
+          scalar constraint in the same order.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_set_dual_2[] =
+R"doc(Sets the dual variables (Lagrange multipliers) of the given inequality
+constraints for the next solve to start from.
+
+The dual variables use the same convention as dual(), so passing the
+output of dual() from a related problem warm starts this one. The
+interior-point method replaces nonpositive entries with its defaults.
+
+Args:
+    constraint: Inequality constraints that were passed to
+                subject_to().
+    dual: The dual variables z of the given constraints, with one per
+          scalar constraint in the same order.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_set_duals[] =
+R"doc(Sets the dual variables of the given constraints.
+
+Args:
+    constraints: The constraints to set the dual variables of.
+    problem_constraints: The problem's list of constraints.
+    problem_duals: The dual variables of the problem's constraints for
+                   the next solve.
+    duals: The dual variables of the given constraints.
+
+)doc";
 
 constexpr char mkd_doc_slp_Problem_solve[] =
 R"doc(Solves the optimization problem. The solution will be stored in the

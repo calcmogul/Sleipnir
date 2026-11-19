@@ -59,10 +59,18 @@ void fill_ipm_initial_iterate(const Eigen::VectorX<Scalar>& c_i, Scalar μ_min,
       std::ranges::any_of(z, [](Scalar value) { return !isnan(value); });
 
   for (int row = 0; row < s.rows(); ++row) {
-    // If cᵢ(x) is sufficiently feasible, start the constraint with zero
-    // violation. Otherwise, make Σ = S⁻¹Z ≈ I.
     if (!is_interior(s[row])) {
-      s[row] = c_i[row] >= Scalar(1e-2) ? c_i[row] : Scalar(1);
+      if (is_interior(z[row])) {
+        // Put the slack-dual pair on the central path for μ_min
+        s[row] = μ_min / z[row];
+      } else if (c_i[row] >= Scalar(1e-2)) {
+        // cᵢ(x) is sufficiently feasible, so start the constraint with zero
+        // violation
+        s[row] = c_i[row];
+      } else {
+        // Make Σ = S⁻¹Z ≈ I
+        s[row] = Scalar(1);
+      }
     }
     s[row] = std::max(s[row], c_i[row]);
 

@@ -49,6 +49,9 @@ class Hessian;
 template <typename Scalar>
 class Jacobian;
 
+template <typename Scalar>
+class Problem;
+
 /// An autodiff variable pointing to an expression node.
 ///
 /// @tparam Scalar_ Scalar type.
@@ -375,6 +378,8 @@ class Variable : public SleipnirBase {
   friend class Hessian;
   template <typename Scalar>
   friend class Jacobian;
+  template <typename Scalar>
+  friend class Problem;
 };
 
 template <template <typename> typename T, typename Scalar>

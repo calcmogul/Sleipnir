@@ -40,6 +40,7 @@
 #include "sleipnir/optimization/solver/util/iterates.hpp"
 #include "sleipnir/optimization/solver/util/problem_scaling.hpp"
 #include "sleipnir/optimization/solver/util/time_trace.hpp"
+#include "sleipnir/util/assert.hpp"
 #include "sleipnir/util/empty.hpp"
 #include "sleipnir/util/print.hpp"
 #include "sleipnir/util/print_diagnostics.hpp"
@@ -287,6 +288,52 @@ class Problem {
     append_unset_entries(m_initial_z, constraint.constraints.size());
   }
 
+  /// Sets the dual variables (Lagrange multipliers) of the given equality
+  /// constraints for the next solve to start from.
+  ///
+  /// @param constraint Equality constraints that were passed to subject_to().
+  /// @param dual The dual variables y of the given constraints, with one per
+  ///     scalar constraint in the same order.
+  void set_dual(const EqualityConstraints<Scalar>& constraint,
+                const Eigen::Ref<const Eigen::VectorX<Scalar>>& dual) {
+    set_duals(constraint.constraints, m_equality_constraints, m_initial_y,
+              dual);
+  }
+
+  /// Returns the dual variables (Lagrange multipliers) of the given equality
+  /// constraints.
+  ///
+  /// @param constraint Equality constraints that were passed to subject_to().
+  /// @return The dual variables y of the given constraints, with one per scalar
+  ///     constraint in the same order.
+  Eigen::VectorX<Scalar> dual(
+      const EqualityConstraints<Scalar>& constraint) const {
+    return duals(constraint.constraints, m_equality_constraints, m_initial_y);
+  }
+
+  /// Sets the dual variables (Lagrange multipliers) of the given inequality
+  /// constraints for the next solve to start from.
+  ///
+  /// @param constraint Inequality constraints that were passed to subject_to().
+  /// @param dual The dual variables z of the given constraints, with one per
+  ///     scalar constraint in the same order.
+  void set_dual(const InequalityConstraints<Scalar>& constraint,
+                const Eigen::Ref<const Eigen::VectorX<Scalar>>& dual) {
+    set_duals(constraint.constraints, m_inequality_constraints, m_initial_z,
+              dual);
+  }
+
+  /// Returns the dual variables (Lagrange multipliers) of the given inequality
+  /// constraints.
+  ///
+  /// @param constraint Inequality constraints that were passed to subject_to().
+  /// @return The dual variables z of the given constraints, with one per scalar
+  ///     constraint in the same order.
+  Eigen::VectorX<Scalar> dual(
+      const InequalityConstraints<Scalar>& constraint) const {
+    return duals(constraint.constraints, m_inequality_constraints, m_initial_z);
+  }
+
   /// Returns the cost function's type.
   ///
   /// @return The cost function's type.
@@ -492,6 +539,75 @@ class Problem {
            status == ExitStatus::CALLBACK_REQUESTED_STOP ||
            status == ExitStatus::MAX_ITERATIONS_EXCEEDED ||
            status == ExitStatus::TIMEOUT;
+  }
+
+  /// Calls a function with each given constraint's row in the problem's list
+  /// of constraints.
+  ///
+  /// @param constraints The constraints to find the rows of.
+  /// @param problem_constraints The problem's list of constraints.
+  /// @param func Function called with the index of each given constraint and
+  ///     its row in the problem's list of constraints.
+  template <typename F>
+  static void for_each_row(
+      const gch::small_vector<Variable<Scalar>>& constraints,
+      const gch::small_vector<Variable<Scalar>>& problem_constraints,
+      F&& func) {
+    size_t row = 0;
+    for (size_t i = 0; i < constraints.size(); ++i) {
+      // subject_to() adds a constraint's rows consecutively, so the row after
+      // the previous match is checked first
+      if (row >= problem_constraints.size() ||
+          problem_constraints[row].expr != constraints[i].expr) {
+        row = std::ranges::find(problem_constraints, constraints[i].expr,
+                                &Variable<Scalar>::expr) -
+              problem_constraints.begin();
+      }
+      // The constraint must have been passed to subject_to()
+      slp_assert(row < problem_constraints.size());
+
+      func(i, row);
+      ++row;
+    }
+  }
+
+  /// Sets the dual variables of the given constraints.
+  ///
+  /// @param constraints The constraints to set the dual variables of.
+  /// @param problem_constraints The problem's list of constraints.
+  /// @param problem_duals The dual variables of the problem's constraints for
+  ///     the next solve.
+  /// @param duals The dual variables of the given constraints.
+  static void set_duals(
+      const gch::small_vector<Variable<Scalar>>& constraints,
+      const gch::small_vector<Variable<Scalar>>& problem_constraints,
+      DenseVector& problem_duals, const Eigen::Ref<const DenseVector>& duals) {
+    slp_assert(duals.rows() == static_cast<int>(constraints.size()));
+
+    for_each_row(constraints, problem_constraints,
+                 [&](size_t i, size_t row) { problem_duals[row] = duals[i]; });
+  }
+
+  /// Returns the dual variables of the given constraints.
+  ///
+  /// @param constraints The constraints to return the dual variables of.
+  /// @param problem_constraints The problem's list of constraints.
+  /// @param problem_duals The dual variables of the problem's constraints from
+  ///     the most recent solve, with NaN for unavailable entries.
+  /// @return The dual variables of the given constraints, with zero for
+  ///     unavailable entries.
+  static DenseVector duals(
+      const gch::small_vector<Variable<Scalar>>& constraints,
+      const gch::small_vector<Variable<Scalar>>& problem_constraints,
+      const DenseVector& problem_duals) {
+    DenseVector result{constraints.size()};
+
+    for_each_row(constraints, problem_constraints, [&](size_t i, size_t row) {
+      using std::isnan;
+      result[i] = isnan(problem_duals[row]) ? Scalar(0) : problem_duals[row];
+    });
+
+    return result;
   }
 
   ExitStatus solve_newton(const Options<Scalar>& options,
