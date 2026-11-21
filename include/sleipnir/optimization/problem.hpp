@@ -279,6 +279,44 @@ class Problem {
                          decision_variable(so3)};
   }
 
+  /// Creates a symmetric positive definite matrix of decision variables in the
+  /// optimization problem.
+  ///
+  /// The solver keeps the matrix positive definite by retracting each step
+  /// onto the positive definite matrices instead of stepping through the
+  /// symmetric matrices, so no semidefinite constraint is needed. Problems
+  /// with these matrices are solved with the interior-point method, which adds
+  /// a log-det barrier term to keep them away from singular matrices. The
+  /// matrix can approach a singular matrix but never reach one, so problems
+  /// whose solution is singular converge slowly or not at all.
+  ///
+  /// Like symmetric_decision_variable(), the lower triangle's decision
+  /// variables are reused across the diagonal.
+  ///
+  /// The matrix has an initial value of the identity. Values set elsewhere are
+  /// kept if they're numerically positive definite, with each eigenvalue at
+  /// least nε times the largest. Otherwise, they're projected onto the positive
+  /// definite matrices when the solve starts by raising the smaller eigenvalues
+  /// to √ε times the largest one.
+  ///
+  /// @param rows The matrix's dimension. Must be at least 1.
+  /// @return A symmetric positive definite matrix of decision variables in the
+  ///     optimization problem.
+  [[nodiscard]]
+  VariableMatrix<Scalar> decision_variable(spd_t, int rows) {
+    slp_assert(rows >= 1);
+
+    m_manifold_blocks.push_back({ManifoldType::SPD,
+                                 static_cast<int>(m_decision_variables.size()),
+                                 rows * (rows + 1) / 2});
+
+    VariableMatrix<Scalar> P = symmetric_decision_variable(rows);
+    for (int i = 0; i < rows; ++i) {
+      P[i, i].set_value(Scalar(1));
+    }
+    return P;
+  }
+
   /// Tells the solver to minimize the output of the given cost function.
   ///
   /// Note that this is optional. If only constraints are specified, the solver
@@ -447,26 +485,27 @@ class Problem {
       return ExitStatus::SUCCESS;
     }
 
-    // Solve the optimization problem
+    // Solve the optimization problem. Manifolds with a boundary need the
+    // interior-point method's barrier function.
     ExitStatus status;
-    if (m_equality_constraints.empty() && m_inequality_constraints.empty()) {
-      if (options.diagnostics) {
-        slp::println("\nInvoking Newton solver\n");
-      }
-
-      status = solve_newton(options, spy, manifold, x);
-    } else if (m_inequality_constraints.empty()) {
-      if (options.diagnostics) {
-        slp::println("\nInvoking SQP solver\n");
-      }
-
-      status = solve_sqp(options, spy, manifold, x);
-    } else {
+    if (manifold.has_boundary() || !m_inequality_constraints.empty()) {
       if (options.diagnostics) {
         slp::println("\nInvoking IPM solver\n");
       }
 
       status = solve_ipm(options, spy, manifold, x);
+    } else if (m_equality_constraints.empty()) {
+      if (options.diagnostics) {
+        slp::println("\nInvoking Newton solver\n");
+      }
+
+      status = solve_newton(options, spy, manifold, x);
+    } else {
+      if (options.diagnostics) {
+        slp::println("\nInvoking SQP solver\n");
+      }
+
+      status = solve_sqp(options, spy, manifold, x);
     }
 
     if (options.diagnostics) {

@@ -1165,6 +1165,36 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_Problem_decision_variable_8[] =
+R"doc(Creates a symmetric positive definite matrix of decision variables in
+the optimization problem.
+
+The solver keeps the matrix positive definite by retracting each step
+onto the positive definite matrices instead of stepping through the
+symmetric matrices, so no semidefinite constraint is needed. Problems
+with these matrices are solved with the interior-point method, which
+adds a log-det barrier term to keep them away from singular matrices.
+The matrix can approach a singular matrix but never reach one, so
+problems whose solution is singular converge slowly or not at all.
+
+Like symmetric_decision_variable(), the lower triangle's decision
+variables are reused across the diagonal.
+
+The matrix has an initial value of the identity. Values set elsewhere
+are kept if they're numerically positive definite, with each
+eigenvalue at least nε times the largest. Otherwise, they're projected
+onto the positive definite matrices when the solve starts by raising
+the smaller eigenvalues to √ε times the largest one.
+
+Args:
+    rows: The matrix's dimension. Must be at least 1.
+
+Returns:
+    A symmetric positive definite matrix of decision variables in the
+    optimization problem.
+
+)doc";
+
 constexpr char mkd_doc_slp_Problem_equality_constraint_type[] =
 R"doc(Returns the type of the highest order equality constraint.
 
@@ -2959,6 +2989,14 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_VariableBlock_trace[] =
+R"doc(Returns the trace of the variable matrix, the sum of its diagonal.
+
+Returns:
+    The trace of the variable matrix.
+
+)doc";
+
 constexpr char mkd_doc_slp_VariableBlock_value[] =
 R"doc(Returns an element of the variable matrix.
 
@@ -3691,6 +3729,14 @@ R"doc(Converts the VariableMatrix to an Eigen matrix.
 
 Returns:
     Eigen matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_VariableMatrix_trace[] =
+R"doc(Returns the trace of the variable matrix, the sum of its diagonal.
+
+Returns:
+    The trace of the variable matrix.
 
 )doc";
 
@@ -4658,6 +4704,14 @@ Returns:
     The solution X.
 
 )doc";
+
+constexpr char mkd_doc_slp_spd_t[] =
+R"doc(Tag type for symmetric positive definite matrix decision variables.
+
+Problem::decision_variable(spd, n) returns an n×n symmetric
+VariableMatrix.)doc";
+
+constexpr char mkd_doc_slp_spd_t_spd_t[] = R"doc(Constructs the tag.)doc";
 
 constexpr char mkd_doc_slp_sphere_t[] =
 R"doc(Tag type for decision variables on the unit sphere.

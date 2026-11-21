@@ -568,8 +568,40 @@ for k in range(N):
 
 and angular velocity integrates with `q[k + 1] == q[k] * Rotation3(ω[k] * dt)`. `log()` of a relative pose, `pose.relative_to(reference).log()`, is a residual for pose errors.
 
+#### Positive definite matrices
+
+`problem.decision_variable(spd, n)` returns an n×n symmetric `VariableMatrix` that the solver keeps positive definite. It replaces a semidefinite constraint P ⪰ 0 on a matrix decision variable. For a constraint G(x) ⪰ 0 on an expression, constrain it equal to one: `G == P`, with one constraint per lower-triangle entry, since the upper triangle's constraints would duplicate them.
+
+The matrix starts at the identity. `set_value()` can set any symmetric value. Before the first iteration, the solver keeps it if it's numerically positive definite, with each eigenvalue at least nε times the largest. Otherwise, it raises the smaller eigenvalues to √ε times the largest one. Every iterate is positive definite, so functions like log det P that are undefined elsewhere are safe. The matrix can't become singular, though, so the solver converges slowly or not at all on problems whose solution is a singular matrix.
+
+Problems with positive definite matrices always use the interior-point solver, even without inequality constraints, since it adds a −μ log det P barrier term that keeps the matrices away from singular ones as μ goes to zero.
+
+For example, the gains K of the discrete-time LQR controller u = −Kx with some columns fixed at zero minimize tr(PW) for an initial-state covariance W, where P solves the Lyapunov equation. A positive definite solution exists only if A − BK is stable, so making P positive definite keeps the gains stabilizing.
+
+```python
+import numpy as np
+from sleipnir.autodiff import VariableMatrix
+from sleipnir.optimization import Problem, spd
+
+problem = Problem()
+
+P = problem.decision_variable(spd, 3)
+F = problem.decision_variable(1, 2)
+F.set_value(np.array([[2.78, 3.0]]))  # Stabilizing initial gains
+
+K = VariableMatrix([[F[0], F[1], 0.0]])
+A_cl = A - B @ K
+residual = Q + K.T @ R @ K + A_cl.T @ P @ A_cl - P
+for i in range(3):
+    for j in range(i + 1):
+        problem.subject_to(residual[i, j] == 0)
+
+problem.minimize((P @ W).trace())
+problem.solve()
+```
+
 #### Iteration callbacks
 
-`IterationInfo.x` contains the decision variables' values, with each manifold variable's components in order: a `Rotation2`'s cos θ and sin θ, a `Rotation3`'s w, x, y, and z, and a pose's translation followed by its rotation. The gradient, Hessian, and Jacobians are with respect to the manifold's tangent space, which has one dimension per degree of freedom, so they have fewer columns than `x` has rows when the problem has manifold variables.
+`IterationInfo.x` contains the decision variables' values, with each manifold variable's components in order: a `Rotation2`'s cos θ and sin θ, a `Rotation3`'s w, x, y, and z, a pose's translation followed by its rotation, and a positive definite matrix's lower triangle in row-major order. The gradient, Hessian, and Jacobians are with respect to the manifold's tangent space, which has one dimension per degree of freedom, so they have fewer columns than `x` has rows when the problem has manifold variables.
 
 See [algorithms.md](algorithms.md#manifold-optimization) for how the solver handles manifold variables.

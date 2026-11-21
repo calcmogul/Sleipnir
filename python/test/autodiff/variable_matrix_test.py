@@ -424,6 +424,16 @@ def test_cwise_reduce() -> None:
     assert (result.value() == np.array([[16.0, 27.0, 40.0], [55.0, 72.0, 91.0]])).all()
 
 
+def test_trace() -> None:
+    A = VariableMatrix([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]])
+
+    assert A.trace().value() == 15.0
+
+    # Block
+    assert A[1:3, 1:3].trace().value() == 14.0
+    assert A[0:2, 1:3].trace().value() == 8.0
+
+
 def test_exp() -> None:
     # Scalar
     A1 = VariableMatrix([[4.0]])

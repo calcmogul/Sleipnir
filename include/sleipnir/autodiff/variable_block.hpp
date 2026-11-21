@@ -564,6 +564,19 @@ class VariableBlock : public SleipnirBase {
     return result;
   }
 
+  /// Returns the trace of the variable matrix, the sum of its diagonal.
+  ///
+  /// @return The trace of the variable matrix.
+  Variable<Scalar> trace() const {
+    slp_assert(rows() == cols());
+
+    Variable<Scalar> result{Scalar(0)};
+    for (int i = 0; i < rows(); ++i) {
+      result += (*this)[i, i];
+    }
+    return result;
+  }
+
   /// Returns the number of rows in the matrix.
   ///
   /// @return The number of rows in the matrix.

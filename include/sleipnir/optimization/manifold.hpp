@@ -59,4 +59,15 @@ struct se3_t {
 /// Tag for decision variables in the rigid transform group SE(3).
 inline constexpr se3_t se3{};
 
+/// Tag type for symmetric positive definite matrix decision variables.
+///
+/// Problem::decision_variable(spd, n) returns an n×n symmetric VariableMatrix.
+struct spd_t {
+  /// Constructs the tag.
+  explicit spd_t() = default;
+};
+
+/// Tag for symmetric positive definite matrix decision variables.
+inline constexpr spd_t spd{};
+
 }  // namespace slp

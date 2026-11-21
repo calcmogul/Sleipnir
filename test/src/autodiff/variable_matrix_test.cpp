@@ -552,6 +552,24 @@ TEMPLATE_TEST_CASE("VariableMatrix - cwise_reduce()", "[VariableMatrix]",
   CHECK(result.value() == expected);
 }
 
+TEMPLATE_TEST_CASE("VariableMatrix - trace()", "[VariableMatrix]",
+                   SCALAR_TYPES) {
+  using T = TestType;
+  using namespace slp::slicing;
+
+  slp::VariableMatrix<T> A{
+      {T(1), T(2), T(3)}, {T(4), T(5), T(6)}, {T(7), T(8), T(9)}};
+
+  CHECK(A.trace().value() == T(15));
+
+  // Block
+  CHECK(A[slp::Slice{1, 3}, slp::Slice{1, 3}].trace().value() == T(14));
+  CHECK(A.block(0, 1, 2, 2).trace().value() == T(8));
+
+  // 1x1
+  CHECK(A.block(2, 0, 1, 1).trace().value() == T(7));
+}
+
 TEMPLATE_TEST_CASE("VariableMatrix - exp()", "[VariableMatrix]", SCALAR_TYPES) {
   using T = TestType;
   using namespace slp::slicing;

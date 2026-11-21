@@ -398,6 +398,8 @@ void bind_variable_block(
       nb::is_operator(), "power"_a);
   cls.def_prop_ro("T", &VariableBlock<VariableMatrix<double>>::T,
                   DOC(slp, VariableBlock, T));
+  cls.def("trace", &VariableBlock<VariableMatrix<double>>::trace,
+          DOC(slp, VariableBlock, trace));
   cls.def("rows", &VariableBlock<VariableMatrix<double>>::rows,
           DOC(slp, VariableBlock, rows));
   cls.def("cols", &VariableBlock<VariableMatrix<double>>::cols,

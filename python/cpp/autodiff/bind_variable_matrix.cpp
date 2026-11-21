@@ -430,6 +430,8 @@ void bind_variable_matrix(nb::module_& autodiff,
       },
       nb::is_operator(), "power"_a);
   cls.def_prop_ro("T", &VariableMatrix<double>::T, DOC(slp, VariableMatrix, T));
+  cls.def("trace", &VariableMatrix<double>::trace,
+          DOC(slp, VariableMatrix, trace));
   cls.def("rows", &VariableMatrix<double>::rows,
           DOC(slp, VariableMatrix, rows));
   cls.def("cols", &VariableMatrix<double>::cols,

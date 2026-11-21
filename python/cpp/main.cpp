@@ -108,6 +108,7 @@ NB_MODULE(_sleipnir, m) {
   nb::class_<so3_t> so3_cls{optimization, "so3_t", DOC(slp, so3_t)};
   nb::class_<se2_t> se2_cls{optimization, "se2_t", DOC(slp, se2_t)};
   nb::class_<se3_t> se3_cls{optimization, "se3_t", DOC(slp, se3_t)};
+  nb::class_<spd_t> spd_cls{optimization, "spd_t", DOC(slp, spd_t)};
 
   nb::class_<Problem<double>> problem{optimization, "Problem",
                                       DOC(slp, Problem)};

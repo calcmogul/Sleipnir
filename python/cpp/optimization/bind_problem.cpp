@@ -177,6 +177,12 @@ void bind_problem(nb::class_<Problem<double>>& cls) {
         return self.decision_variable(tag);
       },
       "manifold"_a, DOC(slp, Problem, decision_variable, 7));
+  cls.def(
+      "decision_variable",
+      [](Problem<double>& self, spd_t tag, int rows) {
+        return self.decision_variable(tag, rows);
+      },
+      "manifold"_a, "rows"_a, DOC(slp, Problem, decision_variable, 8));
   cls.def("symmetric_decision_variable",
           &Problem<double>::symmetric_decision_variable, "rows"_a,
           DOC(slp, Problem, symmetric_decision_variable));

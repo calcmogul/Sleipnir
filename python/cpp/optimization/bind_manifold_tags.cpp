@@ -16,6 +16,7 @@ void bind_manifold_tags(nb::module_& optimization) {
   optimization.attr("so3") = nb::cast(so3);
   optimization.attr("se2") = nb::cast(se2);
   optimization.attr("se3") = nb::cast(se3);
+  optimization.attr("spd") = nb::cast(spd);
 }
 
 }  // namespace slp

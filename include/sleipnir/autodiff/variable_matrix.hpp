@@ -916,6 +916,19 @@ class VariableMatrix : public SleipnirBase {
     return result;
   }
 
+  /// Returns the trace of the variable matrix, the sum of its diagonal.
+  ///
+  /// @return The trace of the variable matrix.
+  Variable<Scalar> trace() const {
+    slp_assert(rows() == cols());
+
+    Variable<Scalar> result{Scalar(0)};
+    for (int i = 0; i < rows(); ++i) {
+      result += (*this)[i, i];
+    }
+    return result;
+  }
+
   /// Returns this 3D vector rotated by a rotation.
   ///
   /// @param q The rotation.
