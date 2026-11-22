@@ -36,6 +36,7 @@
 #include "sleipnir/optimization/solver/sqp.hpp"
 #include "sleipnir/optimization/solver/sqp_matrix_callbacks.hpp"
 #include "sleipnir/optimization/solver/util/bounds.hpp"
+#include "sleipnir/optimization/solver/util/iterates.hpp"
 #include "sleipnir/optimization/solver/util/problem_scaling.hpp"
 #include "sleipnir/optimization/solver/util/time_trace.hpp"
 #include "sleipnir/util/empty.hpp"
@@ -610,8 +611,17 @@ class Problem {
         },
         scaling};
 
+    SQPIterates<Scalar> iterates{
+        .x = std::move(x),
+        .y = DenseVector::Zero(matrix_callbacks.num_equality_constraints)};
+
     // Invoke SQP solver
-    return sqp<Scalar>(matrix_callbacks, iteration_callbacks, options, x);
+    auto status =
+        sqp<Scalar>(matrix_callbacks, iteration_callbacks, options, iterates);
+
+    x = std::move(iterates.x);
+
+    return status;
   }
 
   ExitStatus solve_ipm(const Options<Scalar>& options,
@@ -772,12 +782,29 @@ class Problem {
         },
         scaling};
 
+    const DenseVector c_i = matrix_callbacks.c_i(x);
+
+    IPMIterates<Scalar> iterates{
+        .x = std::move(x),
+        // If cᵢ(x) is sufficiently feasible, start the constraint with zero
+        // violation. Otherwise, make Σ = S⁻¹Z ≈ I.
+        .s = (c_i.array() >= Scalar(1e-2)).select(c_i, Scalar(1)),
+        .y = DenseVector::Zero(matrix_callbacks.num_equality_constraints),
+        .z = DenseVector::Ones(matrix_callbacks.num_inequality_constraints)};
+    Scalar μ = Scalar(0.1) * scaling.f;
+
     // Invoke interior-point method solver
-    return ipm<Scalar>(matrix_callbacks, iteration_callbacks, options,
+    int iterations = 0;
+    auto status =
+        ipm<Scalar>(matrix_callbacks, iteration_callbacks, options, false,
 #ifdef SLEIPNIR_ENABLE_BOUND_PROJECTION
-                       bound_constraint_mask,
+                    bound_constraint_mask,
 #endif
-                       x);
+                    iterates, μ, iterations);
+
+    x = std::move(iterates.x);
+
+    return status;
   }
 
   void print_exit_conditions(const Options<Scalar>& options) {
