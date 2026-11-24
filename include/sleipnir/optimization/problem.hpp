@@ -28,6 +28,8 @@
 #include "sleipnir/autodiff/jacobian.hpp"
 #include "sleipnir/autodiff/real.hpp"
 #include "sleipnir/autodiff/real_matrix.hpp"
+#include "sleipnir/autodiff/translation2.hpp"
+#include "sleipnir/autodiff/translation3.hpp"
 #include "sleipnir/optimization/lint.hpp"
 #include "sleipnir/optimization/solver/control_flow.hpp"
 #include "sleipnir/optimization/solver/exit_status.hpp"
@@ -225,6 +227,58 @@ class Problem {
     }
 
     return params;
+  }
+
+  /// Creates a 2D translation decision variable in the optimization problem.
+  ///
+  /// The translation is two ordinary decision variables.
+  ///
+  /// The translation has an initial value of zero.
+  ///
+  /// @return A 2D translation of decision variables in the optimization
+  ///     problem.
+  [[nodiscard]]
+  Translation2<Scalar> translation2_decision_variable() {
+    return Translation2<Scalar>{real_decision_variable(2)};
+  }
+
+  /// Creates a 2D translation parameter in the optimization problem.
+  ///
+  /// A parameter is a constant whose value can be changed between solves with
+  /// set_value(). Unlike constants, parameters aren't folded into expressions.
+  ///
+  /// The translation has an initial value of zero.
+  ///
+  /// @return A 2D translation of parameters in the optimization problem.
+  [[nodiscard]]
+  Translation2<Scalar> translation2_parameter() {
+    return Translation2<Scalar>{parameter(2)};
+  }
+
+  /// Creates a 3D translation decision variable in the optimization problem.
+  ///
+  /// The translation is three ordinary decision variables.
+  ///
+  /// The translation has an initial value of zero.
+  ///
+  /// @return A 3D translation of decision variables in the optimization
+  ///     problem.
+  [[nodiscard]]
+  Translation3<Scalar> translation3_decision_variable() {
+    return Translation3<Scalar>{real_decision_variable(3)};
+  }
+
+  /// Creates a 3D translation parameter in the optimization problem.
+  ///
+  /// A parameter is a constant whose value can be changed between solves with
+  /// set_value(). Unlike constants, parameters aren't folded into expressions.
+  ///
+  /// The translation has an initial value of zero.
+  ///
+  /// @return A 3D translation of parameters in the optimization problem.
+  [[nodiscard]]
+  Translation3<Scalar> translation3_parameter() {
+    return Translation3<Scalar>{parameter(3)};
   }
 
   /// Tells the solver to minimize the output of the given cost function.

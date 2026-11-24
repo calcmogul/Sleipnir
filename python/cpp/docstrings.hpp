@@ -2621,6 +2621,62 @@ Args:
 
 )doc";
 
+constexpr char mkd_doc_slp_Problem_translation2_decision_variable[] =
+R"doc(Creates a 2D translation decision variable in the optimization
+problem.
+
+The translation is two ordinary decision variables.
+
+The translation has an initial value of zero.
+
+Returns:
+    A 2D translation of decision variables in the optimization
+    problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_translation2_parameter[] =
+R"doc(Creates a 2D translation parameter in the optimization problem.
+
+A parameter is a constant whose value can be changed between solves
+with set_value(). Unlike constants, parameters aren't folded into
+expressions.
+
+The translation has an initial value of zero.
+
+Returns:
+    A 2D translation of parameters in the optimization problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_translation3_decision_variable[] =
+R"doc(Creates a 3D translation decision variable in the optimization
+problem.
+
+The translation is three ordinary decision variables.
+
+The translation has an initial value of zero.
+
+Returns:
+    A 3D translation of decision variables in the optimization
+    problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_translation3_parameter[] =
+R"doc(Creates a 3D translation parameter in the optimization problem.
+
+A parameter is a constant whose value can be changed between solves
+with set_value(). Unlike constants, parameters aren't folded into
+expressions.
+
+The translation has an initial value of zero.
+
+Returns:
+    A 3D translation of parameters in the optimization problem.
+
+)doc";
+
 constexpr char mkd_doc_slp_Real[] =
 R"doc(A real-valued autodiff expression.
 
@@ -4178,6 +4234,275 @@ constexpr char mkd_doc_slp_TranscriptionMethod_SINGLE_SHOOTING[] =
 R"doc(States depend explicitly as a function of all previous states and all
 previous inputs.)doc";
 
+constexpr char mkd_doc_slp_Translation2[] =
+R"doc(A 2D translation of autodiff expressions.
+
+A translation is a point or a displacement (x, y). It converts
+implicitly to a 2x1 RealMatrix.
+
+Translations are created by Problem::translation2_decision_variable(),
+from constants, and from expressions.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_Translation2_Translation2[] =
+R"doc(Constructs a translation from its components.
+
+Args:
+    x: The x component.
+    y: The y component.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_Translation2_2[] =
+R"doc(Constructs a translation from a vector.
+
+Args:
+    vector: The vector (x, y). Must be 2x1.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_Translation2_3[] =
+R"doc(Constructs a constant translation.
+
+Args:
+    vector: The vector (x, y). Must be 2x1.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_distance[] =
+R"doc(Returns the distance to another translation.
+
+The distance isn't differentiable where it's zero. For constraints and
+costs that can reach zero distance, use squared_distance().
+
+Args:
+    other: The other translation.
+
+Returns:
+    The distance.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_m_x[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Translation2_m_y[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Translation2_operator_slp_RealMatrix[] =
+R"doc(Implicit conversion to a 2x1 RealMatrix.
+
+Returns:
+    The translation as a 2x1 RealMatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_set_value[] =
+R"doc(Sets the translation's value.
+
+This is only meaningful for translations of decision variables or
+parameters.
+
+Args:
+    value: The value.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_squared_distance[] =
+R"doc(Returns the squared distance to another translation.
+
+Args:
+    other: The other translation.
+
+Returns:
+    The squared distance.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_value[] =
+R"doc(Returns the translation's value.
+
+Returns:
+    The translation's value.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_x[] =
+R"doc(Returns the x component.
+
+Returns:
+    The x component.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_x_2[] =
+R"doc(Returns the x component.
+
+Returns:
+    The x component.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_y[] =
+R"doc(Returns the y component.
+
+Returns:
+    The y component.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_y_2[] =
+R"doc(Returns the y component.
+
+Returns:
+    The y component.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3[] =
+R"doc(A 3D translation of autodiff expressions.
+
+A translation is a point or a displacement (x, y, z). It converts
+implicitly to a 3x1 RealMatrix.
+
+Translations are created by Problem::translation3_decision_variable(),
+from constants, and from expressions.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_Translation3_Translation3[] =
+R"doc(Constructs a translation from its components.
+
+Args:
+    x: The x component.
+    y: The y component.
+    z: The z component.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_Translation3_2[] =
+R"doc(Constructs a translation from a vector.
+
+Args:
+    vector: The vector (x, y, z). Must be 3x1.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_Translation3_3[] =
+R"doc(Constructs a constant translation.
+
+Args:
+    vector: The vector (x, y, z). Must be 3x1.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_distance[] =
+R"doc(Returns the distance to another translation.
+
+The distance isn't differentiable where it's zero. For constraints and
+costs that can reach zero distance, use squared_distance().
+
+Args:
+    other: The other translation.
+
+Returns:
+    The distance.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_m_x[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Translation3_m_y[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Translation3_m_z[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Translation3_operator_slp_RealMatrix[] =
+R"doc(Implicit conversion to a 3x1 RealMatrix.
+
+Returns:
+    The translation as a 3x1 RealMatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_set_value[] =
+R"doc(Sets the translation's value.
+
+This is only meaningful for translations of decision variables or
+parameters.
+
+Args:
+    value: The value.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_squared_distance[] =
+R"doc(Returns the squared distance to another translation.
+
+Args:
+    other: The other translation.
+
+Returns:
+    The squared distance.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_value[] =
+R"doc(Returns the translation's value.
+
+Returns:
+    The translation's value.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_x[] =
+R"doc(Returns the x component.
+
+Returns:
+    The x component.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_x_2[] =
+R"doc(Returns the x component.
+
+Returns:
+    The x component.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_y[] =
+R"doc(Returns the y component.
+
+Returns:
+    The y component.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_y_2[] =
+R"doc(Returns the y component.
+
+Returns:
+    The y component.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_z[] =
+R"doc(Returns the z component.
+
+Returns:
+    The z component.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_z_2[] =
+R"doc(Returns the z component.
+
+Returns:
+    The z component.
+
+)doc";
+
 constexpr char mkd_doc_slp_abs[] =
 R"doc(abs() for Reals.
 
@@ -4865,6 +5190,30 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_operator_add_8[] =
+R"doc(Adds two translations.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The sum.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_add_9[] =
+R"doc(Adds two translations.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The sum.
+
+)doc";
+
 constexpr char mkd_doc_slp_operator_div[] =
 R"doc(Divides two complex numbers.
 
@@ -4937,6 +5286,30 @@ Template Args:
 
 Returns:
     Result of division.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_div_7[] =
+R"doc(Divides a translation by a scalar.
+
+Args:
+    lhs: The translation.
+    rhs: The divisor.
+
+Returns:
+    The divided translation.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_div_8[] =
+R"doc(Divides a translation by a scalar.
+
+Args:
+    lhs: The translation.
+    rhs: The divisor.
+
+Returns:
+    The divided translation.
 
 )doc";
 
@@ -5044,6 +5417,32 @@ R"doc(Equality operator that returns an equality constraint for two Reals.
 Args:
     lhs: Left-hand side.
     rhs: Left-hand side.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_10[] =
+R"doc(Equality operator that returns an equality constraint for two
+translations.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraint.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_11[] =
+R"doc(Equality operator that returns an equality constraint for two
+translations.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraint.
 
 )doc";
 
@@ -5219,6 +5618,54 @@ Template Args:
 
 )doc";
 
+constexpr char mkd_doc_slp_operator_mul_10[] =
+R"doc(Scales a translation.
+
+Args:
+    lhs: The translation.
+    rhs: The factor.
+
+Returns:
+    The scaled translation.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_11[] =
+R"doc(Scales a translation.
+
+Args:
+    lhs: The factor.
+    rhs: The translation.
+
+Returns:
+    The scaled translation.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_12[] =
+R"doc(Scales a translation.
+
+Args:
+    lhs: The translation.
+    rhs: The factor.
+
+Returns:
+    The scaled translation.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_13[] =
+R"doc(Scales a translation.
+
+Args:
+    lhs: The factor.
+    rhs: The translation.
+
+Returns:
+    The scaled translation.
+
+)doc";
+
 constexpr char mkd_doc_slp_operator_sub[] =
 R"doc(Subtracts two complex numbers.
 
@@ -5298,6 +5745,52 @@ Args:
 
 Returns:
     The negated matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_8[] =
+R"doc(Subtracts two translations.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The difference.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_9[] =
+R"doc(Negates a translation.
+
+Args:
+    translation: The translation.
+
+Returns:
+    The negated translation.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_10[] =
+R"doc(Subtracts two translations.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The difference.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_11[] =
+R"doc(Negates a translation.
+
+Args:
+    translation: The translation.
+
+Returns:
+    The negated translation.
 
 )doc";
 

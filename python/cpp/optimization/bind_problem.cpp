@@ -152,6 +152,12 @@ void bind_problem(nb::class_<Problem<double>>& cls) {
         return self.complex_decision_variable(rows, cols);
       },
       "rows"_a, "cols"_a = 1, DOC(slp, Problem, complex_decision_variable, 2));
+  cls.def("translation2_decision_variable",
+          &Problem<double>::translation2_decision_variable,
+          DOC(slp, Problem, translation2_decision_variable));
+  cls.def("translation3_decision_variable",
+          &Problem<double>::translation3_decision_variable,
+          DOC(slp, Problem, translation3_decision_variable));
   cls.def("parameter", nb::overload_cast<>(&Problem<double>::parameter),
           DOC(slp, Problem, parameter));
   cls.def("parameter", nb::overload_cast<int, int>(&Problem<double>::parameter),
@@ -166,6 +172,10 @@ void bind_problem(nb::class_<Problem<double>>& cls) {
         return self.complex_parameter(rows, cols);
       },
       "rows"_a, "cols"_a = 1, DOC(slp, Problem, complex_parameter, 2));
+  cls.def("translation2_parameter", &Problem<double>::translation2_parameter,
+          DOC(slp, Problem, translation2_parameter));
+  cls.def("translation3_parameter", &Problem<double>::translation3_parameter,
+          DOC(slp, Problem, translation3_parameter));
   for_each_type<double, const Real<double>&, const RealMatrix<double>&>(
       [&]<typename T> {
         cls.def(

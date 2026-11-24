@@ -589,6 +589,8 @@ if(SLEIPNIR_BUILD_PYTHON)
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/gradient.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/hessian.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/jacobian.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/translation2.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/translation3.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/real.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/real_matrix.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/real_submatrix.hpp

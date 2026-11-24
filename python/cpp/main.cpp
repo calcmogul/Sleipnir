@@ -15,6 +15,8 @@
 #include <sleipnir/autodiff/real.hpp>
 #include <sleipnir/autodiff/real_matrix.hpp>
 #include <sleipnir/autodiff/real_submatrix.hpp>
+#include <sleipnir/autodiff/translation2.hpp>
+#include <sleipnir/autodiff/translation3.hpp>
 #include <sleipnir/optimization/lint.hpp>
 #include <sleipnir/optimization/ocp.hpp>
 #include <sleipnir/optimization/ocp/dynamics_type.hpp>
@@ -55,6 +57,10 @@ NB_MODULE(_sleipnir, m) {
       autodiff, "ComplexSubmatrix", DOC(slp, ComplexSubmatrix)};
   nb::class_<RealSubmatrix<RealMatrix<double>>> real_submatrix{
       autodiff, "RealSubmatrix", DOC(slp, RealSubmatrix)};
+  nb::class_<Translation2<double>> translation2{autodiff, "Translation2",
+                                                DOC(slp, Translation2)};
+  nb::class_<Translation3<double>> translation3{autodiff, "Translation3",
+                                                DOC(slp, Translation3)};
 
   nb::class_<Gradient<double>> gradient{autodiff, "Gradient",
                                         DOC(slp, Gradient)};
@@ -112,9 +118,13 @@ NB_MODULE(_sleipnir, m) {
   bind_complex_matrix(complex_matrix);
   bind_complex_submatrix(complex_submatrix);
   bind_real_submatrix(real_submatrix);
+  bind_translation2(translation2);
+  bind_translation3(translation3);
 
   // Implicit conversions
   real_matrix.def(nb::init_implicit<RealSubmatrix<RealMatrix<double>>>());
+  real_matrix.def(nb::init_implicit<Translation2<double>>());
+  real_matrix.def(nb::init_implicit<Translation3<double>>());
   complex.def(nb::init_implicit<std::complex<double>>());
   complex.def(nb::init_implicit<Real<double>>());
   complex_matrix.def(nb::init_implicit<RealMatrix<double>>());

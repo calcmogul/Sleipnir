@@ -13,6 +13,8 @@
 #include <sleipnir/autodiff/real.hpp>
 #include <sleipnir/autodiff/real_matrix.hpp>
 #include <sleipnir/autodiff/real_submatrix.hpp>
+#include <sleipnir/autodiff/translation2.hpp>
+#include <sleipnir/autodiff/translation3.hpp>
 #include <sleipnir/optimization/lint.hpp>
 #include <sleipnir/optimization/ocp.hpp>
 #include <sleipnir/optimization/ocp/dynamics_type.hpp>
@@ -36,6 +38,8 @@ void bind_complex_matrix(nb::class_<ComplexMatrix<double>>& cls);
 void bind_complex_submatrix(
     nb::class_<ComplexSubmatrix<ComplexMatrix<double>>>& cls);
 void bind_real_submatrix(nb::class_<RealSubmatrix<RealMatrix<double>>>& cls);
+void bind_translation2(nb::class_<Translation2<double>>& cls);
+void bind_translation3(nb::class_<Translation3<double>>& cls);
 
 void bind_gradient(nb::class_<Gradient<double>>& cls);
 void bind_hessian(nb::class_<Hessian<double>>& cls);
