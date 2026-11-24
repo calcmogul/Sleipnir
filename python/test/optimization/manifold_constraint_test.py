@@ -1,11 +1,18 @@
+import math
+
 import numpy as np
 import pytest
+from scipy.spatial.transform import Rotation
 from sleipnir.autodiff import (
+    RealMatrix,
+    Rotation2,
+    Rotation3,
     Translation2,
 )
 from sleipnir.optimization import (
     ExitStatus,
     Problem,
+    bounds,
 )
 from tolerance import solution_tolerance
 
@@ -61,6 +68,56 @@ def test_unit_vector_equality_two_decision_variables() -> None:
     assert a_value @ A @ a_value == pytest.approx(
         eigenvalues[0], abs=solution_tolerance(1)
     )
+
+
+def test_heading_tolerance_wrapping_past_pi() -> None:
+    # The allowed headings are 3 ± 0.3 rad, which wraps past π. The cost pulls
+    # the heading toward −2.5 rad, past the upper end at 3.3 rad.
+    problem = Problem()
+    z = problem.rotation2_decision_variable()
+    z.set_value(3.0)
+    problem.minimize(-(z.cos() * math.cos(-2.5) + z.sin() * math.sin(-2.5)))
+    error = z.relative_to(Rotation2(3.0)).angle()
+    problem.subject_to(bounds(-0.3, error, 0.3))
+
+    assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS
+
+    # The active bound's multiplier is |sin(3.3 + 2.5)| ≈ 0.46, so the
+    # interior-point slack at convergence is about tolerance/0.46
+    assert z.value() == pytest.approx(3.3 - 2 * math.pi, abs=solution_tolerance(5))
+
+
+def test_rotation3_and_unit_vector_tolerances() -> None:
+    # The cost pulls the rotation toward 2 rad about an axis, and the
+    # constraint keeps it within 0.4 rad of the identity
+    q_target_axis = np.array([1.0, 1.0, 0.0])
+    q_target = Rotation.from_rotvec(2.0 * q_target_axis / np.linalg.norm(q_target_axis))
+    target = Rotation3(*q_target.as_quat(scalar_first=True))
+
+    problem = Problem()
+    q = problem.rotation3_decision_variable()
+    n = problem.unit_vector_decision_variable(3)
+
+    q_dot = (
+        q.w() * target.w()
+        + q.x() * target.x()
+        + q.y() * target.y()
+        + q.z() * target.z()
+    )
+    problem.minimize(-q_dot * q_dot - n[2])
+    error = q.relative_to(Rotation3(1.0, 0.0, 0.0, 0.0)).to_vector()
+    problem.subject_to(error.T @ error <= 0.4 * 0.4)
+
+    # The cost pulls the vector toward e₃, and the constraint keeps it within
+    # 0.3 rad of e₁
+    problem.subject_to(n.dot(RealMatrix([[1.0], [0.0], [0.0]])) >= math.cos(0.3))
+
+    assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS
+
+    assert 2 * math.acos(abs(q.value()[0])) == pytest.approx(
+        0.4, abs=solution_tolerance(1)
+    )
+    assert n.value(0) == pytest.approx(math.cos(0.3), abs=solution_tolerance(1))
 
 
 def test_distance_tolerances_at_least() -> None:

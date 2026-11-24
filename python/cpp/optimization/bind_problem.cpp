@@ -17,6 +17,8 @@
 
 #include <sleipnir/autodiff/real.hpp>
 #include <sleipnir/autodiff/real_matrix.hpp>
+#include <sleipnir/autodiff/rotation2.hpp>
+#include <sleipnir/autodiff/rotation3.hpp>
 #include <sleipnir/autodiff/unit_vector.hpp>
 #include <sleipnir/optimization/problem.hpp>
 #include <sleipnir/optimization/solver/iteration_info.hpp>
@@ -162,6 +164,12 @@ void bind_problem(nb::class_<Problem<double>>& cls) {
   cls.def("translation3_decision_variable",
           &Problem<double>::translation3_decision_variable,
           DOC(slp, Problem, translation3_decision_variable));
+  cls.def("rotation2_decision_variable",
+          &Problem<double>::rotation2_decision_variable,
+          DOC(slp, Problem, rotation2_decision_variable));
+  cls.def("rotation3_decision_variable",
+          &Problem<double>::rotation3_decision_variable,
+          DOC(slp, Problem, rotation3_decision_variable));
   cls.def("parameter", nb::overload_cast<>(&Problem<double>::parameter),
           DOC(slp, Problem, parameter));
   cls.def("parameter", nb::overload_cast<int, int>(&Problem<double>::parameter),
@@ -182,6 +190,10 @@ void bind_problem(nb::class_<Problem<double>>& cls) {
           DOC(slp, Problem, translation2_parameter));
   cls.def("translation3_parameter", &Problem<double>::translation3_parameter,
           DOC(slp, Problem, translation3_parameter));
+  cls.def("rotation2_parameter", &Problem<double>::rotation2_parameter,
+          DOC(slp, Problem, rotation2_parameter));
+  cls.def("rotation3_parameter", &Problem<double>::rotation3_parameter,
+          DOC(slp, Problem, rotation3_parameter));
   for_each_type<double, const Real<double>&, const RealMatrix<double>&>(
       [&]<typename T> {
         cls.def(

@@ -78,6 +78,12 @@ template <typename Scalar>
 class Problem;
 
 template <typename Scalar>
+class Rotation2;
+
+template <typename Scalar>
+class Rotation3;
+
+template <typename Scalar>
 class UnitVector;
 
 namespace detail {
@@ -155,9 +161,9 @@ RealMatrix<Scalar> sphere_log(const UnitVector<Scalar>& a,
 ///
 /// UnitVectors are created by Problem::unit_vector_decision_variable(n), which
 /// keeps them on the unit sphere during the solve, from constant Eigen
-/// vectors, and by operations that preserve unit length, like negation.
-/// Operations that don't preserve unit length, like addition and scaling,
-/// return a RealMatrix.
+/// vectors, and by operations that preserve unit length, like negation and
+/// rotate_by(). Operations that don't preserve unit length, like addition and
+/// scaling, return a RealMatrix.
 ///
 /// Elements are read-only. A UnitVector converts implicitly to a
 /// RealMatrix for use in general expressions.
@@ -281,6 +287,31 @@ class UnitVector {
     return RealMatrix<Scalar>{{m_storage[1] * rhs[2] - m_storage[2] * rhs[1]},
                               {m_storage[2] * rhs[0] - m_storage[0] * rhs[2]},
                               {m_storage[0] * rhs[1] - m_storage[1] * rhs[0]}};
+  }
+
+  /// Returns this 3D unit vector rotated by a rotation.
+  ///
+  /// @param q The rotation.
+  /// @return The rotated unit vector.
+  template <std::same_as<Rotation3<Scalar>> Rotation>
+  UnitVector rotate_by(const Rotation& q) const {
+    return UnitVector{q.rotate(m_storage)};
+  }
+
+  /// Returns this 2D unit vector rotated by a rotation.
+  ///
+  /// @param z The rotation.
+  /// @return The rotated unit vector.
+  template <std::same_as<Rotation2<Scalar>> Rotation>
+  UnitVector rotate_by(const Rotation& z) const {
+    slp_assert(rows() == 2);
+
+    const auto& v = m_storage;
+    const auto& c = z.cos();
+    const auto& s = z.sin();
+
+    return UnitVector{
+        RealMatrix<Scalar>{{c * v[0] - s * v[1]}, {s * v[0] + c * v[1]}}};
   }
 
   /// Returns an iterator to the beginning of the vector.

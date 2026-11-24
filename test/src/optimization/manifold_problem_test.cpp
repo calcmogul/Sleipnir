@@ -19,6 +19,10 @@
 #include <sleipnir/autodiff/expression_type.hpp>
 #include <sleipnir/autodiff/real.hpp>
 #include <sleipnir/autodiff/real_matrix.hpp>
+#include <sleipnir/autodiff/rotation2.hpp>
+#include <sleipnir/autodiff/rotation3.hpp>
+#include <sleipnir/autodiff/translation2.hpp>
+#include <sleipnir/autodiff/translation3.hpp>
 #include <sleipnir/autodiff/unit_vector.hpp>
 #include <sleipnir/optimization/problem.hpp>
 #include <sleipnir/optimization/solver/exit_status.hpp>
@@ -128,4 +132,153 @@ TEMPLATE_TEST_CASE(
         slp::ExitStatus::SUCCESS);
 
   CHECK_THAT(n.value(), WithinAbs(m.value(), solution_tolerance<T>(10)));
+}
+
+TEMPLATE_TEST_CASE("Problem - Wahba's problem", "[Problem][Manifold]",
+                   SCALAR_TYPES) {
+  using T = TestType;
+
+  const Eigen::Quaternion<T> q_true{Eigen::AngleAxis<T>{
+      T(2.5), Eigen::Vector3<T>{T(1), T(-2), T(0.5)}.normalized()}};
+
+  const std::vector<Eigen::Vector3<T>> body_vectors{
+      {T(1), T(0), T(0)}, {T(0), T(1), T(0)}, {T(0.5), T(0.5), T(0.7)}};
+
+  // Initial guesses from the identity to nearly opposite the solution
+  auto initial_angle = GENERATE(0.0, 1.0, 3.0);
+
+  slp::Problem<T> problem;
+  auto q = problem.rotation3_decision_variable();
+  q.set_value(Eigen::Quaternion<T>{Eigen::AngleAxis<T>{
+      T(initial_angle), Eigen::Vector3<T>{T(0.3), T(1), T(0)}.normalized()}});
+
+  slp::Real<T> cost{T(0)};
+  for (const auto& v : body_vectors) {
+    Eigen::Vector3<T> w = q_true * v;
+    cost += slp::Translation3<T>{v}.rotate_by(q).squared_distance(
+        slp::Translation3<T>{w});
+  }
+  problem.minimize(cost);
+  check_iterates_on_manifold(problem, 0, 4);
+
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
+
+  // q and −q are the same rotation
+  using std::abs;
+  CHECK_THAT(abs(q.value().dot(q_true)),
+             WithinAbs(T(1), solution_tolerance<T>(1)));
+}
+
+TEMPLATE_TEST_CASE("Problem - Rotation averaging", "[Problem][Manifold]",
+                   SCALAR_TYPES) {
+  using T = TestType;
+
+  const std::vector<Eigen::Quaternion<T>> rotations{
+      Eigen::Quaternion<T>{Eigen::AngleAxis<T>{
+          T(0.3), Eigen::Vector3<T>{T(1), T(0), T(0)}.normalized()}},
+      Eigen::Quaternion<T>{Eigen::AngleAxis<T>{
+          T(0.5), Eigen::Vector3<T>{T(0), T(1), T(0.2)}.normalized()}},
+      Eigen::Quaternion<T>{Eigen::AngleAxis<T>{
+          T(-0.4), Eigen::Vector3<T>{T(0.3), T(0.3), T(1)}.normalized()}},
+      Eigen::Quaternion<T>{Eigen::AngleAxis<T>{
+          T(0.2), Eigen::Vector3<T>{T(-1), T(0.5), T(0.5)}.normalized()}}};
+
+  slp::Problem<T> problem;
+  auto q = problem.rotation3_decision_variable();
+
+  std::vector<slp::RealMatrix<T>> residuals;
+  slp::Real<T> cost{T(0)};
+  for (const auto& rotation : rotations) {
+    auto r = (slp::Rotation3<T>{rotation}.inverse() * q).to_vector();
+    cost += r.T() * r;
+    residuals.push_back(r);
+  }
+  problem.minimize(cost);
+  check_iterates_on_manifold(problem, 0, 4);
+
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
+
+  // The minimizer of Σᵢ ‖log(qᵢ⁻¹q)‖² is the Karcher mean, where
+  // Σᵢ log(qᵢ⁻¹q) = 0
+  Eigen::Vector3<T> sum = Eigen::Vector3<T>::Zero();
+  for (auto& r : residuals) {
+    sum += Eigen::Vector3<T>{r.value()};
+  }
+  CHECK_THAT(sum,
+             WithinAbs(Eigen::Vector3<T>::Zero(), solution_tolerance<T>(10)));
+}
+TEMPLATE_TEST_CASE("Problem - 2D point set registration", "[Problem][Manifold]",
+                   SCALAR_TYPES) {
+  using T = TestType;
+
+  using std::cos;
+  using std::sin;
+
+  // The true angle is near π, and the initial guess is on the other side of
+  // ±π, where an angle decision variable would have to wrap
+  const T θ_true(2.8);
+  const Eigen::Matrix2<T> R_true{{cos(θ_true), -sin(θ_true)},
+                                 {sin(θ_true), cos(θ_true)}};
+  const Eigen::Vector2<T> t_true{T(1), T(-0.5)};
+
+  std::vector<slp::Translation2<T>> points{
+      {T(1), T(0)}, {T(0), T(2)}, {T(-1), T(-1)}, {T(2), T(1)}};
+
+  slp::Problem<T> problem;
+  auto z = problem.rotation2_decision_variable();
+  auto t = problem.translation2_decision_variable();
+  z.set_value(T(-2.8));
+
+  slp::Real<T> cost{T(0)};
+  for (auto& p : points) {
+    Eigen::Vector2<T> measured = R_true * p.value() + t_true;
+    cost +=
+        (p.rotate_by(z) + t).squared_distance(slp::Translation2<T>{measured});
+  }
+  problem.minimize(cost);
+  check_iterates_on_manifold(problem, 0, 2);
+
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
+
+  CHECK_THAT(z.value(), WithinAbs(θ_true, solution_tolerance<T>(1)));
+  CHECK_THAT(t.x().value(), WithinAbs(t_true[0], solution_tolerance<T>(1)));
+  CHECK_THAT(t.y().value(), WithinAbs(t_true[1], solution_tolerance<T>(1)));
+}
+
+TEMPLATE_TEST_CASE("Problem - Pose estimation with inequality constraints",
+                   "[Problem][Manifold]", SCALAR_TYPES) {
+  using T = TestType;
+
+  const Eigen::Quaternion<T> q_true{Eigen::AngleAxis<T>{
+      T(1.2), Eigen::Vector3<T>{T(0.2), T(1), T(-0.4)}.normalized()}};
+  const Eigen::Vector3<T> t_true{T(1), T(-0.5), T(2)};
+
+  std::vector<slp::Translation3<T>> points{{T(1), T(0), T(0)},
+                                           {T(0), T(2), T(0)},
+                                           {T(0), T(0), T(-1)},
+                                           {T(1), T(1), T(1)}};
+
+  slp::Problem<T> problem;
+  auto q = problem.rotation3_decision_variable();
+  auto t = problem.translation3_decision_variable();
+
+  slp::Real<T> cost{T(0)};
+  for (auto& p : points) {
+    Eigen::Vector3<T> measured = q_true * p.value() + t_true;
+    cost +=
+        (p.rotate_by(q) + t).squared_distance(slp::Translation3<T>{measured});
+  }
+  problem.minimize(cost);
+
+  // The translation bound is active, so the solution moves off the
+  // unconstrained optimum
+  problem.subject_to(t.z() <= T(1.5));
+  problem.subject_to(t.x() >= T(-5));
+  check_iterates_on_manifold(problem, 0, 4);
+
+  CHECK(problem.inequality_constraint_type() == slp::ExpressionType::LINEAR);
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
+
+  CHECK_THAT(t.z().value(), WithinAbs(T(1.5), solution_tolerance<T>(1)));
+  CHECK_THAT(q.value().norm(), WithinAbs(T(1), rounding_tolerance<T>(10)));
 }

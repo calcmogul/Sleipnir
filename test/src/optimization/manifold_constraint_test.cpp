@@ -17,6 +17,8 @@
 #include <catch2/matchers/catch_matchers.hpp>
 #include <sleipnir/autodiff/expression_type.hpp>
 #include <sleipnir/autodiff/real.hpp>
+#include <sleipnir/autodiff/rotation2.hpp>
+#include <sleipnir/autodiff/rotation3.hpp>
 #include <sleipnir/autodiff/translation2.hpp>
 #include <sleipnir/autodiff/unit_vector.hpp>
 #include <sleipnir/optimization/problem.hpp>
@@ -72,6 +74,67 @@ TEMPLATE_TEST_CASE("Problem - UnitVector equality: two decision variables",
   CHECK_THAT(a_value.dot(b_value), WithinAbs(T(1), solution_tolerance<T>(1)));
   CHECK_THAT(a_value.dot(A * a_value),
              WithinAbs(eigensolver.eigenvalues()[0], solution_tolerance<T>(1)));
+}
+
+TEMPLATE_TEST_CASE("Problem - Heading tolerance wrapping past pi",
+                   "[Problem][Manifold]", SCALAR_TYPES) {
+  using T = TestType;
+
+  using std::cos;
+  using std::sin;
+
+  // The allowed headings are 3 ± 0.3 rad, which wraps past π. The cost pulls
+  // the heading toward −2.5 rad, past the upper end at 3.3 rad.
+  slp::Problem<T> problem;
+  auto z = problem.rotation2_decision_variable();
+  z.set_value(T(3));
+  problem.minimize(-(z.cos() * cos(T(-2.5)) + z.sin() * sin(T(-2.5))));
+  auto error = z.relative_to(slp::Rotation2<T>{T(3)}).angle();
+  problem.subject_to(slp::bounds(T(-0.3), error, T(0.3)));
+
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
+
+  // The active bound's multiplier is |sin(3.3 + 2.5)| ≈ 0.46, so the
+  // interior-point slack at convergence is about tolerance/0.46
+  CHECK_THAT(z.value(), WithinAbs(T(3.3 - 2 * std::numbers::pi),
+                                  solution_tolerance<T>(5)));
+}
+
+TEMPLATE_TEST_CASE("Problem - Rotation3 and UnitVector tolerances",
+                   "[Problem][Manifold]", SCALAR_TYPES) {
+  using T = TestType;
+
+  using std::abs;
+  using std::acos;
+  using std::cos;
+
+  // The cost pulls the rotation toward 2 rad about an axis, and the
+  // constraint keeps it within 0.4 rad of the identity
+  const Eigen::Quaternion<T> q_target{Eigen::AngleAxis<T>{
+      T(2), Eigen::Vector3<T>{T(1), T(1), T(0)}.normalized()}};
+  const slp::Rotation3<T> target{q_target};
+
+  slp::Problem<T> problem;
+  auto q = problem.rotation3_decision_variable();
+  auto n = problem.unit_vector_decision_variable(3);
+
+  slp::Real<T> q_dot = q.w() * target.w() + q.x() * target.x() +
+                       q.y() * target.y() + q.z() * target.z();
+  problem.minimize(-q_dot * q_dot - n[2]);
+  auto error =
+      q.relative_to(slp::Rotation3<T>{Eigen::Quaternion<T>::Identity()})
+          .to_vector();
+  problem.subject_to(error.T() * error <= T(0.4 * 0.4));
+
+  // The cost pulls the vector toward e₃, and the constraint keeps it within
+  // 0.3 rad of e₁
+  problem.subject_to(n.dot(Eigen::Vector3<T>::UnitX()) >= cos(T(0.3)));
+
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
+
+  CHECK_THAT(T(2) * acos(abs(q.value().w())),
+             WithinAbs(T(0.4), solution_tolerance<T>(1)));
+  CHECK_THAT(n.value(0), WithinAbs(cos(T(0.3)), solution_tolerance<T>(1)));
 }
 
 TEMPLATE_TEST_CASE("Problem - Distance tolerances: at least",

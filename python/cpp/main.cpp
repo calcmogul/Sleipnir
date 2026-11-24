@@ -15,6 +15,8 @@
 #include <sleipnir/autodiff/real.hpp>
 #include <sleipnir/autodiff/real_matrix.hpp>
 #include <sleipnir/autodiff/real_submatrix.hpp>
+#include <sleipnir/autodiff/rotation2.hpp>
+#include <sleipnir/autodiff/rotation3.hpp>
 #include <sleipnir/autodiff/translation2.hpp>
 #include <sleipnir/autodiff/translation3.hpp>
 #include <sleipnir/autodiff/unit_vector.hpp>
@@ -60,10 +62,14 @@ NB_MODULE(_sleipnir, m) {
       autodiff, "RealSubmatrix", DOC(slp, RealSubmatrix)};
   nb::class_<UnitVector<double>> unit_vector{autodiff, "UnitVector",
                                              DOC(slp, UnitVector)};
+  nb::class_<Rotation2<double>> rotation2{autodiff, "Rotation2",
+                                          DOC(slp, Rotation2)};
+  nb::class_<Rotation3<double>> rotation3{autodiff, "Rotation3",
+                                          DOC(slp, Rotation3)};
   nb::class_<Translation2<double>> translation2{autodiff, "Translation2",
                                                 DOC(slp, Translation2)};
   nb::class_<Translation3<double>> translation3{autodiff, "Translation3",
-                                                DOC(slp, Translation3)};
+                                                DOC(slp, Translation3, 2)};
 
   nb::class_<Gradient<double>> gradient{autodiff, "Gradient",
                                         DOC(slp, Gradient)};
@@ -100,10 +106,11 @@ NB_MODULE(_sleipnir, m) {
   nb::class_<LintFinding> lint_finding{optimization, "LintFinding",
                                        DOC(slp, LintFinding)};
 
-  // The forward declaration in unit_vector.hpp sorts first, so it takes the
-  // first Problem docstring
+  // The forward declarations in rotation2.hpp, rotation3.hpp, and
+  // unit_vector.hpp sort first, so they take the first three Problem
+  // docstrings
   nb::class_<Problem<double>> problem{optimization, "Problem",
-                                      DOC(slp, Problem, 2)};
+                                      DOC(slp, Problem, 4)};
 
   nb::enum_<DynamicsType> dynamics_type{optimization, "DynamicsType",
                                         DOC(slp, DynamicsType)};
@@ -124,6 +131,8 @@ NB_MODULE(_sleipnir, m) {
   bind_complex_submatrix(complex_submatrix);
   bind_real_submatrix(real_submatrix);
   bind_unit_vector(unit_vector);
+  bind_rotation2(rotation2);
+  bind_rotation3(rotation3);
   bind_translation2(translation2);
   bind_translation3(translation3);
 

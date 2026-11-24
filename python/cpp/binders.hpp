@@ -13,6 +13,8 @@
 #include <sleipnir/autodiff/real.hpp>
 #include <sleipnir/autodiff/real_matrix.hpp>
 #include <sleipnir/autodiff/real_submatrix.hpp>
+#include <sleipnir/autodiff/rotation2.hpp>
+#include <sleipnir/autodiff/rotation3.hpp>
 #include <sleipnir/autodiff/translation2.hpp>
 #include <sleipnir/autodiff/translation3.hpp>
 #include <sleipnir/autodiff/unit_vector.hpp>
@@ -40,6 +42,8 @@ void bind_complex_submatrix(
     nb::class_<ComplexSubmatrix<ComplexMatrix<double>>>& cls);
 void bind_real_submatrix(nb::class_<RealSubmatrix<RealMatrix<double>>>& cls);
 void bind_unit_vector(nb::class_<UnitVector<double>>& cls);
+void bind_rotation2(nb::class_<Rotation2<double>>& cls);
+void bind_rotation3(nb::class_<Rotation3<double>>& cls);
 void bind_translation2(nb::class_<Translation2<double>>& cls);
 void bind_translation3(nb::class_<Translation3<double>>& cls);
 

@@ -493,27 +493,35 @@ problem.solve()
 
 ### Manifold optimization
 
-Unit vectors can be decision variables. Instead of constraining them with `n.T @ n == 1`, the solver steps along the set of valid values, so every iterate is valid, and the problem has fewer constraints and multipliers.
+Unit vectors and rotations can be decision variables. Instead of constraining their unit-length parts with `n.T @ n == 1`, the solver steps along the set of valid values, so every iterate is valid, and the problem has fewer constraints and multipliers. Use them instead of angle decision variables too: rotations have no discontinuity at ±π, and they don't need `atan2()`.
 
 | Decision variable                             | Type           | Value                                      | Initial value      |
 |-----------------------------------------------|----------------|--------------------------------------------|--------------------|
 | `problem.unit_vector_decision_variable(rows)` | `UnitVector`   | unit vector                                | e₁ = [1, 0, …, 0]ᵀ |
 | `problem.translation2_decision_variable()`    | `Translation2` | [x, y]                                     | 0                  |
 | `problem.translation3_decision_variable()`    | `Translation3` | [x, y, z]                                  | 0                  |
+| `problem.rotation2_decision_variable()`       | `Rotation2`    | angle in radians, in (−π, π]               | 0                  |
+| `problem.rotation3_decision_variable()`       | `Rotation3`    | unit quaternion [w, x, y, z]               | identity           |
 
-`set_value()` takes the same form as `value()` and normalizes unit vectors. The types are in `sleipnir.autodiff`.
+`set_value()` takes the same form as `value()` and normalizes unit vectors and quaternions. The types are in `sleipnir.autodiff`.
 
-Each decision variable has a parameter counterpart with the same initial value, like `problem.unit_vector_parameter(n)`, for known values that change between solves.
+Each decision variable has a parameter counterpart with the same initial value, like `problem.rotation2_parameter()`, for known values that change between solves. Use them instead of building a type from parameters, like `Rotation2(problem.parameter())`, whose `set_value()` can't change its value and whose expressions evaluate cos and sin.
 
 The types support these operations:
 
+* Rotations compose with `*` (`a * b` applies `b`, then `a`), and have `inverse()` and `relative_to(other)`, which is `other.inverse() * self`.
+* Unit vectors and translations rotate with `v.rotate_by(rotation)`.
+* `Rotation2` has `cos()`, `sin()`, and `angle()`. `Rotation3` has `w()`, `x()`, `y()`, `z()`, and `to_vector()`, which returns the rotation vector (axis times angle). Both have `to_matrix()`.
+* `Rotation2(angle)` and `Rotation3(rvec)` construct rotations from an angle or rotation vector, which can be constants or autodiff variables. `Rotation3(w, x, y, z)` constructs one from a quaternion.
 * `Translation2` and `Translation3` have `x()`, `y()`, `z()`, `distance()`, and `squared_distance()`.
 
 #### Constraints
 
-Use `==` between two values of the same type to constrain them equal. For unit vectors, it constrains their relative direction, which is one equation per degree of freedom with no spurious solutions. A `UnitVector` can also equal a constant direction, but not a `RealMatrix`. Elementwise alternatives are worse:
+Use `==` between two values of the same type to constrain them equal. It constrains their relative angle or rotation vector, which is one equation per degree of freedom with no spurious solutions. A `UnitVector` can also equal a constant direction, but not a `RealMatrix`. Elementwise alternatives are worse:
 
 * `n == d` with `n` and `d` as `RealMatrix` gives n equations for a unit vector with n − 1 degrees of freedom, so the constraints are redundant.
+* `rotation.cos() == math.cos(θ)` and `rotation.sin() == math.sin(θ)` gives two equations for one degree of freedom.
+* `rotation.sin() == 0` is also satisfied by the opposite heading.
 
 If both sides of a `UnitVector` equality are decision variables, set their initial values before creating the constraint, and don't start them exactly opposite each other.
 
@@ -521,6 +529,15 @@ For tolerances, use quantities that are smooth near the bound. Angles and distan
 
 ```python
 from sleipnir.autodiff import RealMatrix
+from sleipnir.optimization import bounds
+
+# Heading within ±tol of target. The relative angle only wraps when the
+# rotations are opposite, so ranges that cross ±π work.
+problem.subject_to(bounds(-tol, z.relative_to(target).angle(), tol))
+
+# 3D rotation within tol of target
+e = q.relative_to(target).to_vector()
+problem.subject_to(e.T @ e <= tol**2)
 
 # Position within tol of target
 problem.subject_to(t.squared_distance(target) <= tol**2)
@@ -529,8 +546,10 @@ problem.subject_to(t.squared_distance(target) <= tol**2)
 problem.subject_to(n.dot(RealMatrix(d)) >= math.cos(tol))
 ```
 
+A heading range [θ_min, θ_max] is a center (θ_min + θ_max)/2 and a tolerance (θ_max − θ_min)/2.
+
 #### Iteration callbacks
 
-`IterationInfo.x` contains the decision variables' values, with each manifold variable's components in order. The gradient, Hessian, and Jacobians are with respect to the manifold's tangent space, which has one dimension per degree of freedom, so they have fewer columns than `x` has rows when the problem has manifold variables.
+`IterationInfo.x` contains the decision variables' values, with each manifold variable's components in order: a `Rotation2`'s cos θ and sin θ and a `Rotation3`'s w, x, y, and z. The gradient, Hessian, and Jacobians are with respect to the manifold's tangent space, which has one dimension per degree of freedom, so they have fewer columns than `x` has rows when the problem has manifold variables.
 
 See [algorithms.md](algorithms.md#manifold-optimization) for how the solver handles manifold variables.

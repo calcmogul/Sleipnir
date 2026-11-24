@@ -1791,9 +1791,9 @@ constexpr char mkd_doc_slp_IterationInfo[] =
 R"doc(Solver iteration information exposed to an iteration callback.
 
 If some decision variables lie on a manifold (e.g., from
-Problem::unit_vector_decision_variable()), x is the point in the
-ambient space, and the derivatives are with respect to the manifold's
-tangent space at x, so they have fewer columns than x has rows.
+Problem::rotation3_decision_variable()), x is the point in the ambient
+space, and the derivatives are with respect to the manifold's tangent
+space at x, so they have fewer columns than x has rows.
 
 Template Args:
     Scalar: Scalar type.)doc";
@@ -2230,7 +2230,11 @@ Defaults to the square root of the scalar type's machine epsilon.)doc";
 
 constexpr char mkd_doc_slp_Problem[] = R"doc()doc";
 
-constexpr char mkd_doc_slp_Problem_2[] =
+constexpr char mkd_doc_slp_Problem_2[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Problem_3[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Problem_4[] =
 R"doc(This class allows the user to pose a constrained nonlinear
 optimization problem in natural mathematical notation and solve it.
 
@@ -2258,7 +2262,7 @@ mathematical form and it'll be converted for them.
 Template Args:
     Scalar: Scalar type.)doc";
 
-constexpr char mkd_doc_slp_Problem_3[] = R"doc()doc";
+constexpr char mkd_doc_slp_Problem_5[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Problem_Problem[] = R"doc(Constructs the optimization problem.)doc";
 
@@ -2564,6 +2568,66 @@ Args:
 
 Returns:
     A matrix of decision variables in the optimization problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_rotation2_decision_variable[] =
+R"doc(Creates a 2D rotation decision variable in the optimization problem.
+
+The solver keeps the rotation's complex number unit-length by stepping
+along SO(2) instead of through ℝ², so no equality constraint is
+needed.
+
+The rotation has an initial value of zero radians. Values set
+elsewhere are normalized when the solve starts.
+
+Returns:
+    A 2D rotation of decision variables in the optimization problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_rotation2_parameter[] =
+R"doc(Creates a 2D rotation parameter in the optimization problem.
+
+A parameter is a constant whose value can be changed between solves
+with set_value(). Unlike constants, parameters aren't folded into
+expressions.
+
+The rotation's complex number is two parameters. The rotation has an
+initial value of zero radians.
+
+Returns:
+    A 2D rotation of parameters in the optimization problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_rotation3_decision_variable[] =
+R"doc(Creates a 3D rotation decision variable in the optimization problem.
+
+The solver keeps the quaternion unit-length by stepping along SO(3)
+instead of through ℝ⁴, so no equality constraint is needed.
+
+The rotation has an initial value of the identity. Values set
+elsewhere are normalized when the solve starts.
+
+Returns:
+    A 3D rotation of decision variables in the optimization problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_rotation3_parameter[] =
+R"doc(Creates a 3D rotation parameter in the optimization problem.
+
+A parameter is a constant whose value can be changed between solves
+with set_value(). Unlike constants, parameters aren't folded into
+expressions.
+
+The rotation's quaternion is four parameters. The rotation has an
+initial value of the identity, and set_value() normalizes its
+argument.
+
+Returns:
+    A 3D rotation of parameters in the optimization problem.
 
 )doc";
 
@@ -4249,6 +4313,283 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_Rotation2[] =
+R"doc(A 2D rotation of autodiff expressions.
+
+The rotation by θ is stored as the unit complex number cos θ + i sin
+θ, so it has no discontinuity at ±π.
+
+Rotations are created by Problem::rotation2_decision_variable(), which
+keeps them unit-length during the solve, from constant angles, and by
+composition and inversion.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_Rotation2_2[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation2_Rotation2[] =
+R"doc(Constructs a constant rotation.
+
+Args:
+    angle: The rotation angle in radians.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation2_Rotation2_2[] =
+R"doc(Constructs a rotation from an angle that depends on other variables.
+
+This is the inverse of angle() for angles in (−π, π]. It's the
+exponential map of SO(2).
+
+Args:
+    angle: The rotation angle in radians.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation2_Rotation2_3[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation2_angle[] =
+R"doc(Returns the rotation angle in radians.
+
+The angle is in (−π, π]. It's discontinuous at ±π, so prefer cos() and
+sin() in costs and constraints whose solutions may be near ±π.
+
+Returns:
+    The rotation angle in radians.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation2_cos[] =
+R"doc(Returns the real component cos θ.
+
+Returns:
+    The real component cos θ.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation2_inverse[] =
+R"doc(Returns the inverse rotation.
+
+For a unit complex number, this is the conjugate.
+
+Returns:
+    The inverse rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation2_m_cos[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation2_m_sin[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation2_relative_to[] =
+R"doc(Returns this rotation relative to another rotation.
+
+The result is the rotation that takes the other rotation to this one,
+other⁻¹ * this. Its angle() is the angle from the other rotation to
+this one, in (−π, π], so it only wraps when the rotations are
+opposite.
+
+Args:
+    other: The rotation this one is expressed relative to.
+
+Returns:
+    This rotation relative to the other rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation2_scalar_cos[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation2_scalar_sin[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation2_set_value[] =
+R"doc(Sets the rotation angle.
+
+This is only meaningful for rotations created by
+Problem::rotation2_decision_variable() or
+Problem::rotation2_parameter().
+
+Args:
+    angle: The rotation angle in radians.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation2_sin[] =
+R"doc(Returns the imaginary component sin θ.
+
+Returns:
+    The imaginary component sin θ.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation2_to_matrix[] =
+R"doc(Returns the 2x2 rotation matrix.
+
+Returns:
+    The 2x2 rotation matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation2_value[] =
+R"doc(Returns the rotation angle's value in radians, in (−π, π].
+
+Returns:
+    The rotation angle's value in radians.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3[] =
+R"doc(A 3D rotation of autodiff expressions.
+
+The rotation is stored as a unit quaternion with components ordered
+(w, x, y, z), where w is the scalar part.
+
+Rotations are created by Problem::rotation3_decision_variable(), which
+keeps them unit-length during the solve, from constant Eigen
+quaternions, and by composition and inversion.
+
+q and −q represent the same rotation.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_Rotation3_2[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation3_Rotation3[] =
+R"doc(Constructs a constant rotation from a quaternion, which is normalized.
+
+Args:
+    q: The value. It must have nonzero norm.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3_Rotation3_2[] =
+R"doc(Constructs a rotation from a rotation vector (axis times angle in
+radians).
+
+This is the inverse of to_vector() for angles in [0, π]. It's the
+exponential map of SO(3). Its value and derivatives are accurate for
+all rotation vectors, including zero.
+
+Args:
+    rvec: The rotation vector. Must be 3x1.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3_Rotation3_3[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation3_components[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation3_from_rotation_vector[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation3_inverse[] =
+R"doc(Returns the inverse rotation.
+
+For a unit quaternion, this is the conjugate.
+
+Returns:
+    The inverse rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3_m_w[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation3_m_x[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation3_m_y[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation3_m_z[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation3_relative_to[] =
+R"doc(Returns this rotation relative to another rotation.
+
+The result is the rotation that takes the other rotation to this one
+in the other rotation's frame, other⁻¹ * this. Its to_vector() is the
+rotation vector from the other rotation to this one.
+
+Args:
+    other: The rotation this one is expressed relative to.
+
+Returns:
+    This rotation relative to the other rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3_rotate[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Rotation3_set_value[] =
+R"doc(Sets the rotation's value to a quaternion, which is normalized.
+
+This is only meaningful for rotations created by
+Problem::rotation3_decision_variable() or
+Problem::rotation3_parameter().
+
+Args:
+    q: The value. It must have nonzero norm.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3_to_matrix[] =
+R"doc(Returns the 3x3 rotation matrix.
+
+Returns:
+    The 3x3 rotation matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3_to_vector[] =
+R"doc(Returns the rotation vector (axis times angle in radians).
+
+The angle is in [0, π]. The rotation vector is discontinuous at π,
+where the axis flips, so it's meant for rotations well below π, like
+residuals between nearby rotations. Its value, gradient, and Hessian
+are accurate near the identity.
+
+Returns:
+    The rotation vector.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3_value[] =
+R"doc(Returns the rotation's value as a unit quaternion.
+
+Returns:
+    The quaternion's value.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3_w[] =
+R"doc(Returns the scalar component w.
+
+Returns:
+    The scalar component w.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3_x[] =
+R"doc(Returns the vector component x.
+
+Returns:
+    The vector component x.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3_y[] =
+R"doc(Returns the vector component y.
+
+Returns:
+    The vector component y.
+
+)doc";
+
+constexpr char mkd_doc_slp_Rotation3_z[] =
+R"doc(Returns the vector component z.
+
+Returns:
+    The vector component z.
+
+)doc";
+
 constexpr char mkd_doc_slp_TimestepMethod[] = R"doc(Enum describing the type of system timestep.)doc";
 
 constexpr char mkd_doc_slp_TimestepMethod_FIXED[] = R"doc(The timestep is a fixed constant.)doc";
@@ -4336,6 +4677,17 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_Translation2_rotate_by[] =
+R"doc(Returns this translation rotated by a rotation.
+
+Args:
+    rotation: The rotation.
+
+Returns:
+    The rotated translation.
+
+)doc";
+
 constexpr char mkd_doc_slp_Translation2_set_value[] =
 R"doc(Sets the translation's value.
 
@@ -4398,7 +4750,9 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_Translation3[] =
+constexpr char mkd_doc_slp_Translation3[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Translation3_2[] =
 R"doc(A 3D translation of autodiff expressions.
 
 A translation is a point or a displacement (x, y, z). It converts
@@ -4461,6 +4815,17 @@ R"doc(Implicit conversion to a 3x1 RealMatrix.
 
 Returns:
     The translation as a 3x1 RealMatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_rotate_by[] =
+R"doc(Returns this translation rotated by a rotation.
+
+Args:
+    rotation: The rotation.
+
+Returns:
+    The rotated translation.
 
 )doc";
 
@@ -4548,8 +4913,8 @@ R"doc(A unit-length column vector of autodiff expressions.
 UnitVectors are created by Problem::unit_vector_decision_variable(n),
 which keeps them on the unit sphere during the solve, from constant
 Eigen vectors, and by operations that preserve unit length, like
-negation. Operations that don't preserve unit length, like addition
-and scaling, return a RealMatrix.
+negation and rotate_by(). Operations that don't preserve unit length,
+like addition and scaling, return a RealMatrix.
 
 Elements are read-only. A UnitVector converts implicitly to a
 RealMatrix for use in general expressions.
@@ -4563,8 +4928,8 @@ R"doc(A unit-length column vector of autodiff expressions.
 UnitVectors are created by Problem::unit_vector_decision_variable(n),
 which keeps them on the unit sphere during the solve, from constant
 Eigen vectors, and by operations that preserve unit length, like
-negation. Operations that don't preserve unit length, like addition
-and scaling, return a RealMatrix.
+negation and rotate_by(). Operations that don't preserve unit length,
+like addition and scaling, return a RealMatrix.
 
 Elements are read-only. A UnitVector converts implicitly to a
 RealMatrix for use in general expressions.
@@ -4668,6 +5033,28 @@ R"doc(Converts the vector to a RealMatrix.
 
 Returns:
     The vector as a RealMatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_rotate_by[] =
+R"doc(Returns this 3D unit vector rotated by a rotation.
+
+Args:
+    q: The rotation.
+
+Returns:
+    The rotated unit vector.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_rotate_by_2[] =
+R"doc(Returns this 2D unit vector rotated by a rotation.
+
+Args:
+    z: The rotation.
+
+Returns:
+    The rotated unit vector.
 
 )doc";
 
@@ -5743,7 +6130,11 @@ Args:
 
 constexpr char mkd_doc_slp_operator_eq_10[] =
 R"doc(Equality operator that returns an equality constraint for two
-translations.
+rotations.
+
+The constraint is that the angle of lhs relative to rhs is zero. Its
+only solution is lhs = rhs, and it's well-conditioned for rotations up
+to π apart.
 
 Args:
     lhs: Left-hand side.
@@ -5756,7 +6147,12 @@ Returns:
 
 constexpr char mkd_doc_slp_operator_eq_11[] =
 R"doc(Equality operator that returns an equality constraint for two
-translations.
+rotations.
+
+The constraint is that the rotation vector of lhs relative to rhs is
+zero. Its only solution is lhs = rhs (as rotations, so q and −q are
+both solutions), and it's well-conditioned for rotations up to π
+apart.
 
 Args:
     lhs: Left-hand side.
@@ -5768,6 +6164,32 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_eq_12[] =
+R"doc(Equality operator that returns an equality constraint for two
+translations.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraint.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_13[] =
+R"doc(Equality operator that returns an equality constraint for two
+translations.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraint.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_14[] =
 R"doc(Equality operator that returns an equality constraint for two unit
 vectors.
 
@@ -5788,7 +6210,7 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_eq_13[] =
+constexpr char mkd_doc_slp_operator_eq_15[] =
 R"doc(Equality operator that returns an equality constraint for a unit
 vector and a constant direction.
 
@@ -5804,7 +6226,7 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_eq_14[] =
+constexpr char mkd_doc_slp_operator_eq_16[] =
 R"doc(Equality operator that returns an equality constraint for a constant
 direction and a unit vector.
 
@@ -5993,26 +6415,30 @@ Template Args:
 )doc";
 
 constexpr char mkd_doc_slp_operator_mul_10[] =
-R"doc(Scales a translation.
+R"doc(Composes two rotations with complex multiplication.
+
+lhs * rhs rotates by rhs, then by lhs, so the angles add.
 
 Args:
-    lhs: The translation.
-    rhs: The factor.
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
 
 Returns:
-    The scaled translation.
+    The composed rotation.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_mul_11[] =
-R"doc(Scales a translation.
+R"doc(Composes two rotations with the Hamilton product.
+
+lhs * rhs rotates by rhs, then by lhs.
 
 Args:
-    lhs: The factor.
-    rhs: The translation.
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
 
 Returns:
-    The scaled translation.
+    The composed rotation.
 
 )doc";
 
@@ -6041,26 +6467,26 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_mul_14[] =
-R"doc(Multiplication operator.
+R"doc(Scales a translation.
 
 Args:
-    lhs: Operator left-hand side.
-    rhs: Operator right-hand side.
+    lhs: The translation.
+    rhs: The factor.
 
 Returns:
-    The product.
+    The scaled translation.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_mul_15[] =
-R"doc(Multiplication operator.
+R"doc(Scales a translation.
 
 Args:
-    lhs: Operator left-hand side.
-    rhs: Operator right-hand side.
+    lhs: The factor.
+    rhs: The translation.
 
 Returns:
-    The product.
+    The scaled translation.
 
 )doc";
 
@@ -6077,6 +6503,30 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_mul_17[] =
+R"doc(Multiplication operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The product.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_18[] =
+R"doc(Multiplication operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The product.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_19[] =
 R"doc(Multiplication operator.
 
 Args:

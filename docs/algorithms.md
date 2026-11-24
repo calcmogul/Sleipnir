@@ -438,7 +438,7 @@ The algorithm is described in more detail in section 3.8 of [^2].
 
 ## Manifold optimization
 
-Decision variables created with `Problem::unit_vector_decision_variable(n)` lie on a manifold M embedded in ℝⁿ, the unit sphere. The solver keeps them on the manifold instead of adding a unit-norm equality constraint. This removes a constraint and its multiplier, keeps every iterate feasible, and removes the null space a unit-norm constraint leaves in the KKT matrix. See [usage.md](usage.md#manifold-optimization) for how to use them.
+Decision variables created with `Problem::unit_vector_decision_variable(n)`, `Problem::rotation2_decision_variable()`, or `Problem::rotation3_decision_variable()` lie on a manifold M embedded in ℝⁿ: the unit sphere, the unit complex numbers representing SO(2), or the unit quaternions representing SO(3). The solver keeps them on the manifold instead of adding a unit-norm equality constraint. This removes a constraint and its multiplier, keeps every iterate feasible, and removes the null space a unit-norm constraint leaves in the KKT matrix. See [usage.md](usage.md#manifold-optimization) for how to use them.
 
 ### Retractions
 
@@ -446,9 +446,11 @@ Each iterate x is stored in the ambient space ℝⁿ, but steps p are taken in t
 
 ```
   Sphere: R_x(p) = (x + Bp)/‖x + Bp‖
+  SO(2):  R_z(p) = z exp(ip)
+  SO(3):  R_q(p) = q ⊗ exp(p/2)
 ```
 
-where B is an orthonormal basis for the sphere's tangent space at x, computed from a Householder reflection. Euclidean decision variables use R_x(p) = x + p.
+where B is an orthonormal basis for the sphere's tangent space at x, computed from a Householder reflection, and exp(φ) = [cos‖φ‖, sin‖φ‖ φ/‖φ‖] in (w, x, y, z) order. For SO(2), z = cos θ + i sin θ and p is an angle in radians. For SO(3), p is a rotation vector in the body frame. Euclidean decision variables use R_x(p) = x + p.
 
 ### Derivatives in the tangent space
 
@@ -462,27 +464,33 @@ Each iteration minimizes f(R_x(p)) over p, subject to c(R_x(p)) constraints, nea
 
 The last term is the curvature correction. Unconstrained in ℝⁿ, ∇ₓL would be zero at a solution and the term would vanish, but on M only the tangent component Jᵀ∇ₓL is zero, and the normal component generally isn't. Dropping the term would make the Newton step use the wrong Hessian and lose quadratic convergence.
 
-The sphere's retraction satisfies ∇²ₚₚRᵢ = −xᵢI, which follows from its second-order expansion
+Both retractions satisfy ∇²ₚₚRᵢ = −κxᵢI, which follows from their second-order expansions
 
 ```
   Sphere: R_x(p) = x + Bp − x‖p‖²/2 + O(‖p‖³)
+  SO(2):  R_z(p) = z + izp − zp²/2 + O(p³)
+  SO(3):  R_q(p) = q + Jp − q‖p‖²/8 + O(‖p‖³)
 ```
 
-so the correction for each sphere block is −(xᵀ∇ₓL)I.
+so κ = 1 for the sphere and SO(2), and κ = 1/4 for SO(3), and the correction for each manifold block is −κ(xᵀ∇ₓL)I.
 
 The KKT system, its inertia, and the step are k-dimensional, while the cost and constraints are evaluated at ambient points R_x(αp) during the line search. Feasibility restoration uses the same manifold, extended by the Euclidean relaxation variables.
 
 ### Constraints on manifold variables
 
-Constraining manifold variables elementwise is ill-posed. `n == d` for unit vectors in ℝⁿ would give n equations for n − 1 degrees of freedom, so the constraint Jacobian is rank-deficient.
+Constraining manifold variables elementwise is ill-posed. `n == d` for unit vectors in ℝⁿ would give n equations for n − 1 degrees of freedom, so the constraint Jacobian is rank-deficient. `cos θ == cos θ*` and `sin θ == sin θ*` would give two equations for one degree of freedom. Writing a constraint on the angle instead has its own problems: sin(θ − θ*) = 0 is also satisfied at θ* + π, and a plain angle wraps at ±π.
 
-`operator==` on `UnitVector` constrains the logarithm of the relative value instead. That gives one equation per tangent dimension, with Jacobian I at the solution:
+`operator==` on `UnitVector`, `Rotation2`, and `Rotation3` constrains the logarithm of the relative value instead. That gives one equation per tangent dimension, with Jacobian I at the solution:
 
 ```
+  Rotation2:  angle(z₂⁻¹ z₁) = 0                 (1 equation)
+  Rotation3:  rotation vector of q₂⁻¹ ⊗ q₁ = 0  (3 equations)
   UnitVector: Bᵀ log_b(a) = 0                   (n − 1 equations)
 ```
 
-The logarithm's only zero is the solution, and its discontinuity is at the point opposite the solution. The constraint is therefore well-conditioned from anywhere except exactly opposite. log_b(a) = atan2(‖r‖, a·b)/‖r‖ r with r = a − (a·b)b is undefined for exactly opposite unit vectors. B is an orthonormal basis of b's tangent space from a Householder reflection built around b's value when the constraint is created. If b is constant, B is exact. If b is a decision variable, B stays valid unless b moves to a single point more than 90° from that value.
+The logarithm's only zero is the solution, and its discontinuity is at the point opposite the solution. The constraint is therefore well-conditioned from anywhere except exactly opposite. Even there, the 2D angle and 3D rotation vector pick a direction, so a heading constraint started from the opposite heading converges in one iteration. log_b(a) = atan2(‖r‖, a·b)/‖r‖ r with r = a − (a·b)b is undefined for exactly opposite unit vectors. B is an orthonormal basis of b's tangent space from a Householder reflection built around b's value when the constraint is created. If b is constant, B is exact. If b is a decision variable, B stays valid unless b moves to a single point more than 90° from that value.
+
+Tolerance constraints don't need special handling. They're written with quantities that are smooth near the bound: the relative 2D angle, whose discontinuity is opposite the reference, and squared norms like ‖Δt‖² and ‖rotation vector‖², since the norms themselves are cone-shaped at zero, where their derivatives are undefined.
 
 ## Works cited
 

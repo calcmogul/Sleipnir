@@ -6,6 +6,7 @@
 #include <Eigen/Core>
 #include <sleipnir/autodiff/real.hpp>
 #include <sleipnir/autodiff/real_matrix.hpp>
+#include <sleipnir/autodiff/rotation2.hpp>
 #include <sleipnir/autodiff/translation2.hpp>
 
 #include "docstrings.hpp"
@@ -45,6 +46,8 @@ void bind_translation2(nb::class_<Translation2<double>>& cls) {
           DOC(slp, Translation2, distance));
   cls.def("squared_distance", &T::squared_distance, "other"_a,
           DOC(slp, Translation2, squared_distance));
+  cls.def("rotate_by", &T::rotate_by, "rotation"_a,
+          DOC(slp, Translation2, rotate_by));
 
   cls.def(
       "__add__", [](const T& lhs, const T& rhs) { return lhs + rhs; },
@@ -57,16 +60,16 @@ void bind_translation2(nb::class_<Translation2<double>>& cls) {
       DOC(slp, operator, sub, 9));
   cls.def(
       "__mul__", [](const T& lhs, const V& rhs) { return lhs * rhs; },
-      nb::is_operator(), "rhs"_a, DOC(slp, operator, mul, 10));
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, mul, 12));
   cls.def(
       "__rmul__", [](const T& rhs, const V& lhs) { return lhs * rhs; },
-      nb::is_operator(), "lhs"_a, DOC(slp, operator, mul, 11));
+      nb::is_operator(), "lhs"_a, DOC(slp, operator, mul, 13));
   cls.def(
       "__truediv__", [](const T& lhs, const V& rhs) { return lhs / rhs; },
       nb::is_operator(), "rhs"_a, DOC(slp, operator, div, 7));
   cls.def(
       "__eq__", [](const T& lhs, const T& rhs) { return lhs == rhs; },
-      nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 10));
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 12));
 }
 
 }  // namespace slp

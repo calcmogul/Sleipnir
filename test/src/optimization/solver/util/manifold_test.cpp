@@ -9,6 +9,8 @@
 #include <catch2/matchers/catch_matchers.hpp>
 #include <sleipnir/optimization/solver/util/manifold.hpp>
 #include <sleipnir/optimization/solver/util/manifold_type.hpp>
+#include <sleipnir/optimization/solver/util/so2_manifold.hpp>
+#include <sleipnir/optimization/solver/util/so3_manifold.hpp>
 #include <sleipnir/optimization/solver/util/sphere_manifold.hpp>
 
 #include "catch_matchers.hpp"
@@ -17,12 +19,14 @@
 
 namespace {
 
-// Euclidean, sphere S², Euclidean, sphere S¹, Euclidean
+// Euclidean, sphere S², Euclidean, SO(3), sphere S¹, SO(2)
 template <typename T>
 slp::Manifold<T> make_manifold() {
   return slp::Manifold<T>{
       {slp::ManifoldBlock<T>{slp::sphere_manifold<T>, 1, 3},
-       slp::ManifoldBlock<T>{slp::sphere_manifold<T>, 10, 2}}};
+       slp::ManifoldBlock<T>{slp::so3_manifold<T>, 6, 4},
+       slp::ManifoldBlock<T>{slp::sphere_manifold<T>, 10, 2},
+       slp::ManifoldBlock<T>{slp::so2_manifold<T>, 12, 2}}};
 }
 
 template <typename T>
@@ -45,8 +49,8 @@ TEMPLATE_TEST_CASE("Manifold - Dimensions", "[Manifold]", SCALAR_TYPES) {
   auto manifold = make_manifold<T>();
   CHECK_FALSE(manifold.is_euclidean());
 
-  // 14 − (3 − 2) − (2 − 1)
-  CHECK(manifold.tangent_dimension(14) == 12);
+  // 14 − (3 − 2) − (4 − 3) − (2 − 1) − (2 − 1)
+  CHECK(manifold.tangent_dimension(14) == 10);
 }
 
 TEMPLATE_TEST_CASE("Manifold - Projection", "[Manifold]", SCALAR_TYPES) {
@@ -59,16 +63,18 @@ TEMPLATE_TEST_CASE("Manifold - Projection", "[Manifold]", SCALAR_TYPES) {
   CHECK_THAT(x.segment(1, 3).norm(), WithinAbs(T(1), T(1e-6)));
   CHECK(x[4] == T(1.5));
   CHECK(x[5] == T(-2));
-  CHECK(x[6] == T(0.6));
+  CHECK_THAT(x.segment(6, 4).norm(), WithinAbs(T(1), T(1e-6)));
   CHECK_THAT(x.segment(10, 2).norm(), WithinAbs(T(1), T(1e-6)));
-  CHECK(x[12] == T(-0.6));
+  CHECK_THAT(x.segment(12, 2).norm(), WithinAbs(T(1), T(1e-6)));
 
   // Zero blocks go to the default point
   Eigen::VectorX<T> zero = Eigen::VectorX<T>::Zero(14);
   manifold.project(zero);
   CHECK(zero[1] == T(1));
+  CHECK(zero[6] == T(1));
   CHECK(zero[10] == T(1));
-  CHECK(zero.sum() == T(2));
+  CHECK(zero[12] == T(1));
+  CHECK(zero.sum() == T(4));
 }
 
 TEMPLATE_TEST_CASE("Manifold - Retraction stays on manifold", "[Manifold]",
@@ -78,8 +84,8 @@ TEMPLATE_TEST_CASE("Manifold - Retraction stays on manifold", "[Manifold]",
   auto manifold = make_manifold<T>();
   auto x = make_point<T>();
 
-  Eigen::VectorX<T> p{{T(1), T(2), T(-3), T(0.5), T(-1), T(4), T(0.25), T(-2),
-                       T(3), T(0.7), T(-0.4), T(1.2)}};
+  Eigen::VectorX<T> p{
+      {T(1), T(2), T(-3), T(0.5), T(-1), T(4), T(0.25), T(-2), T(3), T(0.7)}};
 
   Eigen::VectorX<T> result;
   manifold.retract(x, T(0.5), p, result);
@@ -88,11 +94,11 @@ TEMPLATE_TEST_CASE("Manifold - Retraction stays on manifold", "[Manifold]",
   CHECK(result[0] == x[0] + T(0.5) * p[0]);
   CHECK(result[4] == x[4] + T(0.5) * p[3]);
   CHECK(result[5] == x[5] + T(0.5) * p[4]);
-  CHECK(result[9] == x[9] + T(0.5) * p[8]);
-  CHECK(result[12] == x[12] + T(0.5) * p[10]);
 
   CHECK_THAT(result.segment(1, 3).norm(), WithinAbs(T(1), T(1e-6)));
+  CHECK_THAT(result.segment(6, 4).norm(), WithinAbs(T(1), T(1e-6)));
   CHECK_THAT(result.segment(10, 2).norm(), WithinAbs(T(1), T(1e-6)));
+  CHECK_THAT(result.segment(12, 2).norm(), WithinAbs(T(1), T(1e-6)));
 
   // Zero step leaves x unchanged
   manifold.retract(x, T(0), p, result);

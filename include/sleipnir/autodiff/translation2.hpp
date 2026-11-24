@@ -10,6 +10,7 @@
 
 #include "sleipnir/autodiff/real.hpp"
 #include "sleipnir/autodiff/real_matrix.hpp"
+#include "sleipnir/autodiff/rotation2.hpp"
 #include "sleipnir/util/assert.hpp"
 
 namespace slp {
@@ -119,6 +120,16 @@ class Translation2 {
     Real<Scalar> dx = m_x - other.m_x;
     Real<Scalar> dy = m_y - other.m_y;
     return dx * dx + dy * dy;
+  }
+
+  /// Returns this translation rotated by a rotation.
+  ///
+  /// @param rotation The rotation.
+  /// @return The rotated translation.
+  Translation2 rotate_by(const Rotation2<Scalar>& rotation) const {
+    const auto& c = rotation.cos();
+    const auto& s = rotation.sin();
+    return Translation2{c * m_x - s * m_y, s * m_x + c * m_y};
   }
 
  private:

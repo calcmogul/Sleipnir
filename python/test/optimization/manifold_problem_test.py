@@ -2,9 +2,14 @@ import math
 
 import numpy as np
 import pytest
+from scipy.spatial.transform import Rotation
 from sleipnir.autodiff import (
     ExpressionType,
+    Real,
     RealMatrix,
+    Rotation3,
+    Translation2,
+    Translation3,
     UnitVector,
 )
 from sleipnir.optimization import (
@@ -93,3 +98,143 @@ def test_sphere_with_constraints_matches_unit_norm_equality_constraint(
     assert constrained_problem.solve(diagnostics=True) == ExitStatus.SUCCESS
 
     assert n.value() == pytest.approx(m.value().ravel(), abs=solution_tolerance(10))
+
+
+@pytest.mark.parametrize("initial_angle", [0.0, 1.0, 3.0])
+def test_wahba(initial_angle: float) -> None:
+    q_true_axis = np.array([1.0, -2.0, 0.5])
+    q_true = Rotation.from_rotvec(2.5 * q_true_axis / np.linalg.norm(q_true_axis))
+
+    body_vectors = [
+        np.array([[1.0], [0.0], [0.0]]),
+        np.array([[0.0], [1.0], [0.0]]),
+        np.array([[0.5], [0.5], [0.7]]),
+    ]
+
+    problem = Problem()
+    q = problem.rotation3_decision_variable()
+    initial_axis = np.array([0.3, 1.0, 0.0])
+    q.set_value(
+        *Rotation.from_rotvec(
+            initial_angle * initial_axis / np.linalg.norm(initial_axis)
+        ).as_quat(scalar_first=True)
+    )
+
+    cost = Real(0.0)
+    for v in body_vectors:
+        w = q_true.as_matrix() @ v
+        cost += (
+            Translation3(v.ravel())
+            .rotate_by(q)
+            .squared_distance(Translation3(w.ravel()))
+        )
+    problem.minimize(cost)
+    check_iterates_on_manifold(problem, 0, 4)
+
+    assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS
+
+    # q and −q are the same rotation
+    assert abs(q.value() @ q_true.as_quat(scalar_first=True)) == pytest.approx(
+        1.0, abs=solution_tolerance(1)
+    )
+
+
+def test_rotation_averaging() -> None:
+    rotations = [
+        Rotation.from_rotvec(angle * np.array(axis) / np.linalg.norm(axis))
+        for angle, axis in [
+            (0.3, [1.0, 0.0, 0.0]),
+            (0.5, [0.0, 1.0, 0.2]),
+            (-0.4, [0.3, 0.3, 1.0]),
+            (0.2, [-1.0, 0.5, 0.5]),
+        ]
+    ]
+
+    problem = Problem()
+    q = problem.rotation3_decision_variable()
+
+    residuals = []
+    cost = Real(0.0)
+    for rotation in rotations:
+        r = (Rotation3(*rotation.as_quat(scalar_first=True)).inverse() * q).to_vector()
+        cost += (r.T @ r)[0]
+        residuals.append(r)
+    problem.minimize(cost)
+    check_iterates_on_manifold(problem, 0, 4)
+
+    assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS
+
+    # The minimizer of Σᵢ ‖log(qᵢ⁻¹q)‖² is the Karcher mean, where
+    # Σᵢ log(qᵢ⁻¹q) = 0
+    assert sum(r.value() for r in residuals) == pytest.approx(
+        np.zeros((3, 1)), abs=solution_tolerance(10)
+    )
+
+
+def test_2d_point_set_registration() -> None:
+    # The true angle is near π, and the initial guess is on the other side of
+    # ±π, where an angle decision variable would have to wrap
+    θ_true = 2.8
+    R_true = np.array(
+        [[math.cos(θ_true), -math.sin(θ_true)], [math.sin(θ_true), math.cos(θ_true)]]
+    )
+    t_true = np.array([1.0, -0.5])
+
+    points = [
+        Translation2(1.0, 0.0),
+        Translation2(0.0, 2.0),
+        Translation2(-1.0, -1.0),
+        Translation2(2.0, 1.0),
+    ]
+
+    problem = Problem()
+    z = problem.rotation2_decision_variable()
+    t = problem.translation2_decision_variable()
+    z.set_value(-2.8)
+
+    cost = Real(0.0)
+    for p in points:
+        measured = R_true @ p.value() + t_true
+        cost += (p.rotate_by(z) + t).squared_distance(Translation2(measured))
+    problem.minimize(cost)
+    check_iterates_on_manifold(problem, 0, 2)
+
+    assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS
+
+    assert z.value() == pytest.approx(θ_true, abs=solution_tolerance(1))
+    assert t.value() == pytest.approx(t_true, abs=solution_tolerance(1))
+
+
+def test_pose_estimation_with_inequality_constraints() -> None:
+    q_true_axis = np.array([0.2, 1.0, -0.4])
+    q_true = Rotation.from_rotvec(1.2 * q_true_axis / np.linalg.norm(q_true_axis))
+    t_true = np.array([1.0, -0.5, 2.0])
+
+    points = [
+        Translation3(1.0, 0.0, 0.0),
+        Translation3(0.0, 2.0, 0.0),
+        Translation3(0.0, 0.0, -1.0),
+        Translation3(1.0, 1.0, 1.0),
+    ]
+
+    problem = Problem()
+    q = problem.rotation3_decision_variable()
+    t = problem.translation3_decision_variable()
+
+    cost = Real(0.0)
+    for p in points:
+        measured = q_true.as_matrix() @ p.value() + t_true
+        cost += (p.rotate_by(q) + t).squared_distance(Translation3(measured))
+    problem.minimize(cost)
+
+    # The translation bound is active, so the solution moves off the
+    # unconstrained optimum
+    problem.subject_to(t.z() <= 1.5)
+    problem.subject_to(t.x() >= -5.0)
+    check_iterates_on_manifold(problem, 0, 4)
+
+    assert problem.inequality_constraint_type() == ExpressionType.LINEAR
+    assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS
+
+    assert t.z().value() == pytest.approx(1.5, abs=solution_tolerance(1))
+    assert np.linalg.norm(q.value()) == pytest.approx(1.0, abs=rounding_tolerance(10))

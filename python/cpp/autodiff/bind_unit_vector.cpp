@@ -13,6 +13,8 @@
 #include <sleipnir/autodiff/real.hpp>
 #include <sleipnir/autodiff/real_matrix.hpp>
 #include <sleipnir/autodiff/real_submatrix.hpp>
+#include <sleipnir/autodiff/rotation2.hpp>
+#include <sleipnir/autodiff/rotation3.hpp>
 #include <sleipnir/autodiff/unit_vector.hpp>
 
 #include "docstrings.hpp"
@@ -105,6 +107,10 @@ void bind_unit_vector(nb::class_<UV>& cls) {
         return self.cross(VM(rhs));
       },
       "rhs"_a, DOC(slp, UnitVector, cross));
+  cls.def("rotate_by", &UV::rotate_by<Rotation3<double>>, "q"_a,
+          DOC(slp, UnitVector, rotate_by));
+  cls.def("rotate_by", &UV::rotate_by<Rotation2<double>>, "z"_a,
+          DOC(slp, UnitVector, rotate_by, 2));
 
   cls.def("__neg__", [](const UV& self) { return -self; });
   cls.def("__pos__", [](const UV& self) { return self; });
@@ -172,12 +178,12 @@ void bind_unit_vector(nb::class_<UV>& cls) {
     if constexpr (std::same_as<T, const UV&>) {
       cls.def(
           "__eq__", [](const UV& lhs, const UV& rhs) { return lhs == rhs; },
-          nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 12));
+          nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 14));
     } else if constexpr (std::same_as<T, nb::DRef<Eigen::MatrixXd>>) {
       cls.def(
           "__eq__",
           [](const UV& lhs, const Eigen::VectorXd& rhs) { return lhs == rhs; },
-          nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 13));
+          nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 15));
     }
     cls.def(
         "__lt__",

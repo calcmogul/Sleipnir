@@ -28,6 +28,8 @@
 #include "sleipnir/autodiff/jacobian.hpp"
 #include "sleipnir/autodiff/real.hpp"
 #include "sleipnir/autodiff/real_matrix.hpp"
+#include "sleipnir/autodiff/rotation2.hpp"
+#include "sleipnir/autodiff/rotation3.hpp"
 #include "sleipnir/autodiff/translation2.hpp"
 #include "sleipnir/autodiff/translation3.hpp"
 #include "sleipnir/autodiff/unit_vector.hpp"
@@ -46,6 +48,8 @@
 #include "sleipnir/optimization/solver/util/manifold.hpp"
 #include "sleipnir/optimization/solver/util/manifold_type.hpp"
 #include "sleipnir/optimization/solver/util/problem_scaling.hpp"
+#include "sleipnir/optimization/solver/util/so2_manifold.hpp"
+#include "sleipnir/optimization/solver/util/so3_manifold.hpp"
 #include "sleipnir/optimization/solver/util/sphere_manifold.hpp"
 #include "sleipnir/optimization/solver/util/time_trace.hpp"
 #include "sleipnir/util/assert.hpp"
@@ -324,6 +328,76 @@ class Problem {
   [[nodiscard]]
   Translation3<Scalar> translation3_parameter() {
     return Translation3<Scalar>{parameter(3)};
+  }
+
+  /// Creates a 2D rotation decision variable in the optimization problem.
+  ///
+  /// The solver keeps the rotation's complex number unit-length by stepping
+  /// along SO(2) instead of through ℝ², so no equality constraint is needed.
+  ///
+  /// The rotation has an initial value of zero radians. Values set elsewhere
+  /// are normalized when the solve starts.
+  ///
+  /// @return A 2D rotation of decision variables in the optimization problem.
+  [[nodiscard]]
+  Rotation2<Scalar> rotation2_decision_variable() {
+    m_manifold_blocks.emplace_back(
+        so2_manifold<Scalar>, static_cast<int>(m_decision_variables.size()), 2);
+
+    RealMatrix<Scalar> z = real_decision_variable(2);
+    z[0].set_value(Scalar(1));
+    return Rotation2<Scalar>{z[0], z[1]};
+  }
+
+  /// Creates a 2D rotation parameter in the optimization problem.
+  ///
+  /// A parameter is a constant whose value can be changed between solves with
+  /// set_value(). Unlike constants, parameters aren't folded into expressions.
+  ///
+  /// The rotation's complex number is two parameters. The rotation has an
+  /// initial value of zero radians.
+  ///
+  /// @return A 2D rotation of parameters in the optimization problem.
+  [[nodiscard]]
+  Rotation2<Scalar> rotation2_parameter() {
+    RealMatrix<Scalar> z = parameter(2);
+    z[0].set_value(Scalar(1));
+    return Rotation2<Scalar>{z[0], z[1]};
+  }
+
+  /// Creates a 3D rotation decision variable in the optimization problem.
+  ///
+  /// The solver keeps the quaternion unit-length by stepping along SO(3)
+  /// instead of through ℝ⁴, so no equality constraint is needed.
+  ///
+  /// The rotation has an initial value of the identity. Values set elsewhere
+  /// are normalized when the solve starts.
+  ///
+  /// @return A 3D rotation of decision variables in the optimization problem.
+  [[nodiscard]]
+  Rotation3<Scalar> rotation3_decision_variable() {
+    m_manifold_blocks.emplace_back(
+        so3_manifold<Scalar>, static_cast<int>(m_decision_variables.size()), 4);
+
+    RealMatrix<Scalar> q = real_decision_variable(4);
+    q[0].set_value(Scalar(1));
+    return Rotation3<Scalar>{q[0], q[1], q[2], q[3]};
+  }
+
+  /// Creates a 3D rotation parameter in the optimization problem.
+  ///
+  /// A parameter is a constant whose value can be changed between solves with
+  /// set_value(). Unlike constants, parameters aren't folded into expressions.
+  ///
+  /// The rotation's quaternion is four parameters. The rotation has an initial
+  /// value of the identity, and set_value() normalizes its argument.
+  ///
+  /// @return A 3D rotation of parameters in the optimization problem.
+  [[nodiscard]]
+  Rotation3<Scalar> rotation3_parameter() {
+    RealMatrix<Scalar> q = parameter(4);
+    q[0].set_value(Scalar(1));
+    return Rotation3<Scalar>{q[0], q[1], q[2], q[3]};
   }
 
   /// Tells the solver to minimize the output of the given cost function.
