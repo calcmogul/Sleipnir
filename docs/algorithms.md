@@ -438,7 +438,7 @@ The algorithm is described in more detail in section 3.8 of [^2].
 
 ## Manifold optimization
 
-Decision variables created with `Problem::unit_vector_decision_variable(n)`, `Problem::rotation2_decision_variable()`, or `Problem::rotation3_decision_variable()` lie on a manifold M embedded in ℝⁿ: the unit sphere, the unit complex numbers representing SO(2), or the unit quaternions representing SO(3). The solver keeps them on the manifold instead of adding a unit-norm equality constraint. This removes a constraint and its multiplier, keeps every iterate feasible, and removes the null space a unit-norm constraint leaves in the KKT matrix. See [usage.md](usage.md#manifold-optimization) for how to use them.
+Decision variables created with `Problem::unit_vector_decision_variable(n)`, `Problem::rotation2_decision_variable()`, `Problem::rotation3_decision_variable()`, or `Problem::spd_decision_variable(n)` lie on a manifold M embedded in ℝⁿ: the unit sphere, the unit complex numbers representing SO(2), the unit quaternions representing SO(3), or the symmetric positive definite matrices. The solver keeps them on the manifold instead of adding a unit-norm equality constraint or a semidefinite constraint. This removes a constraint and its multiplier, keeps every iterate feasible, and removes the null space a unit-norm constraint leaves in the KKT matrix. See [usage.md](usage.md#manifold-optimization) for how to use them.
 
 ### Retractions
 
@@ -451,6 +451,24 @@ Each iterate x is stored in the ambient space ℝⁿ, but steps p are taken in t
 ```
 
 where B is an orthonormal basis for the sphere's tangent space at x, computed from a Householder reflection, and exp(φ) = [cos‖φ‖, sin‖φ‖ φ/‖φ‖] in (w, x, y, z) order. For SO(2), z = cos θ + i sin θ and p is an angle in radians. For SO(3), p is a rotation vector in the body frame. Euclidean decision variables use R_x(p) = x + p.
+
+`Problem::spd_decision_variable(n)` returns a symmetric positive definite matrix P, stored as its lower triangle in row-major order. The positive definite matrices are an open subset of the symmetric matrices, so the tangent space is the symmetric matrices, with the same coordinates as the ambient space. Sleipnir uses the affine-invariant exponential map
+
+```
+  SPD: R_P(ξ) = L exp(L⁻¹ξL⁻ᵀ) Lᵀ = P + ξ + ½ξP⁻¹ξ + O(‖ξ‖³)
+```
+
+where P = LLᵀ is the Cholesky factorization and exp() of the symmetric matrix M = L⁻¹ξL⁻ᵀ is computed from its eigendecomposition. exp() of a symmetric matrix is positive definite, so no step leaves the manifold and the line search doesn't need a fraction-to-the-boundary rule for P.
+
+A retraction alone doesn't keep iterates away from the boundary, though. Exponentially shrinking eigenvalues never reach zero, but iterates drawn toward a solution of the constraints outside the positive definite matrices can shrink them over many iterations until P is numerically singular. So problems with SPD variables always use the interior-point method, which adds the barrier term μb(x) to the log-barrier function ϕ_μ, where
+
+```
+  b(x) = −Σ log det P
+```
+
+sums over the SPD blocks. With the exponential map, log det R_P(ξ) = log det P + tr(L⁻¹ξL⁻ᵀ) = log det P + tr(P⁻¹ξ) exactly, so b(R_x(p)) is linear in p. The barrier term's gradient in tangent coordinates is −tr(P⁻¹ξ)'s coefficients, −(P⁻¹)ᵢᵢ for diagonal coordinates and −2(P⁻¹)ᵢⱼ for off-diagonal ones, and its Hessian is zero, so it changes the KKT system's right-hand side but not its matrix. μ follows the same schedule as the slack barrier, and it drives μ∇b to zero.
+
+The barrier term's implicit dual variable is Z = μP⁻¹ ⪰ 0, with complementarity PZ = μI. The KKT error for μ = 0, which decides convergence, includes μ∇b in the stationarity residual and μ as the complementarity residual. Without them, the equality constraint multipliers that balance μ∇b would make the stationarity residual stall at about μ‖P⁻¹‖.
 
 `Problem::pose2_decision_variable()` and `Problem::pose3_decision_variable()` return poses made of a Euclidean translation and an SO(2) or SO(3) rotation, so SE(2) and SE(3) use the product retraction (t + pₜ, R_R(p_R)). It differs from the group exponential, which couples the translation step to the rotation, only at second order in p, so the solver's convergence is unaffected, and it keeps the translation's derivatives independent of the rotation.
 
@@ -477,6 +495,14 @@ Both retractions satisfy ∇²ₚₚRᵢ = −κxᵢI, which follows from their 
 ```
 
 so κ = 1 for the sphere and SO(2), and κ = 1/4 for SO(3), and the correction for each manifold block is −κ(xᵀ∇ₓL)I.
+
+The SPD retraction has J = I and second-order term ½ξP⁻¹ξ. Let G be the symmetric matrix with vᵀx = tr(GX) for v = ∇ₓL, so Gᵢᵢ = vᵢᵢ and Gᵢⱼ = Gⱼᵢ = vᵢⱼ/2 off the diagonal, since each off-diagonal decision variable appears twice in X. The correction is the Hessian of ½tr(GξP⁻¹ξ), which for tangent coordinates a and b with symmetric basis matrices Eₐ and E_b is
+
+```
+  Cₐ_b = ½(tr(GEₐP⁻¹E_b) + tr(GE_bP⁻¹Eₐ))
+```
+
+It's dense within the block, so an n×n SPD block adds a dense n(n + 1)/2 × n(n + 1)/2 block to the Hessian.
 
 The KKT system, its inertia, and the step are k-dimensional, while the cost and constraints are evaluated at ambient points R_x(αp) during the line search. Feasibility restoration uses the same manifold, extended by the Euclidean relaxation variables.
 

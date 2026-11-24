@@ -39,7 +39,7 @@ void bind_rotation2(nb::class_<Rotation2<double>>& cls) {
       nb::is_operator(), "rhs"_a, DOC(slp, operator, mul, 12));
   cls.def(
       "__eq__", [](const UC& lhs, const UC& rhs) { return lhs == rhs; },
-      nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 12));
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 14));
   cls.def("relative_to", &UC::relative_to, "other"_a,
           DOC(slp, Rotation2, relative_to));
   cls.def("inverse", &UC::inverse, DOC(slp, Rotation2, inverse));

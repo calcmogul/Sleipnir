@@ -21,6 +21,7 @@
 #include <sleipnir/autodiff/similarity3.hpp>
 #include <sleipnir/autodiff/similarity_twist2.hpp>
 #include <sleipnir/autodiff/similarity_twist3.hpp>
+#include <sleipnir/autodiff/spd_matrix.hpp>
 #include <sleipnir/autodiff/translation2.hpp>
 #include <sleipnir/autodiff/translation3.hpp>
 #include <sleipnir/autodiff/twist2.hpp>
@@ -50,6 +51,8 @@ void bind_complex_submatrix(
     nb::class_<ComplexSubmatrix<ComplexMatrix<double>>>& cls);
 void bind_real_submatrix(nb::class_<RealSubmatrix<RealMatrix<double>>>& cls);
 void bind_unit_vector(nb::class_<UnitVector<double>>& cls);
+void bind_spd_matrix(nb::class_<SPDMatrix<double>>& cls);
+void bind_symmetric_view(nb::class_<SymmetricView<double>>& cls);
 void bind_rotation2(nb::class_<Rotation2<double>>& cls);
 void bind_rotation3(nb::class_<Rotation3<double>>& cls);
 void bind_pose2(nb::class_<Pose2<double>>& cls);

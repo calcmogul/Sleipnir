@@ -88,9 +88,24 @@ concept SleipnirScalarLike =
     std::same_as<typename std::decay_t<T>::Scalar, Scalar>;
 
 template <typename Scalar>
+class SPDMatrix;
+
+template <typename Scalar>
+class SymmetricView;
+
+template <typename Scalar>
 class UnitVector;
 
 namespace detail {
+
+template <typename T>
+inline constexpr bool is_symmetric_matrix = false;
+
+template <typename Scalar>
+inline constexpr bool is_symmetric_matrix<SPDMatrix<Scalar>> = true;
+
+template <typename Scalar>
+inline constexpr bool is_symmetric_matrix<SymmetricView<Scalar>> = true;
 
 template <typename T>
 inline constexpr bool is_unit_vector = false;
@@ -99,6 +114,12 @@ template <typename Scalar>
 inline constexpr bool is_unit_vector<UnitVector<Scalar>> = true;
 
 }  // namespace detail
+
+/// A matrix type whose entries are symmetric by construction or by the user's
+/// assertion. Its comparisons constrain only the lower triangle, so the generic
+/// elementwise comparison operators exclude it.
+template <typename T>
+concept SymmetricMatrixLike = detail::is_symmetric_matrix<std::decay_t<T>>;
 
 /// A unit vector. Its equality constraints are on the sphere's tangent space,
 /// so the generic elementwise equality operators exclude it. Elementwise

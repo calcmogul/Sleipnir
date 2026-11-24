@@ -184,6 +184,8 @@ void bind_problem(nb::class_<Problem<double>>& cls) {
   cls.def("similarity3_decision_variable",
           &Problem<double>::similarity3_decision_variable,
           DOC(slp, Problem, similarity3_decision_variable));
+  cls.def("spd_decision_variable", &Problem<double>::spd_decision_variable,
+          "rows"_a, DOC(slp, Problem, spd_decision_variable));
   cls.def("parameter", nb::overload_cast<>(&Problem<double>::parameter),
           DOC(slp, Problem, parameter));
   cls.def("parameter", nb::overload_cast<int, int>(&Problem<double>::parameter),
@@ -216,6 +218,8 @@ void bind_problem(nb::class_<Problem<double>>& cls) {
           DOC(slp, Problem, similarity2_parameter));
   cls.def("similarity3_parameter", &Problem<double>::similarity3_parameter,
           DOC(slp, Problem, similarity3_parameter));
+  cls.def("spd_parameter", &Problem<double>::spd_parameter, "rows"_a,
+          DOC(slp, Problem, spd_parameter));
   for_each_type<double, const Real<double>&, const RealMatrix<double>&>(
       [&]<typename T> {
         cls.def(

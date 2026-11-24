@@ -34,6 +34,7 @@
 #include "sleipnir/autodiff/rotation3.hpp"
 #include "sleipnir/autodiff/similarity2.hpp"
 #include "sleipnir/autodiff/similarity3.hpp"
+#include "sleipnir/autodiff/spd_matrix.hpp"
 #include "sleipnir/autodiff/translation2.hpp"
 #include "sleipnir/autodiff/translation3.hpp"
 #include "sleipnir/autodiff/unit_vector.hpp"
@@ -54,6 +55,7 @@
 #include "sleipnir/optimization/solver/util/problem_scaling.hpp"
 #include "sleipnir/optimization/solver/util/so2_manifold.hpp"
 #include "sleipnir/optimization/solver/util/so3_manifold.hpp"
+#include "sleipnir/optimization/solver/util/spd_manifold.hpp"
 #include "sleipnir/optimization/solver/util/sphere_manifold.hpp"
 #include "sleipnir/optimization/solver/util/time_trace.hpp"
 #include "sleipnir/util/assert.hpp"
@@ -572,6 +574,91 @@ class Problem {
     auto log_scale = parameter();
     return Similarity3<Scalar>{std::move(translation), std::move(rotation),
                                std::move(log_scale)};
+  }
+
+  /// Creates a symmetric positive definite matrix of decision variables in the
+  /// optimization problem.
+  ///
+  /// The solver keeps the matrix positive definite by retracting each step
+  /// onto the positive definite matrices instead of stepping through the
+  /// symmetric matrices, so no semidefinite constraint is needed. Problems
+  /// with these matrices are solved with the interior-point method, which adds
+  /// a log-det barrier term to keep them away from singular matrices. The
+  /// matrix can approach a singular matrix but never reach one, so problems
+  /// whose solution is singular converge slowly or not at all.
+  ///
+  /// The lower triangle's decision variables are reused across the diagonal,
+  /// so the matrix is symmetric by construction.
+  ///
+  /// The matrix has an initial value of the identity. Values set elsewhere are
+  /// kept if they're numerically positive definite, with each eigenvalue at
+  /// least nε times the largest. Otherwise, they're projected onto the positive
+  /// definite matrices when the solve starts by raising the smaller eigenvalues
+  /// to √ε times the largest one.
+  ///
+  /// When equality constraints determine the matrix once the other decision
+  /// variables are fixed, like a Lyapunov equation in a controller's gains,
+  /// set its initial value by solving those constraints at the other decision
+  /// variables' initial values. Warm starting only the other decision
+  /// variables leaves the initial iterate far from the constraints, and the
+  /// solve can fail.
+  ///
+  /// @param rows The matrix's dimension. Must be at least 1.
+  /// @return A symmetric positive definite matrix of decision variables in the
+  ///     optimization problem.
+  [[nodiscard]]
+  SPDMatrix<Scalar> spd_decision_variable(int rows) {
+    slp_assert(rows >= 1);
+
+    m_manifold_blocks.emplace_back(
+        spd_manifold<Scalar>, static_cast<int>(m_decision_variables.size()),
+        rows, rows);
+
+    // Only the lower triangle's (n² + n)/2 elements are stored
+    m_decision_variables.reserve(m_decision_variables.size() +
+                                 (rows * rows + rows) / 2);
+
+    RealMatrix<Scalar> P{detail::empty, rows, rows};
+    for (int row = 0; row < rows; ++row) {
+      for (int col = 0; col <= row; ++col) {
+        m_decision_variables.emplace_back();
+        P[row, col] = m_decision_variables.back();
+        P[col, row] = m_decision_variables.back();
+      }
+      P[row, row].set_value(Scalar(1));
+    }
+    return SPDMatrix<Scalar>{std::move(P)};
+  }
+
+  /// Creates a symmetric positive definite matrix of parameters in the
+  /// optimization problem.
+  ///
+  /// A parameter is a constant whose value can be changed between solves with
+  /// set_value(). Unlike constants, parameters aren't folded into expressions.
+  ///
+  /// The lower triangle's parameters are reused across the diagonal, so the
+  /// matrix is symmetric by construction.
+  ///
+  /// The matrix has an initial value of the identity. Unlike for decision
+  /// variables, values set elsewhere are used as is, so they must be positive
+  /// definite.
+  ///
+  /// @param rows The matrix's dimension. Must be at least 1.
+  /// @return A symmetric positive definite matrix of parameters in the
+  ///     optimization problem.
+  [[nodiscard]]
+  SPDMatrix<Scalar> spd_parameter(int rows) {
+    slp_assert(rows >= 1);
+
+    RealMatrix<Scalar> P{detail::empty, rows, rows};
+    for (int row = 0; row < rows; ++row) {
+      for (int col = 0; col <= row; ++col) {
+        P[row, col] = parameter();
+        P[col, row] = P[row, col];
+      }
+      P[row, row].set_value(Scalar(1));
+    }
+    return SPDMatrix<Scalar>{std::move(P)};
   }
 
   /// Tells the solver to minimize the output of the given cost function.

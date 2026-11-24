@@ -54,10 +54,10 @@ void bind_similarity2(nb::class_<Similarity2<double>>& cls) {
 
   cls.def(
       "__mul__", [](const S& lhs, const S& rhs) { return lhs * rhs; },
-      nb::is_operator(), "rhs"_a, DOC(slp, operator, mul, 14));
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, mul, 12));
   cls.def(
       "__eq__", [](const S& lhs, const S& rhs) { return lhs == rhs; },
-      nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 14));
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 16));
   cls.def("inverse", &S::inverse, DOC(slp, Similarity2, inverse));
   cls.def("log", &S::log, DOC(slp, Similarity2, log));
   cls.def("relative_to", &S::relative_to, "other"_a,

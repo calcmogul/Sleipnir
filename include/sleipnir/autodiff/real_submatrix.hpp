@@ -564,6 +564,15 @@ class RealSubmatrix : public SleipnirBase {
     return result;
   }
 
+  /// Returns a view of this square block that asserts it's symmetric.
+  ///
+  /// See RealMatrix::symmetric_view().
+  ///
+  /// @return A symmetric view of this block.
+  SymmetricView<Scalar> symmetric_view() const {
+    return SymmetricView<Scalar>{RealMatrix<Scalar>{*this}};
+  }
+
   /// Returns the trace of the submatrix, the sum of its diagonal.
   ///
   /// @return The trace of the submatrix.

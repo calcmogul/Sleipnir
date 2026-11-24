@@ -23,6 +23,7 @@
 #include <sleipnir/autodiff/similarity3.hpp>
 #include <sleipnir/autodiff/similarity_twist2.hpp>
 #include <sleipnir/autodiff/similarity_twist3.hpp>
+#include <sleipnir/autodiff/spd_matrix.hpp>
 #include <sleipnir/autodiff/translation2.hpp>
 #include <sleipnir/autodiff/translation3.hpp>
 #include <sleipnir/autodiff/twist2.hpp>
@@ -70,6 +71,10 @@ NB_MODULE(_sleipnir, m) {
       autodiff, "RealSubmatrix", DOC(slp, RealSubmatrix)};
   nb::class_<UnitVector<double>> unit_vector{autodiff, "UnitVector",
                                              DOC(slp, UnitVector)};
+  nb::class_<SPDMatrix<double>> spd_matrix{autodiff, "SPDMatrix",
+                                           DOC(slp, SPDMatrix)};
+  nb::class_<SymmetricView<double>> symmetric_view{autodiff, "SymmetricView",
+                                                   DOC(slp, SymmetricView)};
   nb::class_<Rotation2<double>> rotation2{autodiff, "Rotation2",
                                           DOC(slp, Rotation2)};
   nb::class_<Rotation3<double>> rotation3{autodiff, "Rotation3",
@@ -126,11 +131,11 @@ NB_MODULE(_sleipnir, m) {
   nb::class_<LintFinding> lint_finding{optimization, "LintFinding",
                                        DOC(slp, LintFinding)};
 
-  // The forward declarations in rotation2.hpp, rotation3.hpp, and
-  // unit_vector.hpp sort first, so they take the first three Problem
+  // The forward declarations in rotation2.hpp, rotation3.hpp, spd_matrix.hpp,
+  // and unit_vector.hpp sort first, so they take the first four Problem
   // docstrings
   nb::class_<Problem<double>> problem{optimization, "Problem",
-                                      DOC(slp, Problem, 4)};
+                                      DOC(slp, Problem, 5)};
 
   nb::enum_<DynamicsType> dynamics_type{optimization, "DynamicsType",
                                         DOC(slp, DynamicsType)};
@@ -151,6 +156,8 @@ NB_MODULE(_sleipnir, m) {
   bind_complex_submatrix(complex_submatrix);
   bind_real_submatrix(real_submatrix);
   bind_unit_vector(unit_vector);
+  bind_spd_matrix(spd_matrix);
+  bind_symmetric_view(symmetric_view);
   bind_rotation2(rotation2);
   bind_rotation3(rotation3);
   bind_pose2(pose2);
@@ -174,6 +181,10 @@ NB_MODULE(_sleipnir, m) {
   complex_matrix.def(nb::init_implicit<RealMatrix<double>>());
   complex_matrix.def(
       nb::init_implicit<ComplexSubmatrix<ComplexMatrix<double>>>());
+
+  // An SPDMatrix converts explicitly, as in C++
+  real_matrix.def(nb::init<const SPDMatrix<double>&>(), "matrix"_a,
+                  DOC(slp, SPDMatrix, operator, slp, RealMatrix));
 
   bind_gradient(gradient);
   bind_hessian(hessian);

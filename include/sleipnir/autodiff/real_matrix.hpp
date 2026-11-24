@@ -4,10 +4,12 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <concepts>
 #include <cstddef>
 #include <initializer_list>
 #include <iterator>
+#include <limits>
 #include <span>
 #include <type_traits>
 #include <utility>
@@ -31,6 +33,204 @@
 #include "sleipnir/util/symbol_exports.hpp"
 
 namespace slp {
+
+namespace detail {
+
+/// Returns entry (row, col) of a matrix operand, or a scalar operand itself.
+///
+/// @tparam Scalar Scalar type.
+/// @param operand The operand.
+/// @param row The entry's row.
+/// @param col The entry's column.
+/// @return The entry.
+template <typename Scalar, typename T>
+Real<Scalar> entry(const T& operand, int row, int col) {
+  if constexpr (ScalarLike<T>) {
+    return Real<Scalar>{operand};
+  } else if constexpr (EigenMatrixLike<T>) {
+    return Real<Scalar>{Scalar(operand(row, col))};
+  } else {
+    return operand[row, col];
+  }
+}
+
+/// Returns true if a square matrix operand's value is symmetric to within
+/// √ε times its largest entry, or a scalar operand.
+///
+/// Values computed from symmetric expressions are symmetric only to rounding,
+/// so this catches asymmetric operands, like a transposed product, rather than
+/// proving symmetry.
+///
+/// @tparam Scalar Scalar type.
+/// @param operand The operand.
+/// @return True if the operand's value is symmetric.
+template <typename Scalar, typename T>
+bool is_symmetric_value(const T& operand) {
+  using std::sqrt;
+
+  if constexpr (ScalarLike<T>) {
+    return true;
+  } else {
+    if (operand.rows() != operand.cols()) {
+      return false;
+    }
+
+    Eigen::MatrixX<Scalar> M{operand.rows(), operand.cols()};
+    for (int row = 0; row < M.rows(); ++row) {
+      for (int col = 0; col < M.cols(); ++col) {
+        M(row, col) = entry<Scalar>(operand, row, col).value();
+      }
+    }
+
+    Scalar scale = std::max(Scalar(1), M.cwiseAbs().maxCoeff());
+    return (M - M.transpose()).cwiseAbs().maxCoeff() <=
+           sqrt(std::numeric_limits<Scalar>::epsilon()) * scale;
+  }
+}
+
+/// Returns equality constraints between the lower triangles of two n × n
+/// operands, or between an n × n operand's lower triangle and a scalar.
+///
+/// @tparam Scalar Scalar type.
+/// @param lhs Left-hand side.
+/// @param rhs Right-hand side.
+/// @param n The operands' dimension.
+/// @return The n(n + 1)/2 equality constraints.
+template <typename Scalar, typename LHS, typename RHS>
+EqualityConstraints<Scalar> lower_triangle_equality(const LHS& lhs,
+                                                    const RHS& rhs, int n) {
+  if constexpr (!ScalarLike<LHS>) {
+    slp_assert(lhs.rows() == n && lhs.cols() == n);
+  }
+  if constexpr (!ScalarLike<RHS>) {
+    slp_assert(rhs.rows() == n && rhs.cols() == n);
+  }
+
+  EqualityConstraints<Scalar> result{
+      std::initializer_list<EqualityConstraints<Scalar>>{}};
+  result.constraints.reserve(n * (n + 1) / 2);
+  for (int row = 0; row < n; ++row) {
+    for (int col = 0; col <= row; ++col) {
+      result.constraints.emplace_back(entry<Scalar>(lhs, row, col) -
+                                      entry<Scalar>(rhs, row, col));
+    }
+  }
+  return result;
+}
+
+}  // namespace detail
+
+/// A square matrix of autodiff expressions that the user asserts is symmetric.
+///
+/// It reads a square matrix's lower triangle and mirrors it, so its entries are
+/// symmetric by construction and the upper triangle is never read. Equality
+/// constraints with it constrain only the lower triangle, so a symmetric n × n
+/// expression gives n(n + 1)/2 equations instead of the n² equations of an
+/// elementwise comparison, whose duplicated off-diagonal equations make the
+/// constraint Jacobian rank deficient.
+///
+/// Inequalities aren't supported, since for symmetric matrices they're
+/// ambiguous between elementwise bounds and the semidefinite ordering.
+///
+/// @tparam Scalar_ Scalar type.
+template <typename Scalar_>
+class SymmetricView {
+ public:
+  /// Scalar type alias.
+  using Scalar = Scalar_;
+
+  /// Constructs a symmetric view of a square matrix.
+  ///
+  /// RealMatrix::symmetric_view() is shorthand for this.
+  ///
+  /// When assertions are enabled, the matrix's current value must be
+  /// symmetric to within √ε times its largest entry.
+  ///
+  /// @param matrix The matrix. Its upper triangle isn't read.
+  explicit SymmetricView(const RealMatrix<Scalar>& matrix)
+      : m_storage{detail::empty, matrix.rows(), matrix.cols()} {
+    slp_assert(matrix.rows() == matrix.cols());
+    slp_assert(detail::is_symmetric_value<Scalar>(matrix));
+
+    for (int row = 0; row < matrix.rows(); ++row) {
+      for (int col = 0; col <= row; ++col) {
+        m_storage[row, col] = matrix[row, col];
+        m_storage[col, row] = matrix[row, col];
+      }
+    }
+  }
+
+  /// Returns the number of rows.
+  ///
+  /// @return The number of rows.
+  int rows() const { return m_storage.rows(); }
+
+  /// Returns the number of columns.
+  ///
+  /// @return The number of columns.
+  int cols() const { return m_storage.cols(); }
+
+  /// Returns an element. Elements (row, col) and (col, row) are the same
+  /// element of the viewed matrix's lower triangle.
+  ///
+  /// @param row The row of the element to return.
+  /// @param col The column of the element to return.
+  /// @return An element.
+  const Real<Scalar>& operator[](int row, int col) const {
+    return m_storage[row, col];
+  }
+
+  /// Equality operator that returns equality constraints between the lower
+  /// triangles of two symmetric views.
+  ///
+  /// @param lhs Left-hand side.
+  /// @param rhs Right-hand side.
+  /// @return The n(n + 1)/2 equality constraints.
+  friend EqualityConstraints<Scalar> operator==(const SymmetricView& lhs,
+                                                const SymmetricView& rhs) {
+    return detail::lower_triangle_equality<Scalar>(lhs, rhs, lhs.rows());
+  }
+
+ private:
+  // The lower triangle, mirrored so (row, col) and (col, row) alias
+  RealMatrix<Scalar> m_storage;
+};
+
+/// Equality operator that returns equality constraints between the lower
+/// triangles of a symmetric view and another operand.
+///
+/// The other operand must be symmetric too. If it's a scalar, every entry
+/// of the lower triangle is constrained to it.
+///
+/// @param lhs Left-hand side.
+/// @param rhs Right-hand side.
+/// @return The n(n + 1)/2 equality constraints.
+template <typename Scalar, typename RHS>
+  requires ScalarLike<RHS> || EigenMatrixLike<RHS> ||
+           SleipnirMatrixLike<RHS, Scalar>
+EqualityConstraints<Scalar> operator==(const SymmetricView<Scalar>& lhs,
+                                       const RHS& rhs) {
+  slp_assert(detail::is_symmetric_value<Scalar>(rhs));
+  return detail::lower_triangle_equality<Scalar>(lhs, rhs, lhs.rows());
+}
+
+/// Equality operator that returns equality constraints between the lower
+/// triangles of another operand and a symmetric view.
+///
+/// The other operand must be symmetric too. If it's a scalar, every entry
+/// of the lower triangle is constrained to it.
+///
+/// @param lhs Left-hand side.
+/// @param rhs Right-hand side.
+/// @return The n(n + 1)/2 equality constraints.
+template <typename Scalar, typename LHS>
+  requires ScalarLike<LHS> || EigenMatrixLike<LHS> ||
+           SleipnirMatrixLike<LHS, Scalar>
+EqualityConstraints<Scalar> operator==(const LHS& lhs,
+                                       const SymmetricView<Scalar>& rhs) {
+  slp_assert(detail::is_symmetric_value<Scalar>(lhs));
+  return detail::lower_triangle_equality<Scalar>(lhs, rhs, rhs.rows());
+}
 
 /// A matrix of autodiff expressions.
 ///
@@ -964,6 +1164,22 @@ class RealMatrix : public SleipnirBase {
     }
 
     return result;
+  }
+
+  /// Returns a view of this square matrix that asserts it's symmetric.
+  ///
+  /// The view reads the lower triangle and mirrors it, so the upper triangle
+  /// is never read. Equality constraints with the view constrain only the
+  /// lower triangle, which avoids the duplicated off-diagonal equations of an
+  /// elementwise comparison. For example, a symmetric residual R is
+  /// constrained to zero with `R.symmetric_view() == 0`.
+  ///
+  /// When assertions are enabled, the matrix's current value must be
+  /// symmetric to within √ε times its largest entry.
+  ///
+  /// @return A symmetric view of this matrix.
+  SymmetricView<Scalar> symmetric_view() const {
+    return SymmetricView<Scalar>{*this};
   }
 
   /// Returns the trace of the matrix, the sum of its diagonal.

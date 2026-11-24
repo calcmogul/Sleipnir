@@ -10,8 +10,11 @@
 #include <sleipnir/autodiff/hessian.hpp>
 #include <sleipnir/autodiff/jacobian.hpp>
 #include <sleipnir/autodiff/real.hpp>
+#include <sleipnir/autodiff/spd_matrix.hpp>
+#include <sleipnir/autodiff/unit_vector.hpp>
 #include <sleipnir/optimization/problem.hpp>
 #include <sleipnir/optimization/solver/exit_status.hpp>
+#include <sleipnir/optimization/solver/iteration_info.hpp>
 
 #include "catch_matchers.hpp"
 #include "catch_string_converters.hpp"
@@ -299,4 +302,30 @@ TEMPLATE_TEST_CASE("Problem parameter - Hessian updates", "[Problem]",
   p.set_value(T(5));
   expected(0, 0) = T(10);
   CHECK(Eigen::Matrix<T, 2, 2>{H.value()} == expected);
+}
+
+TEMPLATE_TEST_CASE("Problem parameter - Manifold types", "[Problem]",
+                   SCALAR_TYPES) {
+  using T = TestType;
+
+  slp::Problem<T> problem;
+
+  auto n = problem.unit_vector_parameter(3);
+  auto pose = problem.pose3_parameter();
+  auto similarity = problem.similarity2_parameter();
+  auto P = problem.spd_parameter(2);
+  auto x = problem.real_decision_variable();
+
+  auto r =
+      x - n[1] - pose.translation().x() - similarity.rotation().sin() - P[1, 0];
+  problem.minimize(r * r);
+
+  // The iterate has only x
+  problem.add_callback(
+      [](const slp::IterationInfo<T>& info) { CHECK(info.x.size() == 1); });
+
+  n.set_value(Eigen::Vector3<T>{T(0), T(1), T(0)});
+  pose.translation().set_value(Eigen::Vector3<T>{T(2), T(0), T(0)});
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
+  CHECK_THAT(x.value(), WithinAbs(T(3), solution_tolerance<T>(1)));
 }

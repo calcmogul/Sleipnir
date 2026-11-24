@@ -509,7 +509,7 @@ Unit vectors, rotations, poses, and similarity transforms can be decision variab
 
 `set_value()` takes the same form as `value()` and normalizes unit vectors and quaternions. The types are in `sleipnir.autodiff`.
 
-Each decision variable has a parameter counterpart with the same initial value, like `problem.pose2_parameter()`, for known values that change between solves. Use them instead of building a type from parameters, like `Rotation2(problem.parameter())`, whose `set_value()` can't change its value and whose expressions evaluate cos and sin.
+Each decision variable has a parameter counterpart with the same initial value, like `problem.pose2_parameter()` and `problem.spd_parameter(n)`, for known values that change between solves. Use them instead of building a type from parameters, like `Rotation2(problem.parameter())`, whose `set_value()` can't change its value and whose expressions evaluate cos and sin. Positive definite parameters aren't projected, so their values must be positive definite.
 
 ```python
 import math
@@ -594,8 +594,53 @@ and angular velocity integrates with `q[k + 1] == q[k] * Rotation3(ω[k] * dt)`.
 
 Similarity transforms have similarity twists, which add a log-scale part dσ: `SimilarityTwist2(linear, angular, log_scale)` and `SimilarityTwist3(linear, angular, log_scale)`. `twist.exp()` returns a `Similarity2` or `Similarity3`, `similarity.log()` is its inverse, and `similarity * (velocity * dt).exp()` integrates a constant body-frame velocity and log-scale rate exactly.
 
+#### Positive definite matrices
+
+`problem.spd_decision_variable(n)` returns an n×n `SPDMatrix` that the solver keeps positive definite. It replaces a semidefinite constraint P ⪰ 0 on a matrix decision variable. For a constraint G(x) ⪰ 0 on a symmetric expression, constrain it equal to one: `P == G`.
+
+A symmetric n×n matrix has n(n + 1)/2 degrees of freedom, so equality constraints with an `SPDMatrix` constrain only the lower triangle. An elementwise comparison would give n² equations, and the duplicated off-diagonal ones would make the constraint Jacobian rank deficient. The other operand must be symmetric, and its upper triangle isn't read. The same applies to symmetric expressions without an `SPDMatrix`, like the residual of a matrix equation: `R.symmetric_view() == 0` asserts that R is symmetric and constrains its lower triangle. When assertions are enabled, which they always are in Python, the operand's current value must be symmetric to within √ε times its largest entry.
+
+Inequalities with an `SPDMatrix` or a symmetric view are errors, since they're ambiguous between elementwise bounds and the semidefinite ordering. Constrain individual elements instead, like `P[i, i] <= c`. Elements are read-only, `P[i, j]` and `P[j, i]` are the same variable, and the sum of two `SPDMatrix` values is an `SPDMatrix`. Other arithmetic returns a `RealMatrix`.
+
+The matrix starts at the identity. `set_value()` can set any symmetric value. Before the first iteration, the solver keeps it if it's numerically positive definite, with each eigenvalue at least nε times the largest. Otherwise, it raises the smaller eigenvalues to √ε times the largest one. Every iterate is positive definite, so functions like log det P that are undefined elsewhere are safe. The matrix can't become singular, though, so the solver converges slowly or not at all on problems whose solution is a singular matrix.
+
+Problems with positive definite matrices always use the interior-point solver, even without inequality constraints, since it adds a −μ log det P barrier term that keeps the matrices away from singular ones as μ goes to zero.
+
+For example, the gains K of the discrete-time LQR controller u = −Kx with some columns fixed at zero minimize tr(PW) for an initial-state covariance W, where P solves the Lyapunov equation. A positive definite solution exists only if A − BK is stable, so making P positive definite keeps the gains stabilizing.
+
+When equality constraints determine the matrix once the other decision variables are fixed, set its initial value by solving those constraints at the other decision variables' initial values. Warm starting only the other decision variables leaves the initial iterate far from the constraints, and the solve can fail. Here, the gains start at the full LQR gains with the fixed column zeroed, and P starts at the solution of the Lyapunov equation for those gains.
+
+```python
+import numpy as np
+import scipy.linalg
+from sleipnir.autodiff import RealMatrix
+from sleipnir.optimization import Problem
+
+# Full LQR gains with the last column zeroed, and P for those gains
+S = scipy.linalg.solve_discrete_are(A, B, Q, R)
+K_0 = np.linalg.solve(B.T @ S @ B + R, B.T @ S @ A)
+K_0[0, 2] = 0.0
+A_cl_0 = A - B @ K_0
+P_0 = scipy.linalg.solve_discrete_lyapunov(A_cl_0.T, Q + K_0.T @ R @ K_0)
+
+problem = Problem()
+
+P = problem.spd_decision_variable(3)
+F = problem.real_decision_variable(1, 2)
+P.set_value(P_0)
+F.set_value(K_0[:, :2])
+
+K = RealMatrix([[F[0], F[1], 0.0]])
+A_cl = A - B @ K
+residual = Q + K.T @ R @ K + A_cl.T @ P @ A_cl - P
+problem.subject_to(residual.symmetric_view() == 0)
+
+problem.minimize((P @ W).trace())
+problem.solve()
+```
+
 #### Iteration callbacks
 
-`IterationInfo.x` contains the decision variables' values, with each manifold variable's components in order: a `Rotation2`'s cos θ and sin θ, a `Rotation3`'s w, x, y, and z, a pose's translation followed by its rotation, and a similarity transform's translation, rotation, and log scale. The gradient, Hessian, and Jacobians are with respect to the manifold's tangent space, which has one dimension per degree of freedom, so they have fewer columns than `x` has rows when the problem has manifold variables.
+`IterationInfo.x` contains the decision variables' values, with each manifold variable's components in order: a `Rotation2`'s cos θ and sin θ, a `Rotation3`'s w, x, y, and z, a pose's translation followed by its rotation, a similarity transform's translation, rotation, and log scale, and a positive definite matrix's lower triangle in row-major order. The gradient, Hessian, and Jacobians are with respect to the manifold's tangent space, which has one dimension per degree of freedom, so they have fewer columns than `x` has rows when the problem has manifold variables.
 
 See [algorithms.md](algorithms.md#manifold-optimization) for how the solver handles manifold variables.

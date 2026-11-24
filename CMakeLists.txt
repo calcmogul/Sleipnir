@@ -597,6 +597,7 @@ if(SLEIPNIR_BUILD_PYTHON)
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/similarity_twist3.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/similarity2.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/similarity3.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/spd_matrix.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/translation2.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/translation3.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/twist2.hpp

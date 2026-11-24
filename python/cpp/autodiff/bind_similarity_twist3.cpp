@@ -52,10 +52,10 @@ void bind_similarity_twist3(nb::class_<SimilarityTwist3<double>>& cls) {
 
   cls.def(
       "__mul__", [](const T& lhs, const V& rhs) { return lhs * rhs; },
-      nb::is_operator(), "rhs"_a, DOC(slp, operator, mul, 16));
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, mul, 14));
   cls.def(
       "__rmul__", [](const T& rhs, const V& lhs) { return lhs * rhs; },
-      nb::is_operator(), "lhs"_a, DOC(slp, operator, mul, 17));
+      nb::is_operator(), "lhs"_a, DOC(slp, operator, mul, 15));
   cls.def(
       "__add__", [](const T& lhs, const T& rhs) { return lhs + rhs; },
       nb::is_operator(), "rhs"_a, DOC(slp, operator, add, 8));
@@ -67,7 +67,7 @@ void bind_similarity_twist3(nb::class_<SimilarityTwist3<double>>& cls) {
       DOC(slp, operator, sub, 9));
   cls.def(
       "__eq__", [](const T& lhs, const T& rhs) { return lhs == rhs; },
-      nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 16));
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 18));
 }
 
 }  // namespace slp

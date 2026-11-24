@@ -2464,7 +2464,9 @@ constexpr char mkd_doc_slp_Problem_2[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Problem_3[] = R"doc()doc";
 
-constexpr char mkd_doc_slp_Problem_4[] =
+constexpr char mkd_doc_slp_Problem_4[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Problem_5[] =
 R"doc(This class allows the user to pose a constrained nonlinear
 optimization problem in natural mathematical notation and solve it.
 
@@ -2492,7 +2494,7 @@ mathematical form and it'll be converted for them.
 Template Args:
     Scalar: Scalar type.)doc";
 
-constexpr char mkd_doc_slp_Problem_5[] = R"doc()doc";
+constexpr char mkd_doc_slp_Problem_6[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Problem_Problem[] = R"doc(Constructs the optimization problem.)doc";
 
@@ -3019,6 +3021,67 @@ constexpr char mkd_doc_slp_Problem_solve_ipm[] = R"doc()doc";
 constexpr char mkd_doc_slp_Problem_solve_newton[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Problem_solve_sqp[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Problem_spd_decision_variable[] =
+R"doc(Creates a symmetric positive definite matrix of decision variables in
+the optimization problem.
+
+The solver keeps the matrix positive definite by retracting each step
+onto the positive definite matrices instead of stepping through the
+symmetric matrices, so no semidefinite constraint is needed. Problems
+with these matrices are solved with the interior-point method, which
+adds a log-det barrier term to keep them away from singular matrices.
+The matrix can approach a singular matrix but never reach one, so
+problems whose solution is singular converge slowly or not at all.
+
+The lower triangle's decision variables are reused across the
+diagonal, so the matrix is symmetric by construction.
+
+The matrix has an initial value of the identity. Values set elsewhere
+are kept if they're numerically positive definite, with each
+eigenvalue at least nε times the largest. Otherwise, they're projected
+onto the positive definite matrices when the solve starts by raising
+the smaller eigenvalues to √ε times the largest one.
+
+When equality constraints determine the matrix once the other decision
+variables are fixed, like a Lyapunov equation in a controller's gains,
+set its initial value by solving those constraints at the other
+decision variables' initial values. Warm starting only the other
+decision variables leaves the initial iterate far from the
+constraints, and the solve can fail.
+
+Args:
+    rows: The matrix's dimension. Must be at least 1.
+
+Returns:
+    A symmetric positive definite matrix of decision variables in the
+    optimization problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_spd_parameter[] =
+R"doc(Creates a symmetric positive definite matrix of parameters in the
+optimization problem.
+
+A parameter is a constant whose value can be changed between solves
+with set_value(). Unlike constants, parameters aren't folded into
+expressions.
+
+The lower triangle's parameters are reused across the diagonal, so the
+matrix is symmetric by construction.
+
+The matrix has an initial value of the identity. Unlike for decision
+variables, values set elsewhere are used as is, so they must be
+positive definite.
+
+Args:
+    rows: The matrix's dimension. Must be at least 1.
+
+Returns:
+    A symmetric positive definite matrix of parameters in the
+    optimization problem.
+
+)doc";
 
 constexpr char mkd_doc_slp_Problem_subject_to[] =
 R"doc(Tells the solver to solve the problem while satisfying the given
@@ -3833,6 +3896,23 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_RealMatrix_symmetric_view[] =
+R"doc(Returns a view of this square matrix that asserts it's symmetric.
+
+The view reads the lower triangle and mirrors it, so the upper
+triangle is never read. Equality constraints with the view constrain
+only the lower triangle, which avoids the duplicated off-diagonal
+equations of an elementwise comparison. For example, a symmetric
+residual R is constrained to zero with `R.symmetric_view() == 0`.
+
+When assertions are enabled, the matrix's current value must be
+symmetric to within √ε times its largest entry.
+
+Returns:
+    A symmetric view of this matrix.
+
+)doc";
+
 constexpr char mkd_doc_slp_RealMatrix_to_eigen[] =
 R"doc(Converts the RealMatrix to an Eigen matrix.
 
@@ -4502,6 +4582,16 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_RealSubmatrix_symmetric_view[] =
+R"doc(Returns a view of this square block that asserts it's symmetric.
+
+See RealMatrix::symmetric_view().
+
+Returns:
+    A symmetric view of this block.
+
+)doc";
+
 constexpr char mkd_doc_slp_RealSubmatrix_trace[] =
 R"doc(Returns the trace of the submatrix, the sum of its diagonal.
 
@@ -4955,6 +5045,127 @@ R"doc(Returns the vector component z.
 
 Returns:
     The vector component z.
+
+)doc";
+
+constexpr char mkd_doc_slp_SPDMatrix[] =
+R"doc(A symmetric positive definite matrix of autodiff expressions.
+
+SPDMatrices are created by Problem::spd_decision_variable(n), which
+keeps them positive definite during the solve, from constant Eigen
+matrices, and by operations that preserve positive definiteness, like
+addition of two SPDMatrices. Operations that don't, like subtraction
+and multiplication, return a RealMatrix.
+
+Elements are read-only, and elements (row, col) and (col, row) are the
+same variable.
+
+Equality constraints with an SPDMatrix constrain only the lower
+triangle, so the other operand must be symmetric. Inequalities aren't
+supported, since they're ambiguous between elementwise bounds and the
+semidefinite ordering. Constrain individual elements instead, like
+`P[i, i] <= c`.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_SPDMatrix_SPDMatrix[] =
+R"doc(Constructs a constant symmetric positive definite matrix.
+
+Args:
+    values: The values. They must be symmetric and positive definite.
+
+)doc";
+
+constexpr char mkd_doc_slp_SPDMatrix_SPDMatrix_2[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_SPDMatrix_T[] =
+R"doc(Returns the transpose, which is the matrix itself.
+
+Returns:
+    The transpose.
+
+)doc";
+
+constexpr char mkd_doc_slp_SPDMatrix_cols[] =
+R"doc(Returns the number of columns.
+
+Returns:
+    The number of columns.
+
+)doc";
+
+constexpr char mkd_doc_slp_SPDMatrix_m_storage[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_SPDMatrix_operator_array[] =
+R"doc(Returns an element.
+
+Args:
+    row: The row of the element to return.
+    col: The column of the element to return.
+
+Returns:
+    An element.
+
+)doc";
+
+constexpr char mkd_doc_slp_SPDMatrix_operator_slp_RealMatrix[] =
+R"doc(Converts the matrix to a RealMatrix.
+
+Returns:
+    The matrix as a RealMatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_SPDMatrix_rows[] =
+R"doc(Returns the number of rows.
+
+Returns:
+    The number of rows.
+
+)doc";
+
+constexpr char mkd_doc_slp_SPDMatrix_set_value[] =
+R"doc(Sets the matrix's values.
+
+This is only meaningful for SPDMatrices created by
+Problem::spd_decision_variable(n) or Problem::spd_parameter(n). Values
+of decision variables needn't be positive definite, since the solver
+projects them onto the positive definite matrices when the solve
+starts. Values of parameters are used as is, so they must be positive
+definite.
+
+Args:
+    values: The values. They must be symmetric to within √ε times
+            their largest entry, and their symmetric part is used.
+
+)doc";
+
+constexpr char mkd_doc_slp_SPDMatrix_trace[] =
+R"doc(Returns the trace, the sum of the diagonal.
+
+Returns:
+    The trace.
+
+)doc";
+
+constexpr char mkd_doc_slp_SPDMatrix_value[] =
+R"doc(Returns an element's value.
+
+Args:
+    row: The row of the element whose value to return.
+    col: The column of the element whose value to return.
+
+Returns:
+    An element's value.
+
+)doc";
+
+constexpr char mkd_doc_slp_SPDMatrix_value_2[] =
+R"doc(Returns the matrix's values.
+
+Returns:
+    The matrix's values.
 
 )doc";
 
@@ -5450,6 +5661,67 @@ constexpr char mkd_doc_slp_SimilarityTwist3_m_angular[] = R"doc()doc";
 constexpr char mkd_doc_slp_SimilarityTwist3_m_linear[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_SimilarityTwist3_m_log_scale[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_SymmetricView[] =
+R"doc(A square matrix of autodiff expressions that the user asserts is
+symmetric.
+
+It reads a square matrix's lower triangle and mirrors it, so its
+entries are symmetric by construction and the upper triangle is never
+read. Equality constraints with it constrain only the lower triangle,
+so a symmetric n × n expression gives n(n + 1)/2 equations instead of
+the n² equations of an elementwise comparison, whose duplicated off-
+diagonal equations make the constraint Jacobian rank deficient.
+
+Inequalities aren't supported, since for symmetric matrices they're
+ambiguous between elementwise bounds and the semidefinite ordering.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_SymmetricView_SymmetricView[] =
+R"doc(Constructs a symmetric view of a square matrix.
+
+RealMatrix::symmetric_view() is shorthand for this.
+
+When assertions are enabled, the matrix's current value must be
+symmetric to within √ε times its largest entry.
+
+Args:
+    matrix: The matrix. Its upper triangle isn't read.
+
+)doc";
+
+constexpr char mkd_doc_slp_SymmetricView_cols[] =
+R"doc(Returns the number of columns.
+
+Returns:
+    The number of columns.
+
+)doc";
+
+constexpr char mkd_doc_slp_SymmetricView_m_storage[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_SymmetricView_operator_array[] =
+R"doc(Returns an element. Elements (row, col) and (col, row) are the same
+element of the viewed matrix's lower triangle.
+
+Args:
+    row: The row of the element to return.
+    col: The column of the element to return.
+
+Returns:
+    An element.
+
+)doc";
+
+constexpr char mkd_doc_slp_SymmetricView_rows[] =
+R"doc(Returns the number of rows.
+
+Returns:
+    The number of rows.
+
+)doc";
 
 constexpr char mkd_doc_slp_TimestepMethod[] = R"doc(Enum describing the type of system timestep.)doc";
 
@@ -6429,6 +6701,23 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_detail_entry[] =
+R"doc(Returns entry (row, col) of a matrix operand, or a scalar operand
+itself.
+
+Args:
+    operand: The operand.
+    row: The entry's row.
+    col: The entry's column.
+
+Template Args:
+    Scalar: Scalar type.
+
+Returns:
+    The entry.
+
+)doc";
+
 constexpr char mkd_doc_slp_detail_gradient_tree[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_detail_gradient_tree_2[] =
@@ -6477,6 +6766,25 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_detail_is_symmetric_value[] =
+R"doc(Returns true if a square matrix operand's value is symmetric to within
+√ε times its largest entry, or a scalar operand.
+
+Values computed from symmetric expressions are symmetric only to
+rounding, so this catches asymmetric operands, like a transposed
+product, rather than proving symmetry.
+
+Args:
+    operand: The operand.
+
+Template Args:
+    Scalar: Scalar type.
+
+Returns:
+    True if the operand's value is symmetric.
+
+)doc";
+
 constexpr char mkd_doc_slp_detail_join_english[] =
 R"doc(Joins items into an English list ("a", "a and b", or "a, b, and c").
 
@@ -6504,6 +6812,23 @@ Template Args:
 
 Returns:
     The findings.
+
+)doc";
+
+constexpr char mkd_doc_slp_detail_lower_triangle_equality[] =
+R"doc(Returns equality constraints between the lower triangles of two n × n
+operands, or between an n × n operand's lower triangle and a scalar.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side.
+    n: The operands' dimension.
+
+Template Args:
+    Scalar: Scalar type.
+
+Returns:
+    The n(n + 1)/2 equality constraints.
 
 )doc";
 
@@ -6996,19 +7321,19 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_add_10[] =
-R"doc(Adds two translations.
+R"doc(Unary plus operator.
 
 Args:
-    lhs: Operator left-hand side.
-    rhs: Operator right-hand side.
+    P: The matrix.
 
 Returns:
-    The sum.
+    The matrix.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_add_11[] =
-R"doc(Adds two translations.
+R"doc(Addition operator for two symmetric positive definite matrices, whose
+sum is also symmetric positive definite.
 
 Args:
     lhs: Operator left-hand side.
@@ -7020,7 +7345,7 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_add_12[] =
-R"doc(Adds two twists.
+R"doc(Addition operator.
 
 Args:
     lhs: Operator left-hand side.
@@ -7032,7 +7357,7 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_add_13[] =
-R"doc(Adds two twists.
+R"doc(Addition operator.
 
 Args:
     lhs: Operator left-hand side.
@@ -7044,18 +7369,19 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_add_14[] =
-R"doc(Unary plus operator.
+R"doc(Adds two translations.
 
 Args:
-    v: The vector.
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
 
 Returns:
-    The vector.
+    The sum.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_add_15[] =
-R"doc(Addition operator.
+R"doc(Adds two translations.
 
 Args:
     lhs: Operator left-hand side.
@@ -7067,7 +7393,7 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_add_16[] =
-R"doc(Addition operator.
+R"doc(Adds two twists.
 
 Args:
     lhs: Operator left-hand side.
@@ -7079,6 +7405,53 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_add_17[] =
+R"doc(Adds two twists.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The sum.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_add_18[] =
+R"doc(Unary plus operator.
+
+Args:
+    v: The vector.
+
+Returns:
+    The vector.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_add_19[] =
+R"doc(Addition operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The sum.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_add_20[] =
+R"doc(Addition operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The sum.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_add_21[] =
 R"doc(Addition operator.
 
 Args:
@@ -7166,14 +7539,14 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_div_7[] =
-R"doc(Divides a translation by a scalar.
+R"doc(Division operator.
 
 Args:
-    lhs: The translation.
-    rhs: The divisor.
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
 
 Returns:
-    The divided translation.
+    The quotient.
 
 )doc";
 
@@ -7190,6 +7563,18 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_div_9[] =
+R"doc(Divides a translation by a scalar.
+
+Args:
+    lhs: The translation.
+    rhs: The divisor.
+
+Returns:
+    The divided translation.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_div_10[] =
 R"doc(Division operator.
 
 Args:
@@ -7339,6 +7724,38 @@ Args:
 )doc";
 
 constexpr char mkd_doc_slp_operator_eq_12[] =
+R"doc(Equality operator that returns equality constraints between the lower
+triangles of a symmetric view and another operand.
+
+The other operand must be symmetric too. If it's a scalar, every entry
+of the lower triangle is constrained to it.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The n(n + 1)/2 equality constraints.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_13[] =
+R"doc(Equality operator that returns equality constraints between the lower
+triangles of another operand and a symmetric view.
+
+The other operand must be symmetric too. If it's a scalar, every entry
+of the lower triangle is constrained to it.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The n(n + 1)/2 equality constraints.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_14[] =
 R"doc(Equality operator that returns an equality constraint for two
 rotations.
 
@@ -7355,7 +7772,7 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_eq_13[] =
+constexpr char mkd_doc_slp_operator_eq_15[] =
 R"doc(Equality operator that returns an equality constraint for two
 rotations.
 
@@ -7373,7 +7790,7 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_eq_14[] =
+constexpr char mkd_doc_slp_operator_eq_16[] =
 R"doc(Equality operator that returns an equality constraint for two
 similarity transforms.
 
@@ -7389,7 +7806,7 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_eq_15[] =
+constexpr char mkd_doc_slp_operator_eq_17[] =
 R"doc(Equality operator that returns an equality constraint for two
 similarity transforms.
 
@@ -7405,41 +7822,12 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_eq_16[] =
-R"doc(Equality operator that returns an equality constraint for two
-similarity twists.
-
-The constraint is that the linear parts are equal, the angular parts
-are equal, and the log-scale parts are equal.
-
-Args:
-    lhs: Left-hand side.
-    rhs: Right-hand side.
-
-Returns:
-    The equality constraint.
-
-)doc";
-
-constexpr char mkd_doc_slp_operator_eq_17[] =
-R"doc(Equality operator that returns an equality constraint for two
-similarity twists.
-
-The constraint is that the linear parts are equal, the angular parts
-are equal, and the log-scale parts are equal.
-
-Args:
-    lhs: Left-hand side.
-    rhs: Right-hand side.
-
-Returns:
-    The equality constraint.
-
-)doc";
-
 constexpr char mkd_doc_slp_operator_eq_18[] =
 R"doc(Equality operator that returns an equality constraint for two
-translations.
+similarity twists.
+
+The constraint is that the linear parts are equal, the angular parts
+are equal, and the log-scale parts are equal.
 
 Args:
     lhs: Left-hand side.
@@ -7452,7 +7840,10 @@ Returns:
 
 constexpr char mkd_doc_slp_operator_eq_19[] =
 R"doc(Equality operator that returns an equality constraint for two
-translations.
+similarity twists.
+
+The constraint is that the linear parts are equal, the angular parts
+are equal, and the log-scale parts are equal.
 
 Args:
     lhs: Left-hand side.
@@ -7464,21 +7855,69 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_eq_20[] =
-R"doc(Equality operator that returns an equality constraint for two twists.
+R"doc(Equality operator that returns equality constraints between the lower
+triangles of a symmetric positive definite matrix and a symmetric
+operand.
 
-The constraint is that the linear parts are equal and the angular
-parts are equal.
+A symmetric n × n matrix has n(n + 1)/2 degrees of freedom, so it's
+n(n + 1)/2 equations instead of the n² equations of an elementwise
+comparison, whose duplicated off-diagonal equations make the
+constraint Jacobian rank deficient. The upper triangle of rhs isn't
+read. When assertions are enabled, rhs's current value must be
+symmetric to within √ε times its largest entry.
 
 Args:
     lhs: Left-hand side.
-    rhs: Right-hand side.
+    rhs: Right-hand side. It must be symmetric.
 
 Returns:
-    The equality constraint.
+    The n(n + 1)/2 equality constraints.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_eq_21[] =
+R"doc(Equality operator that returns equality constraints between the lower
+triangles of a symmetric operand and a symmetric positive definite
+matrix.
+
+See operator==(const SPDMatrix&, const RHS&).
+
+Args:
+    lhs: Left-hand side. It must be symmetric.
+    rhs: Right-hand side.
+
+Returns:
+    The n(n + 1)/2 equality constraints.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_22[] =
+R"doc(Equality operator that returns an equality constraint for two
+translations.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraint.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_23[] =
+R"doc(Equality operator that returns an equality constraint for two
+translations.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraint.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_24[] =
 R"doc(Equality operator that returns an equality constraint for two twists.
 
 The constraint is that the linear parts are equal and the angular
@@ -7493,7 +7932,22 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_eq_22[] =
+constexpr char mkd_doc_slp_operator_eq_25[] =
+R"doc(Equality operator that returns an equality constraint for two twists.
+
+The constraint is that the linear parts are equal and the angular
+parts are equal.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraint.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_26[] =
 R"doc(Equality operator that returns an equality constraint for two unit
 vectors.
 
@@ -7514,7 +7968,7 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_eq_23[] =
+constexpr char mkd_doc_slp_operator_eq_27[] =
 R"doc(Equality operator that returns an equality constraint for a unit
 vector and a constant direction.
 
@@ -7530,7 +7984,7 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_eq_24[] =
+constexpr char mkd_doc_slp_operator_eq_28[] =
 R"doc(Equality operator that returns an equality constraint for a constant
 direction and a unit vector.
 
@@ -7857,30 +8311,66 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_mul_20[] =
-R"doc(Scales a translation.
+R"doc(Multiplication operator.
 
 Args:
-    lhs: The translation.
-    rhs: The factor.
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
 
 Returns:
-    The scaled translation.
+    The product.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_mul_21[] =
-R"doc(Scales a translation.
+R"doc(Multiplication operator.
 
 Args:
-    lhs: The factor.
-    rhs: The translation.
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
 
 Returns:
-    The scaled translation.
+    The product.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_mul_22[] =
+R"doc(Multiplication operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The product.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_23[] =
+R"doc(Multiplication operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The product.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_24[] =
+R"doc(Multiplication operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The product, which needn't be symmetric.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_25[] =
 R"doc(Scales a translation.
 
 Args:
@@ -7892,7 +8382,7 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_mul_23[] =
+constexpr char mkd_doc_slp_operator_mul_26[] =
 R"doc(Scales a translation.
 
 Args:
@@ -7904,79 +8394,79 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_mul_24[] =
-R"doc(Scales a twist.
-
-Args:
-    lhs: The twist.
-    rhs: The factor.
-
-Returns:
-    The scaled twist.
-
-)doc";
-
-constexpr char mkd_doc_slp_operator_mul_25[] =
-R"doc(Scales a twist.
-
-Args:
-    lhs: The factor.
-    rhs: The twist.
-
-Returns:
-    The scaled twist.
-
-)doc";
-
-constexpr char mkd_doc_slp_operator_mul_26[] =
-R"doc(Scales a twist.
-
-Args:
-    lhs: The twist.
-    rhs: The factor.
-
-Returns:
-    The scaled twist.
-
-)doc";
-
 constexpr char mkd_doc_slp_operator_mul_27[] =
-R"doc(Scales a twist.
+R"doc(Scales a translation.
 
 Args:
-    lhs: The factor.
-    rhs: The twist.
+    lhs: The translation.
+    rhs: The factor.
 
 Returns:
-    The scaled twist.
+    The scaled translation.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_mul_28[] =
-R"doc(Multiplication operator.
+R"doc(Scales a translation.
 
 Args:
-    lhs: Operator left-hand side.
-    rhs: Operator right-hand side.
+    lhs: The factor.
+    rhs: The translation.
 
 Returns:
-    The product.
+    The scaled translation.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_mul_29[] =
-R"doc(Multiplication operator.
+R"doc(Scales a twist.
 
 Args:
-    lhs: Operator left-hand side.
-    rhs: Operator right-hand side.
+    lhs: The twist.
+    rhs: The factor.
 
 Returns:
-    The product.
+    The scaled twist.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_mul_30[] =
+R"doc(Scales a twist.
+
+Args:
+    lhs: The factor.
+    rhs: The twist.
+
+Returns:
+    The scaled twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_31[] =
+R"doc(Scales a twist.
+
+Args:
+    lhs: The twist.
+    rhs: The factor.
+
+Returns:
+    The scaled twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_32[] =
+R"doc(Scales a twist.
+
+Args:
+    lhs: The factor.
+    rhs: The twist.
+
+Returns:
+    The scaled twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_33[] =
 R"doc(Multiplication operator.
 
 Args:
@@ -7988,7 +8478,31 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_mul_31[] =
+constexpr char mkd_doc_slp_operator_mul_34[] =
+R"doc(Multiplication operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The product.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_35[] =
+R"doc(Multiplication operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The product.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_36[] =
 R"doc(Multiplication operator.
 
 Args:
@@ -8129,30 +8643,30 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_sub_12[] =
-R"doc(Subtracts two translations.
+R"doc(Unary minus operator.
+
+Args:
+    P: The matrix.
+
+Returns:
+    The negated matrix, which is negative definite.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_13[] =
+R"doc(Subtraction operator.
 
 Args:
     lhs: Operator left-hand side.
     rhs: Operator right-hand side.
 
 Returns:
-    The difference.
-
-)doc";
-
-constexpr char mkd_doc_slp_operator_sub_13[] =
-R"doc(Negates a translation.
-
-Args:
-    translation: The translation.
-
-Returns:
-    The negated translation.
+    The difference, which needn't be positive definite.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_sub_14[] =
-R"doc(Subtracts two translations.
+R"doc(Subtraction operator.
 
 Args:
     lhs: Operator left-hand side.
@@ -8164,18 +8678,19 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_sub_15[] =
-R"doc(Negates a translation.
+R"doc(Subtraction operator.
 
 Args:
-    translation: The translation.
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
 
 Returns:
-    The negated translation.
+    The difference.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_sub_16[] =
-R"doc(Subtracts two twists.
+R"doc(Subtracts two translations.
 
 Args:
     lhs: Operator left-hand side.
@@ -8187,18 +8702,18 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_sub_17[] =
-R"doc(Negates a twist.
+R"doc(Negates a translation.
 
 Args:
-    twist: The twist.
+    translation: The translation.
 
 Returns:
-    The negated twist.
+    The negated translation.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_sub_18[] =
-R"doc(Subtracts two twists.
+R"doc(Subtracts two translations.
 
 Args:
     lhs: Operator left-hand side.
@@ -8210,29 +8725,18 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_sub_19[] =
-R"doc(Negates a twist.
+R"doc(Negates a translation.
 
 Args:
-    twist: The twist.
+    translation: The translation.
 
 Returns:
-    The negated twist.
+    The negated translation.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_sub_20[] =
-R"doc(Unary minus operator.
-
-Args:
-    v: The vector.
-
-Returns:
-    The negated vector, which is also unit-length.
-
-)doc";
-
-constexpr char mkd_doc_slp_operator_sub_21[] =
-R"doc(Subtraction operator.
+R"doc(Subtracts two twists.
 
 Args:
     lhs: Operator left-hand side.
@@ -8243,8 +8747,19 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_operator_sub_21[] =
+R"doc(Negates a twist.
+
+Args:
+    twist: The twist.
+
+Returns:
+    The negated twist.
+
+)doc";
+
 constexpr char mkd_doc_slp_operator_sub_22[] =
-R"doc(Subtraction operator.
+R"doc(Subtracts two twists.
 
 Args:
     lhs: Operator left-hand side.
@@ -8256,6 +8771,52 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_sub_23[] =
+R"doc(Negates a twist.
+
+Args:
+    twist: The twist.
+
+Returns:
+    The negated twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_24[] =
+R"doc(Unary minus operator.
+
+Args:
+    v: The vector.
+
+Returns:
+    The negated vector, which is also unit-length.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_25[] =
+R"doc(Subtraction operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The difference.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_26[] =
+R"doc(Subtraction operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The difference.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_27[] =
 R"doc(Subtraction operator.
 
 Args:

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 from sleipnir.autodiff import ExpressionType
-from sleipnir.optimization import ExitStatus, Problem
+from sleipnir.optimization import ExitStatus, IterationInfo, Problem
 from tolerance import solution_tolerance
 
 
@@ -134,5 +134,29 @@ def test_parameter_resolve_with_new_values() -> None:
     # Unconstrained minimum is infeasible, so the bound is active
     target.set_value(10.0)
     upper_bound.set_value(3.0)
+    assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS
+    assert x.value() == pytest.approx(3.0, abs=solution_tolerance(1))
+
+
+def test_parameter_manifold_types() -> None:
+    problem = Problem()
+
+    n = problem.unit_vector_parameter(3)
+    pose = problem.pose3_parameter()
+    similarity = problem.similarity2_parameter()
+    P = problem.spd_parameter(2)
+    x = problem.real_decision_variable()
+
+    r = x - n[1] - pose.translation().x() - similarity.rotation().sin() - P[1, 0]
+    problem.minimize(r * r)
+
+    # The iterate has only x
+    def callback(info: IterationInfo) -> None:
+        assert info.x.size == 1
+
+    problem.add_callback(callback)
+
+    n.set_value(np.array([0.0, 1.0, 0.0]))
+    pose.translation().set_value(np.array([2.0, 0.0, 0.0]))
     assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS
     assert x.value() == pytest.approx(3.0, abs=solution_tolerance(1))

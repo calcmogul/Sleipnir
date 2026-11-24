@@ -332,6 +332,8 @@ void bind_real_submatrix(nb::class_<RealSubmatrix<RealMatrix<double>>>& cls) {
       nb::is_operator(), "power"_a);
   cls.def_prop_ro("T", &RealSubmatrix<RealMatrix<double>>::T,
                   DOC(slp, RealSubmatrix, T));
+  cls.def("symmetric_view", &RealSubmatrix<RealMatrix<double>>::symmetric_view,
+          DOC(slp, RealSubmatrix, symmetric_view));
   cls.def("trace", &RealSubmatrix<RealMatrix<double>>::trace,
           DOC(slp, RealSubmatrix, trace));
   cls.def("rows", &RealSubmatrix<RealMatrix<double>>::rows,

@@ -64,25 +64,25 @@ void bind_translation3(nb::class_<Translation3<double>>& cls) {
 
   cls.def(
       "__add__", [](const T& lhs, const T& rhs) { return lhs + rhs; },
-      nb::is_operator(), "rhs"_a, DOC(slp, operator, add, 10));
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, add, 14));
   cls.def(
       "__sub__", [](const T& lhs, const T& rhs) { return lhs - rhs; },
-      nb::is_operator(), "rhs"_a, DOC(slp, operator, sub, 12));
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, sub, 16));
   cls.def(
       "__neg__", [](const T& self) { return -self; },
-      DOC(slp, operator, sub, 13));
+      DOC(slp, operator, sub, 17));
   cls.def(
       "__mul__", [](const T& lhs, const V& rhs) { return lhs * rhs; },
-      nb::is_operator(), "rhs"_a, DOC(slp, operator, mul, 20));
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, mul, 25));
   cls.def(
       "__rmul__", [](const T& rhs, const V& lhs) { return lhs * rhs; },
-      nb::is_operator(), "lhs"_a, DOC(slp, operator, mul, 21));
+      nb::is_operator(), "lhs"_a, DOC(slp, operator, mul, 26));
   cls.def(
       "__truediv__", [](const T& lhs, const V& rhs) { return lhs / rhs; },
-      nb::is_operator(), "rhs"_a, DOC(slp, operator, div, 7));
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, div, 8));
   cls.def(
       "__eq__", [](const T& lhs, const T& rhs) { return lhs == rhs; },
-      nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 18));
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 22));
 }
 
 }  // namespace slp
