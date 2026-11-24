@@ -353,6 +353,29 @@ Negative values indicate errors.
 
 ## Problem formulation tips
 
+### Linting
+
+`problem.lint()` checks the problem's formulation and returns a list of suggested improvements. It doesn't change or solve the problem, so call it while writing the problem instead of before every solve.
+
+```python
+for finding in problem.lint():
+    print(finding)
+```
+
+Each finding has a `kind` (a `LintKind`), the indices of the decision variables and constraints involved, whether the cost function is involved (`cost`), and a `message` that explains the issue and how to fix it. Decision variables are numbered in the order they were created, and messages call decision variable i `x[i]`. Constraints are numbered in the order they were added, and matrix constraints add one per element.
+
+| `LintKind`                 | Issue                                                                                                                                                                                                                                                                                                        |
+|----------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `UNUSED_DECISION_VARIABLE` | Decision variables don't appear in the cost function or any constraint.                                                                                                                                                                                                                                      |
+| `CONSTANT_CONSTRAINT`      | A constraint doesn't depend on any decision variables, so it's always satisfied or never satisfied.                                                                                                                                                                                                          |
+| `REDUNDANT_CONSTRAINTS`    | Linear constraints on the same linear combination of decision variables imply each other.                                                                                                                                                                                                                    |
+| `CONFLICTING_CONSTRAINTS`  | Linear constraints on the same linear combination of decision variables contradict each other.                                                                                                                                                                                                               |
+| `EQUALITY_AS_INEQUALITIES` | A lower and upper bound on the same linear combination of decision variables are equal.                                                                                                                                                                                                                      |
+| `NONSMOOTH_FUNCTION`       | A function that isn't differentiable everywhere appears in a form with a differentiable replacement: `abs(a) <= b`, `max(a, b) <= c`, `min(a, b) >= c`, a norm (like `hypot()`) compared to a constant, or a cost function that's a norm.                                                                    |
+| `BADLY_SCALED`             | Coefficients of a linear constraint or a linear or quadratic cost function span so many orders of magnitude that the solver loses precision, and the message names the variable substitution that fixes it; or a linear constraint's gradient is tiny, and the message names the constant to multiply it by. |
+
+Values in messages use the decision variables' and parameters' current values.
+
 ### Optimizing the problem formulation
 
 Cost functions and constraints can have the following orders:

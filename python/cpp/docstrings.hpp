@@ -25,7 +25,9 @@
 
 constexpr char mkd_doc_formatter[] = R"doc(Formatter for ExpressionType.)doc";
 
-constexpr char mkd_doc_formatter_2[] = R"doc(Formatter for ExitStatus.)doc";
+constexpr char mkd_doc_formatter_2[] = R"doc(Formatter for LintFinding.)doc";
+
+constexpr char mkd_doc_formatter_3[] = R"doc(Formatter for ExitStatus.)doc";
 
 constexpr char mkd_doc_formatter_format[] =
 R"doc(Formats ExpressionType.
@@ -43,6 +45,21 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_formatter_format_2[] =
+R"doc(Formats LintFinding as its message.
+
+Args:
+    finding: Lint finding.
+    ctx: Format context.
+
+Template Args:
+    FmtContext: Format context type.
+
+Returns:
+    Format context iterator.
+
+)doc";
+
+constexpr char mkd_doc_formatter_format_3[] =
 R"doc(Formats ExitStatus.
 
 Args:
@@ -61,6 +78,8 @@ constexpr char mkd_doc_formatter_m_underlying[] = R"doc()doc";
 
 constexpr char mkd_doc_formatter_m_underlying_2[] = R"doc()doc";
 
+constexpr char mkd_doc_formatter_m_underlying_3[] = R"doc()doc";
+
 constexpr char mkd_doc_formatter_parse[] =
 R"doc(Parse format string.
 
@@ -73,6 +92,17 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_formatter_parse_2[] =
+R"doc(Parses format string.
+
+Args:
+    ctx: Format parse context.
+
+Returns:
+    Format parse context iterator.
+
+)doc";
+
+constexpr char mkd_doc_formatter_parse_3[] =
 R"doc(Parses format string.
 
 Args:
@@ -1863,6 +1893,60 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_LintFinding[] =
+R"doc(A suggested improvement to a problem's formulation from
+Problem::lint().
+
+Decision variable indices count decision variables in the order they
+were created. Constraint indices count scalar constraints in the order
+they were added, with matrix constraints adding one per element.
+Messages refer to decision variable i as x[i].)doc";
+
+constexpr char mkd_doc_slp_LintFinding_cost[] = R"doc(Whether the cost function is involved.)doc";
+
+constexpr char mkd_doc_slp_LintFinding_decision_variables[] = R"doc(The indices of the decision variables involved.)doc";
+
+constexpr char mkd_doc_slp_LintFinding_equality_constraints[] = R"doc(The indices of the equality constraints involved.)doc";
+
+constexpr char mkd_doc_slp_LintFinding_inequality_constraints[] = R"doc(The indices of the inequality constraints involved.)doc";
+
+constexpr char mkd_doc_slp_LintFinding_kind[] = R"doc(The kind of formulation issue.)doc";
+
+constexpr char mkd_doc_slp_LintFinding_message[] = R"doc(A description of the issue and how to fix it.)doc";
+
+constexpr char mkd_doc_slp_LintKind[] = R"doc(The kind of formulation issue a lint finding reports.)doc";
+
+constexpr char mkd_doc_slp_LintKind_BADLY_SCALED[] =
+R"doc(Coefficients of the cost function or linear constraints span so many
+orders of magnitude that the solver loses precision, and rescaling
+decision variables or constraints fixes it.)doc";
+
+constexpr char mkd_doc_slp_LintKind_CONFLICTING_CONSTRAINTS[] =
+R"doc(Linear constraints on the same linear combination of decision
+variables contradict each other, so the problem is infeasible.)doc";
+
+constexpr char mkd_doc_slp_LintKind_CONSTANT_CONSTRAINT[] =
+R"doc(A constraint doesn't depend on any decision variables, so it's either
+always satisfied or never satisfied.)doc";
+
+constexpr char mkd_doc_slp_LintKind_EQUALITY_AS_INEQUALITIES[] =
+R"doc(A lower bound and an upper bound on the same linear combination of
+decision variables are equal, so together they're an equality
+constraint.)doc";
+
+constexpr char mkd_doc_slp_LintKind_NONSMOOTH_FUNCTION[] =
+R"doc(The cost function or a constraint uses a function of decision
+variables that isn't differentiable everywhere, like abs() or a norm,
+in a form with a differentiable replacement.)doc";
+
+constexpr char mkd_doc_slp_LintKind_REDUNDANT_CONSTRAINTS[] =
+R"doc(Linear constraints are implied by other linear constraints on the same
+linear combination of decision variables.)doc";
+
+constexpr char mkd_doc_slp_LintKind_UNUSED_DECISION_VARIABLE[] =
+R"doc(Decision variables don't appear in the cost function or any
+constraint.)doc";
+
 constexpr char mkd_doc_slp_OCP[] =
 R"doc(This class allows the user to pose and solve a constrained optimal
 control problem (OCP) in a variety of ways.
@@ -2294,6 +2378,56 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_Problem_lint[] =
+R"doc(Checks the problem's formulation for issues and suggests improvements.
+
+Linting analyzes the cost function and constraints without changing or
+solving the problem. It reports:
+
+
+  
+
+* Decision variables that don't appear in the cost function or any
+    constraint.
+
+
+  
+
+* Constraints that don't depend on any decision variables.
+
+
+  
+
+* Linear constraints on the same linear combination of decision
+    variables that are redundant, conflict, or form an equality
+    constraint.
+
+
+  
+
+* Functions of decision variables that aren't differentiable
+    everywhere, in forms with a differentiable replacement: abs(a) ≤
+    b, max(a, b) ≤ c, min(a, b) ≥ c, a norm compared to a constant,
+    and a cost function that's a norm.
+
+
+  
+
+* Coefficients of the cost function or linear constraints that span
+    so many orders of magnitude that the solver loses precision, when
+    rescaling decision variables or constraints fixes it.
+
+
+
+
+Values in the findings, such as constraint values and bounds, use the
+decision variables' and parameters' current values.
+
+Returns:
+    The findings, which are empty if there's nothing to improve.
+
+)doc";
+
 constexpr char mkd_doc_slp_Problem_m_decision_variables[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Problem_m_equality_constraints[] = R"doc()doc";
@@ -2482,6 +2616,12 @@ Args:
 )doc";
 
 constexpr char mkd_doc_slp_Real[] =
+R"doc(A real-valued autodiff expression.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_Real_2[] =
 R"doc(A real-valued autodiff expression.
 
 Template Args:
@@ -4208,6 +4348,27 @@ R"doc(Classifies an operand of complex matrix arithmetic.
 Template Args:
     T: The operand type.)doc";
 
+constexpr char mkd_doc_slp_detail_ExpressionRole[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_detail_ExpressionRole_2[] = R"doc(Where an expression appears in a problem.)doc";
+
+constexpr char mkd_doc_slp_detail_ExpressionRole_COST[] = R"doc(The cost function.)doc";
+
+constexpr char mkd_doc_slp_detail_ExpressionRole_EQUALITY_CONSTRAINT[] = R"doc(An equality constraint.)doc";
+
+constexpr char mkd_doc_slp_detail_ExpressionRole_INEQUALITY_CONSTRAINT[] = R"doc(An inequality constraint.)doc";
+
+constexpr char mkd_doc_slp_detail_capitalize[] =
+R"doc(Returns the string with its first letter capitalized.
+
+Args:
+    str: The string.
+
+Returns:
+    The capitalized string.
+
+)doc";
+
 constexpr char mkd_doc_slp_detail_complex_entry[] =
 R"doc(Returns entry (row, col) of a matrix operand as a Complex.
 
@@ -4221,6 +4382,30 @@ Template Args:
 
 Returns:
     The entry.
+
+)doc";
+
+constexpr char mkd_doc_slp_detail_describe_constraints[] =
+R"doc(Describes constraints as "equality constraint i", "inequality
+constraints i and j", and so on.
+
+Args:
+    kind: "equality" or "inequality".
+    indices: The constraint indices.
+
+Returns:
+    The description.
+
+)doc";
+
+constexpr char mkd_doc_slp_detail_describe_decision_variables[] =
+R"doc(Describes decision variables as "x[i]", "x[i] and x[j]", and so on.
+
+Args:
+    indices: The decision variable indices.
+
+Returns:
+    The description.
 
 )doc";
 
@@ -4243,6 +4428,119 @@ Template Args:
 
 Returns:
     The variable's gradient tree.
+
+)doc";
+
+constexpr char mkd_doc_slp_detail_is_sum_of_squares[] =
+R"doc(Returns true if an expression is a sum of squares of expressions of
+decision variables, like a vector's squared norm.
+
+Args:
+    node: The expression.
+
+Template Args:
+    Scalar: Scalar type.
+
+Returns:
+    True if the expression is a sum of squares.
+
+)doc";
+
+constexpr char mkd_doc_slp_detail_join_english[] =
+R"doc(Joins items into an English list ("a", "a and b", or "a, b, and c").
+
+Args:
+    items: The items.
+
+Returns:
+    The list.
+
+)doc";
+
+constexpr char mkd_doc_slp_detail_lint[] =
+R"doc(Checks a problem's formulation for issues and suggests improvements.
+
+See Problem::lint().
+
+Args:
+    decision_variables: The decision variables.
+    cost: The cost function, if any.
+    equality_constraints: The equality constraints cₑ(x) = 0.
+    inequality_constraints: The inequality constraints cᵢ(x) ≥ 0.
+
+Template Args:
+    Scalar: Scalar type.
+
+Returns:
+    The findings.
+
+)doc";
+
+constexpr char mkd_doc_slp_detail_near[] =
+R"doc(Returns true if two values are equal to within a relative tolerance.
+
+Args:
+    a: The first value.
+    b: The second value.
+    tolerance: The relative tolerance.
+
+Template Args:
+    Scalar: Scalar type.
+
+Returns:
+    True if the values are equal to within the tolerance.
+
+)doc";
+
+constexpr char mkd_doc_slp_detail_replaceable_nonsmooth_functions[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_detail_replaceable_nonsmooth_functions_2[] =
+R"doc(Returns the functions of decision variables in an expression that
+aren't differentiable everywhere and appear in a form with a
+differentiable replacement.
+
+The forms and their replacements are:
+
+
+  
+
+* "abs": abs(a) ≤ b → −b ≤ a ≤ b
+
+
+  
+
+* "max": max(a, b) ≤ c → a ≤ c and b ≤ c
+
+
+  
+
+* "min": min(a, b) ≥ c → a ≥ c and b ≥ c
+
+
+  
+
+* "norm": a norm (sqrt() of a sum of squares or hypot()) compared to a
+    value that doesn't depend on decision variables → the squared norm
+    compared to the value's square
+
+
+  
+
+* "cost norm": a cost function that's a norm → the squared norm, which
+    has the same minimizer
+
+
+
+
+Args:
+    x: The expression.
+    role: Where the expression appears in the problem.
+
+Template Args:
+    Scalar: Scalar type.
+
+Returns:
+    The forms found, without duplicates.
 
 )doc";
 

@@ -2,6 +2,7 @@
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/function.h>
+#include <nanobind/stl/vector.h>
 
 #include <algorithm>
 #include <array>
@@ -194,6 +195,7 @@ void bind_problem(nb::class_<Problem<double>>& cls) {
   cls.def("inequality_constraint_type",
           &Problem<double>::inequality_constraint_type,
           DOC(slp, Problem, inequality_constraint_type));
+  cls.def("lint", &Problem<double>::lint, DOC(slp, Problem, lint));
 
   // Maps Python's Problem.solve(**kwargs) to
   // C++'s Problem::solve(Options, bool)

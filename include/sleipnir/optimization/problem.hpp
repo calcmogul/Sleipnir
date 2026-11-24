@@ -13,6 +13,7 @@
 #include <optional>
 #include <ranges>
 #include <utility>
+#include <vector>
 
 #include <Eigen/Core>
 #include <Eigen/SparseCore>
@@ -27,6 +28,7 @@
 #include "sleipnir/autodiff/jacobian.hpp"
 #include "sleipnir/autodiff/real.hpp"
 #include "sleipnir/autodiff/real_matrix.hpp"
+#include "sleipnir/optimization/lint.hpp"
 #include "sleipnir/optimization/solver/control_flow.hpp"
 #include "sleipnir/optimization/solver/exit_status.hpp"
 #include "sleipnir/optimization/solver/ipm.hpp"
@@ -350,6 +352,38 @@ class Problem {
     } else {
       return ExpressionType::NONE;
     }
+  }
+
+  /// Checks the problem's formulation for issues and suggests improvements.
+  ///
+  /// Linting analyzes the cost function and constraints without changing or
+  /// solving the problem. It reports:
+  ///
+  /// <ul>
+  ///   <li>Decision variables that don't appear in the cost function or any
+  ///     constraint.</li>
+  ///   <li>Constraints that don't depend on any decision variables.</li>
+  ///   <li>Linear constraints on the same linear combination of decision
+  ///     variables that are redundant, conflict, or form an equality
+  ///     constraint.</li>
+  ///   <li>Functions of decision variables that aren't differentiable
+  ///     everywhere, in forms with a differentiable replacement: abs(a) ≤ b,
+  ///     max(a, b) ≤ c, min(a, b) ≥ c, a norm compared to a constant, and a
+  ///     cost function that's a norm.</li>
+  ///   <li>Coefficients of the cost function or linear constraints that span
+  ///     so many orders of magnitude that the solver loses precision, when
+  ///     rescaling decision variables or constraints fixes it.</li>
+  /// </ul>
+  ///
+  /// Values in the findings, such as constraint values and bounds, use the
+  /// decision variables' and parameters' current values.
+  ///
+  /// @return The findings, which are empty if there's nothing to improve.
+  [[nodiscard]]
+  std::vector<LintFinding> lint() const {
+    return detail::lint<Scalar>(m_decision_variables, m_f,
+                                m_equality_constraints,
+                                m_inequality_constraints);
   }
 
   /// Solves the optimization problem. The solution will be stored in the

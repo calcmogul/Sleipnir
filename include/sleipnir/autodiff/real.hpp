@@ -2,12 +2,15 @@
 
 #pragma once
 
+#include <stdint.h>
+
 #include <algorithm>
 #include <concepts>
 #include <cstddef>
 #include <initializer_list>
 #include <ranges>
 #include <source_location>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -40,7 +43,16 @@ struct EqualityConstraints;
 template <typename Scalar>
 struct InequalityConstraints;
 
+template <typename Scalar>
+class Real;
+
 namespace detail {
+
+enum class ExpressionRole : uint8_t;
+
+template <typename Scalar>
+std::vector<std::string_view> replaceable_nonsmooth_functions(
+    const Real<Scalar>& x, ExpressionRole role);
 
 template <typename Scalar>
 RealMatrix<Scalar> gradient_tree(
@@ -371,6 +383,9 @@ class Real : public SleipnirBase {
   friend class Hessian;
   template <typename Scalar>
   friend class Jacobian;
+  template <typename Scalar>
+  friend std::vector<std::string_view> detail::replaceable_nonsmooth_functions(
+      const Real<Scalar>& x, detail::ExpressionRole role);
 };
 
 template <template <typename> typename T, typename Scalar>

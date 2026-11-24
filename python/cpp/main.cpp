@@ -15,6 +15,7 @@
 #include <sleipnir/autodiff/real.hpp>
 #include <sleipnir/autodiff/real_matrix.hpp>
 #include <sleipnir/autodiff/real_submatrix.hpp>
+#include <sleipnir/optimization/lint.hpp>
 #include <sleipnir/optimization/ocp.hpp>
 #include <sleipnir/optimization/ocp/dynamics_type.hpp>
 #include <sleipnir/optimization/ocp/timestep_method.hpp>
@@ -86,6 +87,10 @@ NB_MODULE(_sleipnir, m) {
   nb::class_<IterationInfo<double>> iteration_info{
       optimization, "IterationInfo", DOC(slp, IterationInfo)};
 
+  nb::enum_<LintKind> lint_kind{optimization, "LintKind", DOC(slp, LintKind)};
+  nb::class_<LintFinding> lint_finding{optimization, "LintFinding",
+                                       DOC(slp, LintFinding)};
+
   nb::class_<Problem<double>> problem{optimization, "Problem",
                                       DOC(slp, Problem)};
 
@@ -125,6 +130,9 @@ NB_MODULE(_sleipnir, m) {
 
   bind_exit_status(exit_status);
   bind_iteration_info(iteration_info);
+
+  bind_lint_kind(lint_kind);
+  bind_lint_finding(lint_finding);
 
   bind_problem(problem);
 

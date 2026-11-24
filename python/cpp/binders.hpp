@@ -13,6 +13,7 @@
 #include <sleipnir/autodiff/real.hpp>
 #include <sleipnir/autodiff/real_matrix.hpp>
 #include <sleipnir/autodiff/real_submatrix.hpp>
+#include <sleipnir/optimization/lint.hpp>
 #include <sleipnir/optimization/ocp.hpp>
 #include <sleipnir/optimization/ocp/dynamics_type.hpp>
 #include <sleipnir/optimization/ocp/timestep_method.hpp>
@@ -46,6 +47,9 @@ void bind_inequality_constraints(
 
 void bind_exit_status(nb::enum_<ExitStatus>& e);
 void bind_iteration_info(nb::class_<IterationInfo<double>>& cls);
+
+void bind_lint_kind(nb::enum_<LintKind>& e);
+void bind_lint_finding(nb::class_<LintFinding>& cls);
 
 void bind_problem(nb::class_<Problem<double>>& cls);
 

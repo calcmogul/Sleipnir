@@ -592,6 +592,7 @@ if(SLEIPNIR_BUILD_PYTHON)
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/real.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/real_matrix.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/real_submatrix.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/optimization/lint.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/optimization/ocp.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/optimization/ocp/dynamics_type.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/optimization/ocp/timestep_method.hpp
