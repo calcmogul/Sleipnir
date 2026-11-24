@@ -15,6 +15,8 @@ void bind_lint_kind(nb::enum_<LintKind>& e) {
           DOC(slp, LintKind, UNUSED_DECISION_VARIABLE));
   e.value("CONSTANT_CONSTRAINT", LintKind::CONSTANT_CONSTRAINT,
           DOC(slp, LintKind, CONSTANT_CONSTRAINT));
+  e.value("SPHERE_CONSTRAINT", LintKind::SPHERE_CONSTRAINT,
+          DOC(slp, LintKind, SPHERE_CONSTRAINT));
   e.value("REDUNDANT_CONSTRAINTS", LintKind::REDUNDANT_CONSTRAINTS,
           DOC(slp, LintKind, REDUNDANT_CONSTRAINTS));
   e.value("CONFLICTING_CONSTRAINTS", LintKind::CONFLICTING_CONSTRAINTS,

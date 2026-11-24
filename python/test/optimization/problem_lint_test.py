@@ -1,19 +1,7 @@
 import numpy as np
 from sleipnir import autodiff
-from sleipnir.autodiff import Real, RealMatrix
+from sleipnir.autodiff import Real, Rotation3, Translation2
 from sleipnir.optimization import LintKind, Problem
-
-
-def squared_distance(a: RealMatrix | np.ndarray, b: RealMatrix | np.ndarray) -> Real:
-    """Returns the squared distance between two 2D points."""
-    dx = a[0] - b[0]
-    dy = a[1] - b[1]
-    return dx * dx + dy * dy
-
-
-def distance(a: RealMatrix | np.ndarray, b: RealMatrix | np.ndarray) -> Real:
-    """Returns the distance between two 2D points."""
-    return autodiff.sqrt(squared_distance(a, b))
 
 
 def test_lint_clean_problem() -> None:
@@ -37,8 +25,10 @@ def test_lint_clean_problem() -> None:
 def test_lint_unused_decision_variables() -> None:
     problem = Problem()
 
-    x = problem.real_decision_variable(5)
-    problem.minimize(x[0] * x[0])
+    x = problem.real_decision_variable(3)
+    problem.rotation2_decision_variable()
+    used_rotation = problem.rotation2_decision_variable()
+    problem.minimize(x[0] * x[0] + used_rotation.cos())
     problem.subject_to(x[2] >= 1)
 
     findings = problem.lint()
@@ -81,6 +71,99 @@ def test_lint_constant_constraints() -> None:
     assert findings[1].equality_constraints == []
     assert findings[1].inequality_constraints == [0]
     assert "always satisfied" in findings[1].message
+
+
+def test_lint_sphere_constraints_unit_sphere() -> None:
+    problem = Problem()
+
+    v = problem.real_decision_variable(3)
+    v[0].set_value(0.3)
+    v[1].set_value(0.4)
+    v[2].set_value(5.0)
+    problem.minimize(v[0] + v[1] + v[2])
+    problem.subject_to(v.T @ v == 1)
+
+    findings = problem.lint()
+    assert len(findings) == 1
+    assert findings[0].kind == LintKind.SPHERE_CONSTRAINT
+    assert findings[0].decision_variables == [0, 1, 2]
+    assert findings[0].equality_constraints == [0]
+    assert (
+        findings[0].message
+        == "Equality constraint 0 keeps x[0], x[1], and x[2] on the unit sphere. "
+        "Creating them with unit_vector_decision_variable(3) instead removes the "
+        "constraint and keeps every iterate on the sphere."
+    )
+
+
+def test_lint_sphere_constraints_radius_2_circle() -> None:
+    problem = Problem()
+
+    # Radius 2 circle written as 4 = x² + y²
+    x = problem.real_decision_variable()
+    y = problem.real_decision_variable()
+    problem.minimize(x + y)
+    problem.subject_to(Real(4.0) == x * x + y * y)
+
+    findings = problem.lint()
+    assert len(findings) == 1
+    assert findings[0].kind == LintKind.SPHERE_CONSTRAINT
+    assert "on a sphere of radius 2" in findings[0].message
+    assert "rotation2_decision_variable()" in findings[0].message
+
+
+def test_lint_sphere_constraints_quaternion() -> None:
+    problem = Problem()
+
+    q = problem.real_decision_variable(4)
+    problem.minimize(q[0])
+    problem.subject_to(q.T @ q == 1)
+
+    findings = problem.lint()
+    assert len(findings) == 1
+    assert "rotation3_decision_variable()" in findings[0].message
+
+
+def test_lint_sphere_constraints_not_spheres() -> None:
+    problem = Problem()
+
+    x = problem.real_decision_variable(7)
+    problem.minimize(x[0] + x[1] + x[2] + x[3] + x[4] + x[5] + x[6])
+
+    # Ellipse
+    problem.subject_to(x[0] * x[0] + 2 * x[1] * x[1] == 1)
+
+    # Shifted circle
+    problem.subject_to(x[2] * x[2] + x[3] * x[3] + x[2] == 1)
+
+    # Empty set
+    problem.subject_to(x[4] * x[4] + x[5] * x[5] == -1)
+
+    # One decision variable
+    problem.subject_to(x[6] * x[6] == 1)
+
+    assert problem.lint() == []
+
+
+def test_lint_sphere_constraints_overlapping_spheres() -> None:
+    problem = Problem()
+
+    x = problem.real_decision_variable(3)
+    problem.minimize(x[0] + x[1] + x[2])
+    problem.subject_to(x[0] * x[0] + x[1] * x[1] == 1)
+    problem.subject_to(x[1] * x[1] + x[2] * x[2] == 1)
+
+    assert problem.lint() == []
+
+
+def test_lint_sphere_constraints_manifold_decision_variables() -> None:
+    problem = Problem()
+
+    u = problem.unit_vector_decision_variable(2)
+    problem.minimize(u[0])
+    problem.subject_to(u[0] * u[0] + u[1] * u[1] == 1)
+
+    assert problem.lint() == []
 
 
 def test_lint_linear_equality_constraints_redundant() -> None:
@@ -284,16 +367,16 @@ def test_lint_nonsmooth_functions_max_and_min() -> None:
 def test_lint_nonsmooth_functions_norms() -> None:
     problem = Problem()
 
-    t = problem.real_decision_variable(2)
+    t = problem.translation2_decision_variable()
     x = problem.real_decision_variable()
     y = problem.real_decision_variable()
     r = problem.parameter()
     r.set_value(2.0)
-    target = np.array([1.0, 2.0])
+    target = Translation2(1.0, 2.0)
     problem.minimize(autodiff.sqrt(x * x + y * y))
-    problem.subject_to(distance(t, target) <= 1)
+    problem.subject_to(t.distance(target) <= 1)
     problem.subject_to(autodiff.hypot(x, y) >= r)
-    problem.subject_to(distance(t, target) == 1)
+    problem.subject_to(t.distance(target) == 1)
 
     findings = problem.lint()
     assert len(findings) == 2
@@ -302,9 +385,9 @@ def test_lint_nonsmooth_functions_norms() -> None:
     assert findings[0].inequality_constraints == []
     assert (
         findings[0].message
-        == "The cost function is a norm, like hypot(), which isn't differentiable "
-        "where it's 0. Minimize the squared norm instead, which has the same "
-        "minimizer."
+        == "The cost function is a norm, like distance() or hypot(), which isn't "
+        "differentiable where it's 0. Minimize the squared norm, like "
+        "squared_distance(), instead, which has the same minimizer."
     )
     assert not findings[1].cost
     assert findings[1].equality_constraints == [0]
@@ -312,27 +395,28 @@ def test_lint_nonsmooth_functions_norms() -> None:
     assert (
         findings[1].message
         == "Equality constraint 0 and inequality constraints 0 and 1 compare a "
-        "norm, like hypot(), to a value that doesn't depend on decision "
-        "variables. The norm isn't differentiable where it's 0. Compare the "
-        "squared norm to the value's square instead."
+        "norm, like distance() or hypot(), to a value that doesn't depend on "
+        "decision variables. The norm isn't differentiable where it's 0. Compare "
+        "the squared norm, like squared_distance(), to the value's square "
+        "instead."
     )
 
 
 def test_lint_nonsmooth_functions_forms_without_a_differentiable_replacement() -> None:
     problem = Problem()
 
-    a = problem.real_decision_variable(2)
-    b = problem.real_decision_variable(2)
+    a = problem.translation2_decision_variable()
+    b = problem.translation2_decision_variable()
     x = problem.real_decision_variable()
     y = problem.real_decision_variable()
-    start = np.array([0.0, 0.0])
-    end = np.array([3.0, 4.0])
+    start = Translation2(0.0, 0.0)
+    end = Translation2(3.0, 4.0)
 
     # Path length and L1 cost
     problem.minimize(
-        distance(a, start)
-        + distance(b, a)
-        + distance(end, b)
+        a.distance(start)
+        + b.distance(a)
+        + end.distance(b)
         + autodiff.abs(x)
         + autodiff.max(x, y)
     )
@@ -344,7 +428,7 @@ def test_lint_nonsmooth_functions_forms_without_a_differentiable_replacement() -
     problem.subject_to(autodiff.max(x, y) >= 1)
     problem.subject_to(autodiff.min(x, y) <= 1)
     problem.subject_to(autodiff.sign(x) == 1)
-    problem.subject_to(distance(a, b) <= x)
+    problem.subject_to(a.distance(b) <= x)
 
     assert problem.lint() == []
 
@@ -352,16 +436,33 @@ def test_lint_nonsmooth_functions_forms_without_a_differentiable_replacement() -
 def test_lint_nonsmooth_functions_smooth_uses() -> None:
     problem = Problem()
 
-    t = problem.real_decision_variable(2)
+    t = problem.translation2_decision_variable()
     x = problem.real_decision_variable()
     y = problem.real_decision_variable()
-    target = np.array([1.0, 2.0])
+    target = Translation2(1.0, 2.0)
     problem.minimize(autodiff.sqrt(x * x + y * y + 1) + autodiff.sqrt(x + 2))
-    problem.subject_to(squared_distance(t, target) <= 1)
+    problem.subject_to(t.squared_distance(target) <= 1)
     problem.subject_to(autodiff.hypot(x, 1.0) <= 2)
     p = problem.parameter()
     p.set_value(-3.0)
     problem.subject_to(autodiff.abs(p) * y >= 0)
+
+    assert problem.lint() == []
+
+
+def test_lint_nonsmooth_functions_manifold_types() -> None:
+    problem = Problem()
+
+    q = problem.rotation3_decision_variable()
+    u = problem.unit_vector_decision_variable(3)
+    p = problem.pose3_decision_variable()
+    problem.minimize(
+        (q.to_vector().T @ q.to_vector())[0]
+        + (p.log().angular().T @ p.log().angular())[0]
+        + (p.log().linear().T @ p.log().linear())[0]
+    )
+    problem.subject_to(q == Rotation3(0.5, 0.5, 0.5, 0.5))
+    problem.subject_to(u == np.array([0.0, 0.0, 1.0]))
 
     assert problem.lint() == []
 

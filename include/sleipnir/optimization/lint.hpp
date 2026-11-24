@@ -28,6 +28,7 @@
 #include "sleipnir/autodiff/jacobian.hpp"
 #include "sleipnir/autodiff/real.hpp"
 #include "sleipnir/autodiff/real_matrix.hpp"
+#include "sleipnir/optimization/solver/util/manifold_type.hpp"
 #include "sleipnir/util/empty.hpp"
 
 namespace slp {
@@ -39,6 +40,9 @@ enum class LintKind : uint8_t {
   /// A constraint doesn't depend on any decision variables, so it's either
   /// always satisfied or never satisfied.
   CONSTANT_CONSTRAINT,
+  /// An equality constraint keeps decision variables on a sphere, which a
+  /// manifold decision variable does without a constraint.
+  SPHERE_CONSTRAINT,
   /// Linear constraints are implied by other linear constraints on the same
   /// linear combination of decision variables.
   REDUNDANT_CONSTRAINTS,
@@ -320,6 +324,8 @@ std::vector<std::string_view> replaceable_nonsmooth_functions(
 ///
 /// @tparam Scalar Scalar type.
 /// @param decision_variables The decision variables.
+/// @param manifold_blocks The decision variable blocks constrained to
+///     manifolds.
 /// @param cost The cost function, if any.
 /// @param equality_constraints The equality constraints cₑ(x) = 0.
 /// @param inequality_constraints The inequality constraints cᵢ(x) ≥ 0.
@@ -327,6 +333,7 @@ std::vector<std::string_view> replaceable_nonsmooth_functions(
 template <typename Scalar>
 std::vector<LintFinding> lint(
     std::span<const Real<Scalar>> decision_variables,
+    std::span<const ManifoldBlock<Scalar>> manifold_blocks,
     const std::optional<Real<Scalar>>& cost,
     std::span<const Real<Scalar>> equality_constraints,
     std::span<const Real<Scalar>> inequality_constraints) {
@@ -405,6 +412,15 @@ std::vector<LintFinding> lint(
                         .message = capitalize(std::move(message))});
   };
 
+  // Map each decision variable to its manifold block, or -1 if it has none
+  std::vector<int> block_of(num_decision_variables, -1);
+  for (size_t block = 0; block < manifold_blocks.size(); ++block) {
+    const auto& manifold_block = manifold_blocks[block];
+    for (int i = 0; i < manifold_block.size(); ++i) {
+      block_of[manifold_block.offset() + i] = block;
+    }
+  }
+
   // Decision variable values
   Eigen::VectorX<Scalar> x_value{num_decision_variables};
   for (int i = 0; i < num_decision_variables; ++i) {
@@ -432,6 +448,15 @@ std::vector<LintFinding> lint(
     A.resize(num_constraints, num_decision_variables);
   }
 
+  // Returns constraint i's decision variables
+  auto constraint_variables = [&](int i) {
+    std::vector<int> variables;
+    for (typename decltype(A)::InnerIterator it{A, i}; it; ++it) {
+      variables.emplace_back(it.col());
+    }
+    return variables;
+  };
+
   // The cost gradient at the current values, with a structural sparsity
   // pattern like the constraint Jacobian's
   Eigen::SparseMatrix<Scalar, Eigen::RowMajor> g;
@@ -454,9 +479,18 @@ std::vector<LintFinding> lint(
       used[it.col()] = true;
     }
 
+    // The manifold keeps a block's decision variables related, so a block is
+    // used if any of its decision variables are
+    std::vector<bool> block_used(manifold_blocks.size(), false);
+    for (int i = 0; i < num_decision_variables; ++i) {
+      if (used[i] && block_of[i] != -1) {
+        block_used[block_of[i]] = true;
+      }
+    }
+
     std::vector<int> unused;
     for (int i = 0; i < num_decision_variables; ++i) {
-      if (!used[i]) {
+      if (!used[i] && (block_of[i] == -1 || !block_used[block_of[i]])) {
         unused.emplace_back(i);
       }
     }
@@ -503,6 +537,116 @@ std::vector<LintFinding> lint(
                         ? "With the parameters' current values, its value"
                         : "Its value",
                     value, verdict));
+  }
+
+  // Sphere constraints: ±(x₁² + … + xₙ²) + k = 0 with the same sign on every
+  // square and no other terms
+  {
+    struct Sphere {
+      int constraint;
+      std::vector<int> variables;
+      Scalar radius;
+    };
+    std::vector<Sphere> spheres;
+
+    for (int i = 0; i < num_equality_constraints; ++i) {
+      if (equality_constraints[i].type() != QUADRATIC) {
+        continue;
+      }
+
+      auto variables = constraint_variables(i);
+      const int n = variables.size();
+      if (n < 2 ||
+          std::ranges::any_of(
+              variables,
+              [&](int variable) { return block_of[variable] != -1; })) {
+        continue;
+      }
+
+      RealMatrix<Scalar> wrt{detail::empty, n, 1};
+      Eigen::VectorX<Scalar> x{n};
+      Eigen::VectorX<Scalar> g{n};
+      for (int k = 0; k < n; ++k) {
+        wrt[k] = decision_variables[variables[k]];
+        x[k] = x_value[variables[k]];
+        g[k] = A.coeff(i, variables[k]);
+      }
+
+      // A quadratic constraint's Hessian is constant. A sphere's is a·I.
+      const Eigen::MatrixX<Scalar> H =
+          Hessian<Scalar>{equality_constraints[i], wrt}.value().toDense();
+      const Scalar a = H(0, 0);
+      if (a == Scalar(0) ||
+          !H.isApprox(a * Eigen::MatrixX<Scalar>::Identity(n, n), tolerance)) {
+        continue;
+      }
+
+      // The gradient g = Hx + b has no linear term b
+      const Eigen::VectorX<Scalar> Hx = H * x;
+      const Eigen::VectorX<Scalar> b = g - Hx;
+      if (b.template lpNorm<Eigen::Infinity>() >
+          tolerance * std::max({abs(a), g.template lpNorm<Eigen::Infinity>(),
+                                Hx.template lpNorm<Eigen::Infinity>()})) {
+        continue;
+      }
+
+      // c(x) = a/2 ‖x‖² + k, so the radius is √(−2k/a)
+      const Scalar k = c_value[i] - b.dot(x) - x.dot(Hx) / Scalar(2);
+      const Scalar r_squared = Scalar(-2) * k / a;
+      if (r_squared <= tolerance) {
+        continue;
+      }
+
+      spheres.emplace_back(i, std::move(variables), sqrt(r_squared));
+    }
+
+    // Spheres that share decision variables aren't a product of spheres
+    std::vector<int> sphere_count(num_decision_variables, 0);
+    for (const auto& sphere : spheres) {
+      for (int variable : sphere.variables) {
+        ++sphere_count[variable];
+      }
+    }
+
+    for (auto& sphere : spheres) {
+      if (std::ranges::any_of(sphere.variables, [&](int variable) {
+            return sphere_count[variable] > 1;
+          })) {
+        continue;
+      }
+
+      const int n = sphere.variables.size();
+      const int indices[] = {sphere.constraint};
+
+      std::string message;
+      if (near(sphere.radius, Scalar(1), tolerance)) {
+        message = std::format(
+            "{} keeps {} on the unit sphere. Creating them with "
+            "unit_vector_decision_variable({}) instead removes the constraint "
+            "and keeps every iterate on the sphere.",
+            describe(indices), describe_decision_variables(sphere.variables),
+            n);
+      } else {
+        message = std::format(
+            "{} keeps {} on a sphere of radius {}. Writing them as {} times "
+            "unit_vector_decision_variable({}) instead removes the constraint "
+            "and keeps every iterate on the sphere.",
+            describe(indices), describe_decision_variables(sphere.variables),
+            sphere.radius, sphere.radius, n);
+      }
+      if (n == 2) {
+        message +=
+            " If they're a rotation's cosine and sine, use "
+            "rotation2_decision_variable() instead.";
+      } else if (n == 4) {
+        message +=
+            " If they're a quaternion, use rotation3_decision_variable() "
+            "instead.";
+      }
+
+      add_finding(LintKind::SPHERE_CONSTRAINT, std::move(sphere.variables),
+                  indices, std::move(message));
+    }
   }
 
   // Linear constraints on the same linear combination of decision variables.
@@ -835,15 +979,16 @@ std::vector<LintFinding> lint(
             where, have, them);
       } else if (use.form == "norm") {
         message = std::format(
-            "{} {} a norm, like hypot(), to a value that doesn't depend on "
-            "decision variables. The norm isn't differentiable where it's 0. "
-            "Compare the squared norm to the value's square instead.",
+            "{} {} a norm, like distance() or hypot(), to a value that "
+            "doesn't depend on decision variables. The norm isn't "
+            "differentiable where it's 0. Compare the squared norm, like "
+            "squared_distance(), to the value's square instead.",
             where, plural ? "compare" : "compares");
       } else {
         message =
-            "the cost function is a norm, like hypot(), which isn't "
-            "differentiable where it's 0. Minimize the squared norm instead, "
-            "which has the same minimizer.";
+            "the cost function is a norm, like distance() or hypot(), which "
+            "isn't differentiable where it's 0. Minimize the squared norm, "
+            "like squared_distance(), instead, which has the same minimizer.";
       }
 
       add_finding(LintKind::NONSMOOTH_FUNCTION, {}, use.constraints,

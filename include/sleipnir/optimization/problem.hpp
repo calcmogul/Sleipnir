@@ -799,6 +799,9 @@ class Problem {
   ///   <li>Decision variables that don't appear in the cost function or any
   ///     constraint.</li>
   ///   <li>Constraints that don't depend on any decision variables.</li>
+  ///   <li>Equality constraints that keep decision variables on a sphere,
+  ///     which a unit vector or rotation decision variable does without a
+  ///     constraint.</li>
   ///   <li>Linear constraints on the same linear combination of decision
   ///     variables that are redundant, conflict, or form an equality
   ///     constraint.</li>
@@ -817,7 +820,7 @@ class Problem {
   /// @return The findings, which are empty if there's nothing to improve.
   [[nodiscard]]
   std::vector<LintFinding> lint() const {
-    return detail::lint<Scalar>(m_decision_variables, m_f,
+    return detail::lint<Scalar>(m_decision_variables, m_manifold_blocks, m_f,
                                 m_equality_constraints,
                                 m_inequality_constraints);
   }

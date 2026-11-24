@@ -5,10 +5,13 @@
 #include <vector>
 
 #include <Eigen/Core>
+#include <Eigen/Geometry>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <sleipnir/autodiff/rotation3.hpp>
+#include <sleipnir/autodiff/translation2.hpp>
 #include <sleipnir/optimization/lint.hpp>
 #include <sleipnir/optimization/problem.hpp>
 
@@ -16,20 +19,6 @@
 #include "scalar_types.hpp"
 
 using Catch::Matchers::ContainsSubstring;
-
-// Returns the squared distance between two 2D points
-template <typename A, typename B>
-auto squared_distance(const A& a, const B& b) {
-  auto dx = a[0] - b[0];
-  auto dy = a[1] - b[1];
-  return dx * dx + dy * dy;
-}
-
-// Returns the distance between two 2D points
-template <typename A, typename B>
-auto distance(const A& a, const B& b) {
-  return slp::sqrt(squared_distance(a, b));
-}
 
 TEMPLATE_TEST_CASE("Problem - Lint clean problem", "[Problem]", SCALAR_TYPES) {
   using T = TestType;
@@ -57,8 +46,11 @@ TEMPLATE_TEST_CASE("Problem - Lint unused decision variables", "[Problem]",
 
   slp::Problem<T> problem;
 
-  auto x = problem.real_decision_variable(5);
-  problem.minimize(x[0] * x[0]);
+  auto x = problem.real_decision_variable(3);
+  [[maybe_unused]]
+  auto unused_rotation = problem.rotation2_decision_variable();
+  auto used_rotation = problem.rotation2_decision_variable();
+  problem.minimize(x[0] * x[0] + used_rotation.cos());
   problem.subject_to(x[2] >= 1);
 
   auto findings = problem.lint();
@@ -101,6 +93,120 @@ TEMPLATE_TEST_CASE("Problem - Lint constant constraints", "[Problem]",
   CHECK(findings[1].equality_constraints.empty());
   CHECK(findings[1].inequality_constraints == std::vector{0});
   CHECK_THAT(findings[1].message, ContainsSubstring("always satisfied"));
+}
+
+TEMPLATE_TEST_CASE("Problem - Lint sphere constraints: unit sphere",
+                   "[Problem]", SCALAR_TYPES) {
+  using T = TestType;
+
+  slp::Problem<T> problem;
+
+  auto v = problem.real_decision_variable(3);
+  v[0].set_value(T(0.3));
+  v[1].set_value(T(0.4));
+  v[2].set_value(T(5));
+  problem.minimize(v[0] + v[1] + v[2]);
+  problem.subject_to(v.T() * v == 1);
+
+  auto findings = problem.lint();
+  REQUIRE(findings.size() == 1);
+  CHECK(findings[0].kind == slp::LintKind::SPHERE_CONSTRAINT);
+  CHECK(findings[0].decision_variables == std::vector{0, 1, 2});
+  CHECK(findings[0].equality_constraints == std::vector{0});
+  CHECK(findings[0].message ==
+        "Equality constraint 0 keeps x[0], x[1], and x[2] on the unit "
+        "sphere. Creating them with unit_vector_decision_variable(3) "
+        "instead removes the constraint and keeps every iterate on the "
+        "sphere.");
+}
+
+TEMPLATE_TEST_CASE("Problem - Lint sphere constraints: radius 2 circle",
+                   "[Problem]", SCALAR_TYPES) {
+  using T = TestType;
+
+  slp::Problem<T> problem;
+
+  // Radius 2 circle written as 4 = x² + y²
+
+  auto x = problem.real_decision_variable();
+  auto y = problem.real_decision_variable();
+  problem.minimize(x + y);
+  problem.subject_to(4 == x * x + y * y);
+
+  auto findings = problem.lint();
+  REQUIRE(findings.size() == 1);
+  CHECK(findings[0].kind == slp::LintKind::SPHERE_CONSTRAINT);
+  CHECK_THAT(findings[0].message, ContainsSubstring("on a sphere of radius 2"));
+  CHECK_THAT(findings[0].message,
+             ContainsSubstring("rotation2_decision_variable()"));
+}
+
+TEMPLATE_TEST_CASE("Problem - Lint sphere constraints: quaternion", "[Problem]",
+                   SCALAR_TYPES) {
+  using T = TestType;
+
+  slp::Problem<T> problem;
+
+  auto q = problem.real_decision_variable(4);
+  problem.minimize(q[0]);
+  problem.subject_to(q.T() * q == 1);
+
+  auto findings = problem.lint();
+  REQUIRE(findings.size() == 1);
+  CHECK_THAT(findings[0].message,
+             ContainsSubstring("rotation3_decision_variable()"));
+}
+
+TEMPLATE_TEST_CASE("Problem - Lint sphere constraints: not spheres",
+                   "[Problem]", SCALAR_TYPES) {
+  using T = TestType;
+
+  slp::Problem<T> problem;
+
+  auto x = problem.real_decision_variable(7);
+  problem.minimize(x[0] + x[1] + x[2] + x[3] + x[4] + x[5] + x[6]);
+
+  // Ellipse
+  problem.subject_to(x[0] * x[0] + 2 * x[1] * x[1] == 1);
+
+  // Shifted circle
+  problem.subject_to(x[2] * x[2] + x[3] * x[3] + x[2] == 1);
+
+  // Empty set
+  problem.subject_to(x[4] * x[4] + x[5] * x[5] == -1);
+
+  // One decision variable
+  problem.subject_to(x[6] * x[6] == 1);
+
+  CHECK(problem.lint().empty());
+}
+
+TEMPLATE_TEST_CASE("Problem - Lint sphere constraints: overlapping spheres",
+                   "[Problem]", SCALAR_TYPES) {
+  using T = TestType;
+
+  slp::Problem<T> problem;
+
+  auto x = problem.real_decision_variable(3);
+  problem.minimize(x[0] + x[1] + x[2]);
+  problem.subject_to(x[0] * x[0] + x[1] * x[1] == 1);
+  problem.subject_to(x[1] * x[1] + x[2] * x[2] == 1);
+
+  CHECK(problem.lint().empty());
+}
+
+TEMPLATE_TEST_CASE(
+    "Problem - Lint sphere constraints: manifold decision variables",
+    "[Problem]", SCALAR_TYPES) {
+  using T = TestType;
+
+  slp::Problem<T> problem;
+
+  auto u = problem.unit_vector_decision_variable(2);
+  problem.minimize(u[0]);
+  problem.subject_to(u[0] * u[0] + u[1] * u[1] == 1);
+
+  CHECK(problem.lint().empty());
 }
 
 TEMPLATE_TEST_CASE("Problem - Lint linear equality constraints: redundant",
@@ -323,16 +429,16 @@ TEMPLATE_TEST_CASE("Problem - Lint nonsmooth functions: norms", "[Problem]",
 
   slp::Problem<T> problem;
 
-  auto t = problem.real_decision_variable(2);
+  auto t = problem.translation2_decision_variable();
   auto x = problem.real_decision_variable();
   auto y = problem.real_decision_variable();
   auto r = problem.parameter();
   r.set_value(T(2));
-  Eigen::Vector2<T> target{T(1), T(2)};
+  slp::Translation2<T> target{T(1), T(2)};
   problem.minimize(slp::sqrt(x * x + y * y));
-  problem.subject_to(distance(t, target) <= 1);
+  problem.subject_to(t.distance(target) <= 1);
   problem.subject_to(slp::hypot(x, y) >= r);
-  problem.subject_to(distance(t, target) == 1);
+  problem.subject_to(t.distance(target) == 1);
 
   auto findings = problem.lint();
   REQUIRE(findings.size() == 2);
@@ -340,17 +446,18 @@ TEMPLATE_TEST_CASE("Problem - Lint nonsmooth functions: norms", "[Problem]",
   CHECK(findings[0].equality_constraints.empty());
   CHECK(findings[0].inequality_constraints.empty());
   CHECK(findings[0].message ==
-        "The cost function is a norm, like hypot(), which isn't "
-        "differentiable where it's 0. Minimize the squared norm instead, "
-        "which has the same minimizer.");
+        "The cost function is a norm, like distance() or hypot(), which "
+        "isn't differentiable where it's 0. Minimize the squared norm, like "
+        "squared_distance(), instead, which has the same minimizer.");
   CHECK_FALSE(findings[1].cost);
   CHECK(findings[1].equality_constraints == std::vector{0});
   CHECK(findings[1].inequality_constraints == std::vector{0, 1});
   CHECK(findings[1].message ==
         "Equality constraint 0 and inequality constraints 0 and 1 compare a "
-        "norm, like hypot(), to a value that doesn't depend on decision "
-        "variables. The norm isn't differentiable where it's 0. Compare the "
-        "squared norm to the value's square instead.");
+        "norm, like distance() or hypot(), to a value that doesn't depend "
+        "on decision variables. The norm isn't differentiable where it's 0. "
+        "Compare the squared norm, like squared_distance(), to the value's "
+        "square instead.");
 }
 
 TEMPLATE_TEST_CASE(
@@ -361,15 +468,15 @@ TEMPLATE_TEST_CASE(
 
   slp::Problem<T> problem;
 
-  auto a = problem.real_decision_variable(2);
-  auto b = problem.real_decision_variable(2);
+  auto a = problem.translation2_decision_variable();
+  auto b = problem.translation2_decision_variable();
   auto x = problem.real_decision_variable();
   auto y = problem.real_decision_variable();
-  Eigen::Vector2<T> start{T(0), T(0)};
-  Eigen::Vector2<T> end{T(3), T(4)};
+  slp::Translation2<T> start{T(0), T(0)};
+  slp::Translation2<T> end{T(3), T(4)};
 
   // Path length and L1 cost
-  problem.minimize(distance(a, start) + distance(b, a) + distance(end, b) +
+  problem.minimize(a.distance(start) + b.distance(a) + end.distance(b) +
                    slp::abs(x) + slp::max(x, y));
 
   // Bounds of the other direction, equalities, and norms compared to
@@ -379,7 +486,7 @@ TEMPLATE_TEST_CASE(
   problem.subject_to(slp::max(x, y) >= 1);
   problem.subject_to(slp::min(x, y) <= 1);
   problem.subject_to(slp::sign(x) == 1);
-  problem.subject_to(distance(a, b) <= x);
+  problem.subject_to(a.distance(b) <= x);
 
   CHECK(problem.lint().empty());
 }
@@ -390,16 +497,35 @@ TEMPLATE_TEST_CASE("Problem - Lint nonsmooth functions: smooth uses",
 
   slp::Problem<T> problem;
 
-  auto t = problem.real_decision_variable(2);
+  auto t = problem.translation2_decision_variable();
   auto x = problem.real_decision_variable();
   auto y = problem.real_decision_variable();
-  Eigen::Vector2<T> target{T(1), T(2)};
+  slp::Translation2<T> target{T(1), T(2)};
   problem.minimize(slp::sqrt(x * x + y * y + 1) + slp::sqrt(x + 2));
-  problem.subject_to(squared_distance(t, target) <= 1);
+  problem.subject_to(t.squared_distance(target) <= 1);
   problem.subject_to(slp::hypot(x, T(1)) <= 2);
   auto p = problem.parameter();
   p.set_value(T(-3));
   problem.subject_to(slp::abs(p) * y >= 0);
+
+  CHECK(problem.lint().empty());
+}
+
+TEMPLATE_TEST_CASE("Problem - Lint nonsmooth functions: manifold types",
+                   "[Problem]", SCALAR_TYPES) {
+  using T = TestType;
+
+  slp::Problem<T> problem;
+
+  auto q = problem.rotation3_decision_variable();
+  auto u = problem.unit_vector_decision_variable(3);
+  auto p = problem.pose3_decision_variable();
+  problem.minimize(q.to_vector().T() * q.to_vector() +
+                   p.log().angular().T() * p.log().angular() +
+                   p.log().linear().T() * p.log().linear());
+  problem.subject_to(q == slp::Rotation3<T>{Eigen::Quaternion<T>{
+                              T(0.5), T(0.5), T(0.5), T(0.5)}});
+  problem.subject_to(u == Eigen::Vector3<T>{T(0), T(0), T(1)});
 
   CHECK(problem.lint().empty());
 }

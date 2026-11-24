@@ -1948,6 +1948,10 @@ constexpr char mkd_doc_slp_LintKind_REDUNDANT_CONSTRAINTS[] =
 R"doc(Linear constraints are implied by other linear constraints on the same
 linear combination of decision variables.)doc";
 
+constexpr char mkd_doc_slp_LintKind_SPHERE_CONSTRAINT[] =
+R"doc(An equality constraint keeps decision variables on a sphere, which a
+manifold decision variable does without a constraint.)doc";
+
 constexpr char mkd_doc_slp_LintKind_UNUSED_DECISION_VARIABLE[] =
 R"doc(Decision variables don't appear in the cost function or any
 constraint.)doc";
@@ -2637,6 +2641,13 @@ solving the problem. It reports:
   
 
 * Constraints that don't depend on any decision variables.
+
+
+  
+
+* Equality constraints that keep decision variables on a sphere,
+    which a unit vector or rotation decision variable does without a
+    constraint.
 
 
   
@@ -6803,6 +6814,8 @@ See Problem::lint().
 
 Args:
     decision_variables: The decision variables.
+    manifold_blocks: The decision variable blocks constrained to
+                     manifolds.
     cost: The cost function, if any.
     equality_constraints: The equality constraints cₑ(x) = 0.
     inequality_constraints: The inequality constraints cᵢ(x) ≥ 0.
