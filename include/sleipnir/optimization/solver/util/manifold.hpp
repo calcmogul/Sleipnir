@@ -62,6 +62,7 @@ class Manifold {
       slp_assert(block.tangent_size() >= 1);
       end = block.offset() + block.size();
       m_tangent_dimension_reduction += block.size() - block.tangent_size();
+      m_has_boundary = m_has_boundary || block.type().has_boundary();
     }
   }
 
@@ -121,6 +122,48 @@ class Manifold {
                                p_b,
                                result.segment(block.offset(), block.size()));
         });
+  }
+
+  /// Returns true if the manifold has a boundary, which is the case if any
+  /// block has one.
+  ///
+  /// @return True if the manifold has a boundary.
+  bool has_boundary() const { return m_has_boundary; }
+
+  /// Returns the boundary barrier function b(x), the sum of the blocks'
+  /// barrier functions.
+  ///
+  /// @param x The point on the manifold.
+  /// @return The barrier function's value, or ∞ if x is outside a block's
+  ///     boundary.
+  Scalar barrier(const DenseVector& x) const {
+    Scalar b{0};
+    for (const auto& block : m_blocks) {
+      if (block.type().has_boundary()) {
+        b += block.type().barrier(block,
+                                  x.segment(block.offset(), block.size()));
+      }
+    }
+    return b;
+  }
+
+  /// Returns the gradient of the boundary barrier function b(R_x(p)) with
+  /// respect to p at p = 0.
+  ///
+  /// @param x The point on the manifold.
+  /// @return The gradient in tangent coordinates.
+  DenseVector barrier_gradient(const DenseVector& x) const {
+    DenseVector g = DenseVector::Zero(tangent_dimension(x.rows()));
+    for_each_segment(
+        x.rows(), [](int, int, int) {},
+        [&](const ManifoldBlock<Scalar>& block, int tangent_offset) {
+          if (block.type().has_boundary()) {
+            block.type().barrier_gradient(
+                block, x.segment(block.offset(), block.size()),
+                g.segment(tangent_offset, block.tangent_size()));
+          }
+        });
+    return g;
   }
 
   /// Returns the infinity norm of Jp/(1 + |x|), where J is the retraction's
@@ -221,6 +264,7 @@ class Manifold {
  private:
   gch::small_vector<ManifoldBlock<Scalar>> m_blocks;
   int m_tangent_dimension_reduction = 0;
+  bool m_has_boundary = false;
 
   /// Calls euclidean(ambient_offset, tangent_offset, size) for each run of
   /// Euclidean decision variables and block_func(block, tangent_offset) for

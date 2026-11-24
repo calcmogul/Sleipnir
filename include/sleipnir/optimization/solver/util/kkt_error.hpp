@@ -127,17 +127,28 @@ Scalar kkt_error_one_norm(
 /// Returns the ∞-norm of the scaled KKT condition errors for the interior-point
 /// method.
 ///
+/// If the manifold has a boundary, the boundary barrier term μ_b b(x) (see
+/// Manifold::barrier()) is part of the problem. Its implicit dual variable for
+/// an SPD block P is Z = μ_b P⁻¹, so the stationarity residual includes μ_b∇b,
+/// and the complementarity residual PZ − μI = (μ_b − μ)I has ∞-norm
+/// |μ_b − μ|.
+///
 /// @tparam Scalar Scalar type.
 /// @param iterates The iterates.
 /// @param function_values Cost function and constraint values.
 /// @param first_derivatives Cost function gradient and constraint Jacobians.
+/// @param g_b Boundary barrier function gradient ∇b, or empty if the manifold
+///     has no boundary.
+/// @param μ_b Boundary barrier parameter.
 /// @param μ Barrier parameter.
 /// @param tolerance Solver tolerance.
 template <typename Scalar>
 Scalar kkt_error_inf_norm(const IPMIterates<Scalar>& iterates,
                           const IPMFunctionValues<Scalar>& function_values,
                           const IPMFirstDerivatives<Scalar>& first_derivatives,
+                          const Eigen::VectorX<Scalar>& g_b, Scalar μ_b,
                           Scalar μ, Scalar tolerance) {
+  using std::abs;
   using std::pow;
 
   const auto& [x, s, y, z] = iterates;
@@ -146,10 +157,13 @@ Scalar kkt_error_inf_norm(const IPMIterates<Scalar>& iterates,
 
   // The KKT conditions from docs/algorithms.md:
   //
-  //   ∇f − Aₑᵀy − Aᵢᵀz = 0
+  //   ∇f + μ_b∇b − Aₑᵀy − Aᵢᵀz = 0
   //   Sz − μe = 0
   //   cₑ = 0
   //   cᵢ − s = 0
+  //
+  // and (μ_b − μ)I = 0 if the manifold has a boundary.
+  const bool has_barrier = g_b.size() > 0;
 
   constexpr Scalar ε = std::numeric_limits<Scalar>::epsilon();
 
@@ -168,13 +182,24 @@ Scalar kkt_error_inf_norm(const IPMIterates<Scalar>& iterates,
   //
   //   s_d = max(1, ε^(5/8) ω/tol)
 
-  // ω = ‖|∇f| + |Aₑ|ᵀ|y| + |Aᵢ|ᵀ|z|‖_∞
-  const Scalar ω = (g.cwiseAbs() + A_e.cwiseAbs().transpose() * y.cwiseAbs() +
-                    A_i.cwiseAbs().transpose() * z.cwiseAbs())
-                       .toDense()
-                       .template lpNorm<Eigen::Infinity>();
+  // ω = ‖|∇f| + μ_b|∇b| + |Aₑ|ᵀ|y| + |Aᵢ|ᵀ|z|‖_∞
+  Eigen::VectorX<Scalar> terms =
+      (g.cwiseAbs() + A_e.cwiseAbs().transpose() * y.cwiseAbs() +
+       A_i.cwiseAbs().transpose() * z.cwiseAbs())
+          .toDense();
+  if (has_barrier) {
+    terms += μ_b * g_b.cwiseAbs();
+  }
+  const Scalar ω = terms.template lpNorm<Eigen::Infinity>();
 
   Scalar s_d = std::max(Scalar(1), pow(ε, Scalar(0.625)) * ω / tolerance);
+
+  // ∇f + μ_b∇b − Aₑᵀy − Aᵢᵀz
+  Eigen::VectorX<Scalar> r_d =
+      (g - A_e.transpose() * y - A_i.transpose() * z).toDense();
+  if (has_barrier) {
+    r_d += μ_b * g_b;
+  }
 
   // s_c = max(sₘₐₓ, ‖z‖₁ / n) / sₘₐₓ
   //
@@ -187,15 +212,14 @@ Scalar kkt_error_inf_norm(const IPMIterates<Scalar>& iterates,
   const Eigen::VectorX<Scalar> μe =
       Eigen::VectorX<Scalar>::Constant(s.rows(), μ);
 
-  // ‖∇f − Aₑᵀy − Aᵢᵀz‖_∞ / s_d
+  // ‖∇f + μ_b∇b − Aₑᵀy − Aᵢᵀz‖_∞ / s_d
   // ‖Sz − μe‖_∞ / s_c
+  // |μ_b − μ|
   // ‖cₑ‖_∞
   // ‖cᵢ − s‖_∞
-  return std::max({(g - A_e.transpose() * y - A_i.transpose() * z)
-                           .toDense()
-                           .template lpNorm<Eigen::Infinity>() /
-                       s_d,
+  return std::max({r_d.template lpNorm<Eigen::Infinity>() / s_d,
                    (S * z - μe).template lpNorm<Eigen::Infinity>() / s_c,
+                   has_barrier ? abs(μ_b - μ) : Scalar(0),
                    c_e.template lpNorm<Eigen::Infinity>(),
                    (c_i - s).template lpNorm<Eigen::Infinity>()});
 }
@@ -203,36 +227,47 @@ Scalar kkt_error_inf_norm(const IPMIterates<Scalar>& iterates,
 /// Returns the 1-norm of the KKT condition errors for the interior-point
 /// method.
 ///
+/// If the manifold has a boundary, the boundary barrier term μb(x) (see
+/// Manifold::barrier()) is part of the problem. Its implicit dual variable for
+/// an SPD block P is Z = μP⁻¹, so the stationarity residual includes μ∇b, and
+/// the complementarity residual PZ − μI is zero.
+///
 /// @tparam Scalar Scalar type.
 /// @param iterates The iterates.
 /// @param function_values Cost function and constraint values.
 /// @param first_derivatives Cost function gradient and constraint Jacobians.
+/// @param g_b Boundary barrier function gradient ∇b, or empty if the manifold
+///     has no boundary.
 /// @param μ Barrier parameter.
 template <typename Scalar>
 Scalar kkt_error_one_norm(const IPMIterates<Scalar>& iterates,
                           const IPMFunctionValues<Scalar>& function_values,
                           const IPMFirstDerivatives<Scalar>& first_derivatives,
-                          Scalar μ) {
+                          const Eigen::VectorX<Scalar>& g_b, Scalar μ) {
   const auto& [x, s, y, z] = iterates;
   const auto& [f, c_e, c_i] = function_values;
   const auto& [g, A_e, A_i] = first_derivatives;
 
   // The KKT conditions from docs/algorithms.md:
   //
-  //   ∇f − Aₑᵀy − Aᵢᵀz = 0
+  //   ∇f + μ∇b − Aₑᵀy − Aᵢᵀz = 0
   //   Sz − μe = 0
   //   cₑ = 0
   //   cᵢ − s = 0
+
+  // ∇f + μ∇b − Aₑᵀy − Aᵢᵀz
+  Eigen::VectorX<Scalar> r_d =
+      (g - A_e.transpose() * y - A_i.transpose() * z).toDense();
+  if (g_b.size() > 0) {
+    r_d += μ * g_b;
+  }
 
   const auto S = s.asDiagonal();
   const Eigen::VectorX<Scalar> μe =
       Eigen::VectorX<Scalar>::Constant(s.rows(), μ);
 
-  return (g - A_e.transpose() * y - A_i.transpose() * z)
-             .toDense()
-             .template lpNorm<1>() +
-         (S * z - μe).template lpNorm<1>() + c_e.template lpNorm<1>() +
-         (c_i - s).template lpNorm<1>();
+  return r_d.template lpNorm<1>() + (S * z - μe).template lpNorm<1>() +
+         c_e.template lpNorm<1>() + (c_i - s).template lpNorm<1>();
 }
 
 /// Returns the ∞-norm of the unscaled KKT condition errors for Newton's method.
@@ -300,19 +335,22 @@ Scalar unscaled_kkt_error_inf_norm(
 /// @param function_values Scaled cost function and constraint values.
 /// @param first_derivatives Scaled cost function gradient and constraint
 ///     Jacobians.
+/// @param g_b Boundary barrier function gradient ∇b, or empty if the manifold
+///     has no boundary.
+/// @param μ_b Scaled boundary barrier parameter.
 /// @param μ Scaled barrier parameter.
 /// @param tolerance Solver tolerance.
 template <typename Scalar>
 Scalar unscaled_kkt_error_inf_norm(
     const ProblemScaling<Scalar>& scaling, const IPMIterates<Scalar>& iterates,
     const IPMFunctionValues<Scalar>& function_values,
-    const IPMFirstDerivatives<Scalar>& first_derivatives, Scalar μ,
-    Scalar tolerance) {
+    const IPMFirstDerivatives<Scalar>& first_derivatives,
+    const Eigen::VectorX<Scalar>& g_b, Scalar μ_b, Scalar μ, Scalar tolerance) {
   using DenseVector = Eigen::VectorX<Scalar>;
 
   if (scaling.is_identity()) {
-    return kkt_error_inf_norm<Scalar>(iterates, function_values,
-                                      first_derivatives, μ, tolerance);
+    return kkt_error_inf_norm<Scalar>(
+        iterates, function_values, first_derivatives, g_b, μ_b, μ, tolerance);
   }
 
   const Scalar inv_d_f = Scalar(1) / scaling.f;
@@ -332,9 +370,12 @@ Scalar unscaled_kkt_error_inf_norm(
       scaling.c_i.cwiseProduct(iterates.z) * inv_d_f};
   const Scalar μ_unscaled = inv_d_f * μ;
 
+  // b(x) isn't scaled, so the unscaled barrier term is d_f⁻¹μ_b∇b
+  const Scalar μ_b_unscaled = inv_d_f * μ_b;
+
   return kkt_error_inf_norm<Scalar>(iterates_unscaled, function_values_unscaled,
-                                    first_derivatives_unscaled, μ_unscaled,
-                                    tolerance);
+                                    first_derivatives_unscaled, g_b,
+                                    μ_b_unscaled, μ_unscaled, tolerance);
 }
 
 }  // namespace slp

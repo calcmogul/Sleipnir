@@ -772,9 +772,10 @@ class Problem {
       return ExitStatus::SUCCESS;
     }
 
-    // Solve the optimization problem
+    // Solve the optimization problem. Manifolds with a boundary need the
+    // interior-point method's barrier function.
     ExitStatus status;
-    if (!m_inequality_constraints.empty()) {
+    if (manifold.has_boundary() || !m_inequality_constraints.empty()) {
       if (options.diagnostics) {
         slp::println("\nInvoking IPM solver\n");
       }

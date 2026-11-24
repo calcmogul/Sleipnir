@@ -143,6 +143,7 @@ ExitStatus ipm(
     IPMIterates<Scalar>& iterates, Scalar& μ, int& iterations) {
   using DenseVector = Eigen::VectorX<Scalar>;
   using SparseMatrix = Eigen::SparseMatrix<Scalar>;
+  using SparseVector = Eigen::SparseVector<Scalar>;
 
   using std::isfinite;
 
@@ -214,6 +215,29 @@ ExitStatus ipm(
   slp_assert(c_i.rows() == matrices.num_inequality_constraints);
   slp_assert(A_i.rows() == matrices.num_inequality_constraints);
   slp_assert(A_i.cols() == matrices.num_decision_variables);
+
+  // Manifolds with a boundary add the barrier function b(x) to the log-barrier
+  // function ϕ_μ. Its Hessian in tangent coordinates is zero, so it only adds
+  // μ∇b to the gradient.
+  const bool has_barrier = manifold.has_boundary();
+
+  // Returns an IPM filter entry whose cost includes μb(x)
+  auto make_filter_entry =
+      [&](const DenseVector& x, const DenseVector& s,
+          const IPMFunctionValues<Scalar>& function_values) {
+        FilterEntry<Scalar> entry{s, function_values, μ};
+        if (has_barrier) {
+          entry.cost += μ * manifold.barrier(x);
+        }
+        return entry;
+      };
+
+  // Returns ∇b(x), or an empty vector if the manifold has no boundary
+  auto barrier_gradient = [&](const DenseVector& x) -> DenseVector {
+    return has_barrier ? manifold.barrier_gradient(x) : DenseVector{};
+  };
+
+  DenseVector g_b = barrier_gradient(x);
 
   IPMIterates<Scalar> trial_iterates;
   auto& [trial_x, trial_s, trial_y, trial_z] = trial_iterates;
@@ -289,8 +313,8 @@ ExitStatus ipm(
 
   // Error
   Scalar E_0 = unscaled_kkt_error_inf_norm<Scalar>(
-      matrices.scaling, iterates, function_values, first_derivatives, Scalar(0),
-      options.tolerance);
+      matrices.scaling, iterates, function_values, first_derivatives, g_b, μ,
+      Scalar(0), options.tolerance);
 
   setup_tracer.stop();
 
@@ -338,7 +362,13 @@ ExitStatus ipm(
 
     phase_tracer.next(diagnostics[KKT_SYSTEM_SOLVE]);
 
-    auto step = kkt_system.solve(g, A_e, A_i, y, s, z, μ, c_e, c_i - s);
+    // ∇f + μ∇b
+    SparseVector g_ϕ = g;
+    if (has_barrier) {
+      g_ϕ += (μ * g_b).sparseView();
+    }
+
+    auto step = kkt_system.solve(g_ϕ, A_e, A_i, y, s, z, μ, c_e, c_i - s);
 
     phase_tracer.next(diagnostics[LINE_SEARCH]);
 
@@ -351,17 +381,17 @@ ExitStatus ipm(
     // αₖᶻ = max(α ∈ (0, 1] : zₖ + αpₖᶻ ≥ (1−τⱼ)zₖ)
     Scalar α_z = fraction_to_the_boundary_rule<Scalar>(z, step.p_z, τ);
 
-    const FilterEntry<Scalar> current_entry{s, function_values, μ};
+    const FilterEntry<Scalar> current_entry =
+        make_filter_entry(x, s, function_values);
 
     // Compute the directional derivative of the log-barrier function along the
     // search direction.
     //
-    //   ϕ_μ(x, s) = f(x) − μ∑ᵢ ln(sᵢ)
+    //   ϕ_μ(x, s) = f(x) + μb(x) − μ∑ᵢ ln(sᵢ)
     //
     //   D_ϕ = ∇ϕ_μ(x, s)ᵀ[pˣ pˢ]
-    //       = ∇f(x)ᵀpˣ − μ∑ᵢ pᵢˢ/sᵢ
-    const Scalar D_ϕ =
-        g.transpose() * step.p_x - μ * s.cwiseInverse().dot(step.p_s);
+    //       = (∇f(x) + μ∇b(x))ᵀpˣ − μ∑ᵢ pᵢˢ/sᵢ
+    const Scalar D_ϕ = g_ϕ.dot(step.p_x) - μ * s.cwiseInverse().dot(step.p_s);
 
     const Scalar α_min = filter.min_step_size(current_entry, D_ϕ);
 
@@ -408,7 +438,8 @@ ExitStatus ipm(
       }
 
       // Check whether filter accepts trial iterate
-      FilterEntry trial_entry{trial_s, trial_function_values, μ};
+      auto trial_entry =
+          make_filter_entry(trial_x, trial_s, trial_function_values);
       if (filter.try_add(current_entry, trial_entry, D_ϕ, α)) {
         // Accept step
         break;
@@ -448,7 +479,7 @@ ExitStatus ipm(
                   soc_tracer.current_duration(),
                   unscaled_kkt_error_inf_norm<Scalar>(
                       matrices.scaling, trial_iterates, trial_function_values,
-                      first_derivatives, Scalar(0), options.tolerance),
+                      first_derivatives, g_b, μ, Scalar(0), options.tolerance),
                   trial_f, constraint_violation(trial_c_e, trial_c_i, trial_s),
                   trial_s.dot(trial_z), μ, kkt_system.hessian_regularization(),
                   kkt_system.constraint_jacobian_regularization(),
@@ -464,7 +495,7 @@ ExitStatus ipm(
           //     αˢᵒᶜ(cᵢ(xₖ) − sₖ) + cᵢ(xₖ + αˢᵒᶜpˣˢᵒᶜ) − (sₖ + αˢᵒᶜpˢˢᵒᶜ)
           c_e_soc = α_soc * c_e_soc + trial_c_e;
           c_i_minus_s_soc = α_soc * c_i_minus_s_soc + trial_c_i - trial_s;
-          soc_step = kkt_system.solve(g, A_e, A_i, y, s, z, μ, c_e_soc,
+          soc_step = kkt_system.solve(g_ϕ, A_e, A_i, y, s, z, μ, c_e_soc,
                                       c_i_minus_s_soc);
 
           // αˢᵒᶜ = max(α ∈ (0, 1] : sₖ + αpₖˢ ≥ (1−τⱼ)sₖ)
@@ -482,7 +513,8 @@ ExitStatus ipm(
           trial_c_i = matrices.c_i(trial_x);
 
           // Check whether filter accepts trial iterate
-          FilterEntry trial_entry{trial_s, trial_function_values, μ};
+          auto trial_entry =
+              make_filter_entry(trial_x, trial_s, trial_function_values);
           if (filter.try_add(current_entry, trial_entry, D_ϕ, α)) {
             step = soc_step;
             α = α_soc;
@@ -531,7 +563,7 @@ ExitStatus ipm(
       // KKT error was reduced. If it wasn't, invoke feasibility restoration.
       if (α < α_min || α < α_tiny) {
         Scalar current_kkt_error = kkt_error_one_norm<Scalar>(
-            iterates, function_values, first_derivatives, μ);
+            iterates, function_values, first_derivatives, g_b, μ);
 
         manifold.retract(x, α_max, step.p_x, trial_x);
         trial_s = s + α_max * step.p_s;
@@ -547,7 +579,7 @@ ExitStatus ipm(
             IPMFirstDerivatives<Scalar>{matrices.g(trial_x),
                                         matrices.A_e(trial_x),
                                         matrices.A_i(trial_x)},
-            μ);
+            barrier_gradient(trial_x), μ);
 
         // If the step using αᵐᵃˣ reduced the KKT error below the current
         // iterate's and every previous fallback step's, accept it anyway
@@ -570,7 +602,8 @@ ExitStatus ipm(
 
     // If solver stalled, invoke feasibility restoration
     if (!call_feasibility_restoration && !in_feasibility_restoration) {
-      FilterEntry trial_entry{trial_s, trial_function_values, μ};
+      auto trial_entry =
+          make_filter_entry(trial_x, trial_s, trial_function_values);
       if (stall_detector.update(current_entry, trial_entry, α,
                                 filter.min_constraint_violation)) {
         call_feasibility_restoration = true;
@@ -586,7 +619,7 @@ ExitStatus ipm(
         return ExitStatus::FEASIBILITY_RESTORATION_FAILED;
       }
 
-      FilterEntry initial_entry{s, function_values, μ};
+      auto initial_entry = make_filter_entry(x, s, function_values);
 
       // Augment the filter with the current iterate so the normal phase can't
       // return to it
@@ -623,7 +656,8 @@ ExitStatus ipm(
 
         // If the current iterate sufficiently reduces constraint violation and
         // is accepted by the normal filter, stop feasibility restoration
-        FilterEntry trial_entry{trial_s, trial_function_values, μ};
+        auto trial_entry =
+            make_filter_entry(trial_x, trial_s, trial_function_values);
         if (trial_entry.constraint_violation <
                 Scalar(0.9) * initial_entry.constraint_violation &&
             filter.is_acceptable(trial_entry)) {
@@ -654,7 +688,7 @@ ExitStatus ipm(
       // stops at its own convergence tolerance instead of driving constraint
       // violation to zero, so the filter can still hold entries with lower cost
       // and constraint violation.
-      if (!filter.is_acceptable(FilterEntry{s, function_values, μ})) {
+      if (!filter.is_acceptable(make_filter_entry(x, s, function_values))) {
         return ExitStatus::FEASIBILITY_RESTORATION_FAILED;
       }
     } else {
@@ -691,23 +725,26 @@ ExitStatus ipm(
     A_e = matrices.A_e(x);
     A_i = matrices.A_i(x);
     g = matrices.g(x);
+    g_b = barrier_gradient(x);
     H = matrices.H(x, y, z);
 
     // Update the error
     E_0 = unscaled_kkt_error_inf_norm<Scalar>(
-        matrices.scaling, iterates, function_values, first_derivatives,
+        matrices.scaling, iterates, function_values, first_derivatives, g_b, μ,
         Scalar(0), options.tolerance);
 
     // Update the barrier parameter if necessary
     if (E_0 > options.tolerance) {
       // While the error is below the desired threshold for this barrier
       // parameter value, decrease the barrier parameter further
-      Scalar E_μ = kkt_error_inf_norm<Scalar>(
-          iterates, function_values, first_derivatives, μ, options.tolerance);
+      Scalar E_μ = kkt_error_inf_norm<Scalar>(iterates, function_values,
+                                              first_derivatives, g_b, μ, μ,
+                                              options.tolerance);
       while (μ > μ_min && E_μ <= barrier_subproblem_tolerance(μ)) {
         update_barrier_parameter_and_reset_filter();
-        E_μ = kkt_error_inf_norm<Scalar>(
-            iterates, function_values, first_derivatives, μ, options.tolerance);
+        E_μ = kkt_error_inf_norm<Scalar>(iterates, function_values,
+                                         first_derivatives, g_b, μ, μ,
+                                         options.tolerance);
       }
     }
 

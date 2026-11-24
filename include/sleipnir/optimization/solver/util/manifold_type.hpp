@@ -107,6 +107,39 @@ class ManifoldType {
                                   Eigen::Ref<const DenseVector> v,
                                   int tangent_offset,
                                   Triplets& triplets) const = 0;
+
+  /// Returns true if the manifold has a boundary the iterates must stay
+  /// inside.
+  ///
+  /// A manifold with a boundary needs the interior-point method's barrier
+  /// function.
+  ///
+  /// @return True if the manifold has a boundary.
+  virtual bool has_boundary() const { return false; }
+
+  /// Returns the boundary barrier function b(x).
+  ///
+  /// @param block The block.
+  /// @param x The point on the manifold.
+  /// @return The barrier function's value, or ∞ if x is outside the boundary.
+  virtual Scalar barrier(
+      [[maybe_unused]] const ManifoldBlock<Scalar>& block,
+      [[maybe_unused]] Eigen::Ref<const DenseVector> x) const {
+    return Scalar(0);
+  }
+
+  /// Computes the gradient of b(R_x(p)) with respect to p at p = 0.
+  ///
+  /// The barrier's Hessian with respect to p must be zero at p = 0.
+  ///
+  /// @param[in] block The block.
+  /// @param[in] x The point on the manifold.
+  /// @param[out] g The gradient in tangent coordinates, which is zero on
+  ///     entry.
+  virtual void barrier_gradient(
+      [[maybe_unused]] const ManifoldBlock<Scalar>& block,
+      [[maybe_unused]] Eigen::Ref<const DenseVector> x,
+      [[maybe_unused]] Eigen::Ref<DenseVector> g) const {}
 };
 
 /// A contiguous block of decision variables constrained to a manifold.
