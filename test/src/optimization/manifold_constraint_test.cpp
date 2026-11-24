@@ -16,6 +16,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <sleipnir/autodiff/expression_type.hpp>
+#include <sleipnir/autodiff/pose3.hpp>
 #include <sleipnir/autodiff/real.hpp>
 #include <sleipnir/autodiff/rotation2.hpp>
 #include <sleipnir/autodiff/rotation3.hpp>
@@ -28,6 +29,50 @@
 #include "catch_string_converters.hpp"
 #include "scalar_types.hpp"
 #include "tolerance.hpp"
+
+TEMPLATE_TEST_CASE("Problem - Heading equality from the opposite heading",
+                   "[Problem][Manifold]", SCALAR_TYPES) {
+  using T = TestType;
+
+  slp::Problem<T> problem;
+  auto pose = problem.pose2_decision_variable();
+
+  // The initial heading is 0, opposite the constrained heading
+  problem.minimize(
+      pose.translation().squared_distance(slp::Translation2<T>{T(1), T(2)}));
+  problem.subject_to(pose.rotation() == slp::Rotation2<T>{T(std::numbers::pi)});
+
+  CHECK(problem.equality_constraint_type() == slp::ExpressionType::NONLINEAR);
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
+
+  using std::abs;
+  CHECK_THAT(abs(pose.rotation().value()),
+             WithinAbs(T(std::numbers::pi), solution_tolerance<T>(1)));
+  CHECK_THAT(pose.translation().x().value(),
+             WithinAbs(T(1), solution_tolerance<T>(1)));
+}
+
+TEMPLATE_TEST_CASE("Problem - Pose3 equality", "[Problem][Manifold]",
+                   SCALAR_TYPES) {
+  using T = TestType;
+
+  const Eigen::Quaternion<T> q_target{Eigen::AngleAxis<T>{
+      T(2.9), Eigen::Vector3<T>{T(1), T(-2), T(0.5)}.normalized()}};
+  const slp::Pose3<T> target{Eigen::Vector3<T>{T(1), T(-0.5), T(2)}, q_target};
+
+  slp::Problem<T> problem;
+  auto pose = problem.pose3_decision_variable();
+  problem.subject_to(pose == target);
+
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
+
+  Eigen::Vector3<T> t = pose.translation().value();
+  CHECK_THAT(t, WithinAbs(Eigen::Vector3<T>{T(1), T(-0.5), T(2)},
+                          solution_tolerance<T>(1)));
+  using std::abs;
+  CHECK_THAT(abs(pose.rotation().value().dot(q_target)),
+             WithinAbs(T(1), solution_tolerance<T>(1)));
+}
 
 TEMPLATE_TEST_CASE("Problem - UnitVector equality: constant direction",
                    "[Problem][Manifold]", SCALAR_TYPES) {
@@ -135,6 +180,25 @@ TEMPLATE_TEST_CASE("Problem - Rotation3 and UnitVector tolerances",
   CHECK_THAT(T(2) * acos(abs(q.value().w())),
              WithinAbs(T(0.4), solution_tolerance<T>(1)));
   CHECK_THAT(n.value(0), WithinAbs(cos(T(0.3)), solution_tolerance<T>(1)));
+}
+
+TEMPLATE_TEST_CASE("Problem - Distance tolerances: at most",
+                   "[Problem][Manifold]", SCALAR_TYPES) {
+  using T = TestType;
+
+  slp::Problem<T> problem;
+  auto pose = problem.pose2_decision_variable();
+  problem.minimize(
+      pose.translation().squared_distance(slp::Translation2<T>{T(3), T(4)}));
+  problem.subject_to(pose.translation().squared_distance(
+                         slp::Translation2<T>{T(0), T(0)}) <= T(1));
+
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
+
+  CHECK_THAT(pose.translation().x().value(),
+             WithinAbs(T(0.6), solution_tolerance<T>(1)));
+  CHECK_THAT(pose.translation().y().value(),
+             WithinAbs(T(0.8), solution_tolerance<T>(1)));
 }
 
 TEMPLATE_TEST_CASE("Problem - Distance tolerances: at least",

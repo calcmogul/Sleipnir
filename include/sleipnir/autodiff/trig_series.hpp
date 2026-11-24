@@ -69,6 +69,38 @@ std::array<Scalar, trig_series_terms> alternating_factorial_coeffs(int m) {
   return coeffs;
 }
 
+/// Returns the coefficients (−1)ᵏB₂ₖ/(2k)! of (θ/2) cot(θ/2), where B₂ₖ are
+/// the Bernoulli numbers.
+///
+/// @return The coefficients for k = 0, 1, …, 11.
+template <typename Scalar>
+std::array<Scalar, trig_series_terms + 1> half_cot_coeffs() {
+  constexpr std::array<std::pair<double, double>, trig_series_terms + 1>
+      bernoulli{{{1, 1},
+                 {1, 6},
+                 {-1, 30},
+                 {1, 42},
+                 {-1, 30},
+                 {5, 66},
+                 {-691, 2730},
+                 {7, 6},
+                 {-3617, 510},
+                 {43867, 798},
+                 {-174611, 330},
+                 {854513, 138}}};
+
+  std::array<Scalar, trig_series_terms + 1> coeffs;
+  Scalar factorial(1);
+  for (int k = 0; k < static_cast<int>(trig_series_terms) + 1; ++k) {
+    if (k > 0) {
+      factorial *= Scalar(2 * k - 1) * Scalar(2 * k);
+    }
+    coeffs[k] = Scalar(k % 2 == 0 ? 1 : -1) * Scalar(bernoulli[k].first) /
+                Scalar(bernoulli[k].second) / factorial;
+  }
+  return coeffs;
+}
+
 /// Returns cos θ.
 ///
 /// @param s θ².
@@ -89,6 +121,69 @@ Real<Scalar> sin_over_theta(const Real<Scalar>& s) {
   static const auto coeffs = alternating_factorial_coeffs<Scalar>(1);
   return series_or_closed_form(
       s, coeffs, [](const Real<Scalar>& θ) { return sin(θ) / θ; });
+}
+
+/// Returns (1 − cos θ)/θ².
+///
+/// @param s θ².
+/// @return (1 − cos θ)/θ².
+template <typename Scalar>
+Real<Scalar> one_minus_cos_over_theta_sq(const Real<Scalar>& s) {
+  static const auto coeffs = alternating_factorial_coeffs<Scalar>(2);
+  return series_or_closed_form(s, coeffs, [](const Real<Scalar>& θ) {
+    return (Scalar(1) - cos(θ)) / (θ * θ);
+  });
+}
+
+/// Returns (θ − sin θ)/θ³.
+///
+/// @param s θ².
+/// @return (θ − sin θ)/θ³.
+template <typename Scalar>
+Real<Scalar> theta_minus_sin_over_theta_cubed(const Real<Scalar>& s) {
+  static const auto coeffs = alternating_factorial_coeffs<Scalar>(3);
+  return series_or_closed_form(s, coeffs, [](const Real<Scalar>& θ) {
+    return (θ - sin(θ)) / (θ * θ * θ);
+  });
+}
+
+/// Returns (θ/2) cot(θ/2) = θ sin θ/(2(1 − cos θ)) for |θ| < 2π.
+///
+/// @param s θ².
+/// @return (θ/2) cot(θ/2).
+template <typename Scalar>
+Real<Scalar> half_theta_cot_half_theta(const Real<Scalar>& s) {
+  static const auto coeffs = [] {
+    auto all = half_cot_coeffs<Scalar>();
+    std::array<Scalar, trig_series_terms> result;
+    std::copy(all.begin(), all.end() - 1, result.begin());
+    return result;
+  }();
+  return series_or_closed_form(s, coeffs, [](const Real<Scalar>& θ) {
+    return θ * sin(θ) / (Scalar(2) * (Scalar(1) - cos(θ)));
+  });
+}
+
+/// Returns (1 − (θ/2) cot(θ/2))/θ² for |θ| < 2π.
+///
+/// @param s θ².
+/// @return (1 − (θ/2) cot(θ/2))/θ².
+template <typename Scalar>
+Real<Scalar> one_minus_half_theta_cot_half_theta_over_theta_sq(
+    const Real<Scalar>& s) {
+  // The series is (1 − Σₖ cₖsᵏ)/s = −Σₖ cₖ₊₁sᵏ
+  static const auto coeffs = [] {
+    auto all = half_cot_coeffs<Scalar>();
+    std::array<Scalar, trig_series_terms> result;
+    for (size_t k = 0; k < trig_series_terms; ++k) {
+      result[k] = -all[k + 1];
+    }
+    return result;
+  }();
+  return series_or_closed_form(s, coeffs, [](const Real<Scalar>& θ) {
+    return (Scalar(1) - θ * sin(θ) / (Scalar(2) * (Scalar(1) - cos(θ)))) /
+           (θ * θ);
+  });
 }
 
 }  // namespace slp::detail

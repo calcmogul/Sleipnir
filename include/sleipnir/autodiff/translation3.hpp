@@ -15,6 +15,9 @@
 
 namespace slp {
 
+template <typename Scalar>
+class Pose3;
+
 /// A 3D translation of autodiff expressions.
 ///
 /// A translation is a point or a displacement (x, y, z). It converts implicitly
@@ -143,6 +146,15 @@ class Translation3 {
   Translation3 rotate_by(const Rotation3<Scalar>& rotation) const {
     return Translation3{rotation.rotate(RealMatrix<Scalar>{*this})};
   }
+
+  /// Returns this point transformed by a pose.
+  ///
+  /// The result is R p + t, where p is this point, and R and t are the pose's
+  /// rotation and translation.
+  ///
+  /// @param pose The pose.
+  /// @return The transformed point.
+  Translation3 transform_by(const Pose3<Scalar>& pose) const;
 
  private:
   Real<Scalar> m_x;

@@ -15,6 +15,9 @@
 
 namespace slp {
 
+template <typename Scalar>
+class Pose2;
+
 /// A 2D translation of autodiff expressions.
 ///
 /// A translation is a point or a displacement (x, y). It converts implicitly
@@ -131,6 +134,15 @@ class Translation2 {
     const auto& s = rotation.sin();
     return Translation2{c * m_x - s * m_y, s * m_x + c * m_y};
   }
+
+  /// Returns this point transformed by a pose.
+  ///
+  /// The result is R p + t, where p is this point, and R and t are the pose's
+  /// rotation and translation.
+  ///
+  /// @param pose The pose.
+  /// @return The transformed point.
+  Translation2 transform_by(const Pose2<Scalar>& pose) const;
 
  private:
   Real<Scalar> m_x;

@@ -17,6 +17,7 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include <sleipnir/autodiff/expression_type.hpp>
+#include <sleipnir/autodiff/pose2.hpp>
 #include <sleipnir/autodiff/real.hpp>
 #include <sleipnir/autodiff/real_matrix.hpp>
 #include <sleipnir/autodiff/rotation2.hpp>
@@ -243,6 +244,74 @@ TEMPLATE_TEST_CASE("Problem - 2D point set registration", "[Problem][Manifold]",
   CHECK_THAT(z.value(), WithinAbs(θ_true, solution_tolerance<T>(1)));
   CHECK_THAT(t.x().value(), WithinAbs(t_true[0], solution_tolerance<T>(1)));
   CHECK_THAT(t.y().value(), WithinAbs(t_true[1], solution_tolerance<T>(1)));
+}
+
+TEMPLATE_TEST_CASE("Problem - SE(2) point set registration",
+                   "[Problem][Manifold]", SCALAR_TYPES) {
+  using T = TestType;
+
+  const slp::Pose2<T> pose_true{Eigen::Vector2<T>{T(1), T(-0.5)}, T(2.8)};
+
+  std::vector<slp::Translation2<T>> points{
+      {T(1), T(0)}, {T(0), T(2)}, {T(-1), T(-1)}, {T(2), T(1)}};
+
+  slp::Problem<T> problem;
+  auto pose = problem.pose2_decision_variable();
+  pose.rotation().set_value(T(-2.8));
+
+  slp::Real<T> cost{T(0)};
+  for (auto& p : points) {
+    const slp::Translation2<T> measured{p.transform_by(pose_true).value()};
+    cost += p.transform_by(pose).squared_distance(measured);
+  }
+  problem.minimize(cost);
+  check_iterates_on_manifold(problem, 2, 2);
+
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
+
+  CHECK_THAT(pose.rotation().value(),
+             WithinAbs(T(2.8), solution_tolerance<T>(1)));
+  CHECK_THAT(pose.translation().x().value(),
+             WithinAbs(T(1), solution_tolerance<T>(1)));
+  CHECK_THAT(pose.translation().y().value(),
+             WithinAbs(T(-0.5), solution_tolerance<T>(1)));
+}
+
+TEMPLATE_TEST_CASE("Problem - SE(3) point set registration",
+                   "[Problem][Manifold]", SCALAR_TYPES) {
+  using T = TestType;
+
+  const Eigen::Quaternion<T> q_true{Eigen::AngleAxis<T>{
+      T(2.5), Eigen::Vector3<T>{T(0.2), T(1), T(-0.4)}.normalized()}};
+  const Eigen::Vector3<T> t_true{T(1), T(-0.5), T(2)};
+
+  std::vector<slp::Translation3<T>> points{{T(1), T(0), T(0)},
+                                           {T(0), T(2), T(0)},
+                                           {T(0), T(0), T(-1)},
+                                           {T(1), T(1), T(1)}};
+
+  slp::Problem<T> problem;
+  auto pose = problem.pose3_decision_variable();
+
+  // The measurements are of the points in the pose's frame
+  slp::Real<T> cost{T(0)};
+  for (auto& p : points) {
+    Eigen::Vector3<T> measured = q_true.inverse() * (p.value() - t_true);
+    cost += p.transform_by(pose.inverse())
+                .squared_distance(slp::Translation3<T>{measured});
+  }
+  problem.minimize(cost);
+  check_iterates_on_manifold(problem, 3, 4);
+
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
+
+  Eigen::Vector3<T> t = pose.translation().value();
+  Eigen::Quaternion<T> q = pose.rotation().value();
+  for (int i = 0; i < 3; ++i) {
+    CHECK_THAT(t[i], WithinAbs(t_true[i], solution_tolerance<T>(1)));
+  }
+  using std::abs;
+  CHECK_THAT(abs(q.dot(q_true)), WithinAbs(T(1), solution_tolerance<T>(1)));
 }
 
 TEMPLATE_TEST_CASE("Problem - Pose estimation with inequality constraints",

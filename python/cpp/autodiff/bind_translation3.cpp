@@ -4,6 +4,7 @@
 #include <nanobind/nanobind.h>
 
 #include <Eigen/Core>
+#include <sleipnir/autodiff/pose3.hpp>
 #include <sleipnir/autodiff/real.hpp>
 #include <sleipnir/autodiff/real_matrix.hpp>
 #include <sleipnir/autodiff/rotation3.hpp>
@@ -52,6 +53,9 @@ void bind_translation3(nb::class_<Translation3<double>>& cls) {
           DOC(slp, Translation3, squared_distance));
   cls.def("rotate_by", &T::rotate_by, "rotation"_a,
           DOC(slp, Translation3, rotate_by));
+  cls.def("transform_by",
+          nb::overload_cast<const Pose3<double>&>(&T::transform_by, nb::const_),
+          "pose"_a, DOC(slp, Translation3, transform_by));
 
   cls.def(
       "__add__", [](const T& lhs, const T& rhs) { return lhs + rhs; },
@@ -64,16 +68,16 @@ void bind_translation3(nb::class_<Translation3<double>>& cls) {
       DOC(slp, operator, sub, 9));
   cls.def(
       "__mul__", [](const T& lhs, const V& rhs) { return lhs * rhs; },
-      nb::is_operator(), "rhs"_a, DOC(slp, operator, mul, 12));
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, mul, 14));
   cls.def(
       "__rmul__", [](const T& rhs, const V& lhs) { return lhs * rhs; },
-      nb::is_operator(), "lhs"_a, DOC(slp, operator, mul, 13));
+      nb::is_operator(), "lhs"_a, DOC(slp, operator, mul, 15));
   cls.def(
       "__truediv__", [](const T& lhs, const V& rhs) { return lhs / rhs; },
       nb::is_operator(), "rhs"_a, DOC(slp, operator, div, 7));
   cls.def(
       "__eq__", [](const T& lhs, const T& rhs) { return lhs == rhs; },
-      nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 12));
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 14));
 }
 
 }  // namespace slp

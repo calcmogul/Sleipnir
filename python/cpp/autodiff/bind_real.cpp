@@ -267,13 +267,13 @@ void bind_real(nb::module_& autodiff, nb::class_<Real<double>>& cls) {
 
   // Comparison operators
   for_each_type<nb::detail::self_t, double, int>([&]<typename T> {
-    cls.def(nb::self == T(), "rhs"_a, DOC(slp, operator, eq, 7));
+    cls.def(nb::self == T(), "rhs"_a, DOC(slp, operator, eq, 9));
     cls.def(nb::self < T(), "rhs"_a, DOC(slp, operator, lt));
     cls.def(nb::self <= T(), "rhs"_a, DOC(slp, operator, le));
     cls.def(nb::self > T(), "rhs"_a, DOC(slp, operator, gt));
     cls.def(nb::self >= T(), "rhs"_a, DOC(slp, operator, ge));
     if constexpr (!std::same_as<T, nb::detail::self_t>) {
-      cls.def(T() == nb::self, "lhs"_a, DOC(slp, operator, eq, 7));
+      cls.def(T() == nb::self, "lhs"_a, DOC(slp, operator, eq, 9));
       cls.def(T() < nb::self, "lhs"_a, DOC(slp, operator, lt));
       cls.def(T() <= nb::self, "lhs"_a, DOC(slp, operator, le));
       cls.def(T() > nb::self, "lhs"_a, DOC(slp, operator, gt));

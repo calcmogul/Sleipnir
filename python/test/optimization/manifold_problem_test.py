@@ -5,6 +5,7 @@ import pytest
 from scipy.spatial.transform import Rotation
 from sleipnir.autodiff import (
     ExpressionType,
+    Pose2,
     Real,
     RealMatrix,
     Rotation3,
@@ -203,6 +204,68 @@ def test_2d_point_set_registration() -> None:
 
     assert z.value() == pytest.approx(θ_true, abs=solution_tolerance(1))
     assert t.value() == pytest.approx(t_true, abs=solution_tolerance(1))
+
+
+def test_se2_point_set_registration() -> None:
+    pose_true = Pose2(np.array([1.0, -0.5]), 2.8)
+
+    points = [
+        Translation2(1.0, 0.0),
+        Translation2(0.0, 2.0),
+        Translation2(-1.0, -1.0),
+        Translation2(2.0, 1.0),
+    ]
+
+    problem = Problem()
+    pose = problem.pose2_decision_variable()
+    pose.rotation().set_value(-2.8)
+
+    cost = Real(0.0)
+    for p in points:
+        measured = Translation2(p.transform_by(pose_true).value())
+        cost += p.transform_by(pose).squared_distance(measured)
+    problem.minimize(cost)
+    check_iterates_on_manifold(problem, 2, 2)
+
+    assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS
+
+    assert pose.rotation().value() == pytest.approx(2.8, abs=solution_tolerance(1))
+    assert pose.translation().value() == pytest.approx(
+        np.array([1.0, -0.5]), abs=solution_tolerance(1)
+    )
+
+
+def test_se3_point_set_registration() -> None:
+    q_true_axis = np.array([0.2, 1.0, -0.4])
+    q_true = Rotation.from_rotvec(2.5 * q_true_axis / np.linalg.norm(q_true_axis))
+    t_true = np.array([1.0, -0.5, 2.0])
+
+    points = [
+        Translation3(1.0, 0.0, 0.0),
+        Translation3(0.0, 2.0, 0.0),
+        Translation3(0.0, 0.0, -1.0),
+        Translation3(1.0, 1.0, 1.0),
+    ]
+
+    problem = Problem()
+    pose = problem.pose3_decision_variable()
+
+    # The measurements are of the points in the pose's frame
+    cost = Real(0.0)
+    for p in points:
+        measured = Translation3(q_true.inv().apply(p.value() - t_true))
+        cost += p.transform_by(pose.inverse()).squared_distance(measured)
+    problem.minimize(cost)
+    check_iterates_on_manifold(problem, 3, 4)
+
+    assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS
+
+    assert pose.translation().value() == pytest.approx(
+        t_true, abs=solution_tolerance(1)
+    )
+    assert abs(
+        pose.rotation().value() @ q_true.as_quat(scalar_first=True)
+    ) == pytest.approx(1.0, abs=solution_tolerance(1))
 
 
 def test_pose_estimation_with_inequality_constraints() -> None:

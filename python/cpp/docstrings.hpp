@@ -2228,6 +2228,236 @@ R"doc(The solver will stop once the error is below this tolerance.
 
 Defaults to the square root of the scalar type's machine epsilon.)doc";
 
+constexpr char mkd_doc_slp_Pose2[] =
+R"doc(A 2D pose of autodiff expressions, which represents a rigid transform
+in SE(2).
+
+A pose is a translation t and a rotation R. It maps a point p in its
+own frame to R p + t in the parent frame.
+
+Poses are created by Problem::pose2_decision_variable(), from
+constants, and from a translation and a Rotation2.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_Pose2_2[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Pose2_3[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Pose2_Pose2[] =
+R"doc(Constructs a constant pose.
+
+Args:
+    translation: The translation.
+    angle: The rotation angle in radians.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose2_Pose2_2[] =
+R"doc(Constructs a pose from a translation and a rotation.
+
+Args:
+    translation: The translation.
+    rotation: The rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose2_inverse[] =
+R"doc(Returns the inverse pose.
+
+It maps points in the parent frame to this pose's frame.
+
+Returns:
+    The inverse pose.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose2_log[] =
+R"doc(Returns the twist that moves from the identity to this pose.
+
+This is the inverse of Twist2::exp(), and the logarithm map of SE(2).
+The twist's angular part is in (−π, π].
+
+Returns:
+    The twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose2_m_rotation[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Pose2_m_translation[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Pose2_relative_to[] =
+R"doc(Returns this pose relative to another pose.
+
+The result is this pose expressed in the other pose's frame, other⁻¹ *
+this. It's often used as the error between a pose and a reference.
+
+Args:
+    other: The pose whose frame the result is expressed in.
+
+Returns:
+    This pose relative to the other pose.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose2_rotation[] =
+R"doc(Returns the rotation.
+
+Returns:
+    The rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose2_rotation_2[] =
+R"doc(Returns the rotation.
+
+Returns:
+    The rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose2_to_matrix[] =
+R"doc(Returns the 3x3 homogeneous transformation matrix.
+
+Returns:
+    The 3x3 homogeneous transformation matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose2_translation[] =
+R"doc(Returns the translation.
+
+Returns:
+    The translation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose2_translation_2[] =
+R"doc(Returns the translation.
+
+Returns:
+    The translation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose3[] =
+R"doc(A 3D pose of autodiff expressions, which represents a rigid transform
+in SE(3).
+
+A pose is a translation t and a rotation R. It maps a point p in its
+own frame to R p + t in the parent frame.
+
+Poses are created by Problem::pose3_decision_variable(), from
+constants, and from a translation and a Rotation3.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_Pose3_2[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Pose3_3[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Pose3_Pose3[] =
+R"doc(Constructs a constant pose.
+
+Args:
+    translation: The translation.
+    rotation: The rotation. It's normalized, so it must have nonzero
+              norm.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose3_Pose3_2[] =
+R"doc(Constructs a pose from a translation and a rotation.
+
+Args:
+    translation: The translation.
+    rotation: The rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose3_inverse[] =
+R"doc(Returns the inverse pose.
+
+It maps points in the parent frame to this pose's frame.
+
+Returns:
+    The inverse pose.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose3_log[] =
+R"doc(Returns the twist that moves from the identity to this pose.
+
+This is the inverse of Twist3::exp(), and the logarithm map of SE(3).
+The twist's angular part is the rotation's to_vector(), whose angle is
+in [0, π].
+
+Returns:
+    The twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose3_m_rotation[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Pose3_m_translation[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Pose3_relative_to[] =
+R"doc(Returns this pose relative to another pose.
+
+The result is this pose expressed in the other pose's frame, other⁻¹ *
+this. It's often used as the error between a pose and a reference.
+
+Args:
+    other: The pose whose frame the result is expressed in.
+
+Returns:
+    This pose relative to the other pose.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose3_rotation[] =
+R"doc(Returns the rotation.
+
+Returns:
+    The rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose3_rotation_2[] =
+R"doc(Returns the rotation.
+
+Returns:
+    The rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose3_to_matrix[] =
+R"doc(Returns the 4x4 homogeneous transformation matrix.
+
+Returns:
+    The 4x4 homogeneous transformation matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose3_translation[] =
+R"doc(Returns the translation.
+
+Returns:
+    The translation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Pose3_translation_2[] =
+R"doc(Returns the translation.
+
+Returns:
+    The translation.
+
+)doc";
+
 constexpr char mkd_doc_slp_Problem[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Problem_2[] = R"doc()doc";
@@ -2540,6 +2770,70 @@ Args:
 
 Returns:
     A matrix of parameters in the optimization problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_pose2_decision_variable[] =
+R"doc(Creates a 2D pose decision variable in the optimization problem.
+
+The translation is two ordinary decision variables, and the rotation
+is a 2D rotation decision variable (see
+rotation2_decision_variable()).
+
+The pose has an initial value of the identity.
+
+Returns:
+    A 2D pose of decision variables in the optimization problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_pose2_parameter[] =
+R"doc(Creates a 2D pose parameter in the optimization problem.
+
+A parameter is a constant whose value can be changed between solves
+with set_value(). Unlike constants, parameters aren't folded into
+expressions.
+
+The pose is a 2D translation parameter (see translation2_parameter())
+and a 2D rotation parameter (see rotation2_parameter()). Set their
+values through translation() and rotation().
+
+The pose has an initial value of the identity.
+
+Returns:
+    A 2D pose of parameters in the optimization problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_pose3_decision_variable[] =
+R"doc(Creates a 3D pose decision variable in the optimization problem.
+
+The translation is three ordinary decision variables, and the rotation
+is a 3D rotation decision variable (see
+rotation3_decision_variable()).
+
+The pose has an initial value of the identity.
+
+Returns:
+    A 3D pose of decision variables in the optimization problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_pose3_parameter[] =
+R"doc(Creates a 3D pose parameter in the optimization problem.
+
+A parameter is a constant whose value can be changed between solves
+with set_value(). Unlike constants, parameters aren't folded into
+expressions.
+
+The pose is a 3D translation parameter (see translation3_parameter())
+and a 3D rotation parameter (see rotation3_parameter()). Set their
+values through translation() and rotation().
+
+The pose has an initial value of the identity.
+
+Returns:
+    A 3D pose of parameters in the optimization problem.
 
 )doc";
 
@@ -4710,6 +5004,20 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_Translation2_transform_by[] =
+R"doc(Returns this point transformed by a pose.
+
+The result is R p + t, where p is this point, and R and t are the
+pose's rotation and translation.
+
+Args:
+    pose: The pose.
+
+Returns:
+    The transformed point.
+
+)doc";
+
 constexpr char mkd_doc_slp_Translation2_value[] =
 R"doc(Returns the translation's value.
 
@@ -4851,6 +5159,20 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_Translation3_transform_by[] =
+R"doc(Returns this point transformed by a pose.
+
+The result is R p + t, where p is this point, and R and t are the
+pose's rotation and translation.
+
+Args:
+    pose: The pose.
+
+Returns:
+    The transformed point.
+
+)doc";
+
 constexpr char mkd_doc_slp_Translation3_value[] =
 R"doc(Returns the translation's value.
 
@@ -4906,6 +5228,148 @@ Returns:
     The z component.
 
 )doc";
+
+constexpr char mkd_doc_slp_Twist2[] =
+R"doc(A 2D twist of autodiff expressions.
+
+A twist is a change in pose along an arc of constant curvature,
+expressed in the frame of the pose it starts from. It's a linear part
+(dx, dy) and an angular part dθ in radians.
+
+exp() returns the pose reached by moving along the twist from the
+identity, and Pose2::log() is its inverse. A body-frame velocity times
+a timestep is a twist, so pose * (velocity * dt).exp() integrates a
+constant velocity for dt.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_Twist2_Twist2[] =
+R"doc(Constructs a twist from its linear and angular parts.
+
+Args:
+    linear: The linear part (dx, dy). Must be 2x1.
+    angular: The angular part dθ in radians.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist2_angular[] =
+R"doc(Returns the angular part dθ in radians.
+
+Returns:
+    The angular part.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist2_angular_2[] =
+R"doc(Returns the angular part dθ in radians.
+
+Returns:
+    The angular part.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist2_exp[] =
+R"doc(Returns the pose reached by moving along this twist from the identity.
+
+This is the exponential map of SE(2). Its value and derivatives are
+accurate for all twists, including those with zero angular part.
+
+Returns:
+    The pose.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist2_linear[] =
+R"doc(Returns the linear part (dx, dy).
+
+Returns:
+    The linear part.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist2_linear_2[] =
+R"doc(Returns the linear part (dx, dy).
+
+Returns:
+    The linear part.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist2_m_angular[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Twist2_m_linear[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Twist3[] =
+R"doc(A 3D twist of autodiff expressions.
+
+A twist is a change in pose along a screw motion, expressed in the
+frame of the pose it starts from. It's a linear part (dx, dy, dz) and
+an angular part (rx, ry, rz), a rotation vector in radians.
+
+exp() returns the pose reached by moving along the twist from the
+identity, and Pose3::log() is its inverse. A body-frame velocity times
+a timestep is a twist, so pose * (velocity * dt).exp() integrates a
+constant velocity for dt.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_Twist3_Twist3[] =
+R"doc(Constructs a twist from its linear and angular parts.
+
+Args:
+    linear: The linear part (dx, dy, dz). Must be 3x1.
+    angular: The angular part (rx, ry, rz) in radians. Must be 3x1.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist3_angular[] =
+R"doc(Returns the angular part (rx, ry, rz) in radians.
+
+Returns:
+    The angular part.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist3_angular_2[] =
+R"doc(Returns the angular part (rx, ry, rz) in radians.
+
+Returns:
+    The angular part.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist3_exp[] =
+R"doc(Returns the pose reached by moving along this twist from the identity.
+
+This is the exponential map of SE(3). Its value and derivatives are
+accurate for all twists, including those with zero angular part.
+
+Returns:
+    The pose.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist3_linear[] =
+R"doc(Returns the linear part (dx, dy, dz).
+
+Returns:
+    The linear part.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist3_linear_2[] =
+R"doc(Returns the linear part (dx, dy, dz).
+
+Returns:
+    The linear part.
+
+)doc";
+
+constexpr char mkd_doc_slp_Twist3_m_angular[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Twist3_m_linear[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_UnitVector[] =
 R"doc(A unit-length column vector of autodiff expressions.
@@ -5334,6 +5798,18 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_detail_cross[] =
+R"doc(Returns the cross product of two 3D vectors.
+
+Args:
+    a: The first vector.
+    b: The second vector.
+
+Returns:
+    a × b.
+
+)doc";
+
 constexpr char mkd_doc_slp_detail_describe_constraints[] =
 R"doc(Describes constraints as "equality constraint i", "inequality
 constraints i and j", and so on.
@@ -5536,6 +6012,28 @@ Template Args:
 )doc";
 
 constexpr char mkd_doc_slp_exp[] =
+R"doc(Returns the pose reached by moving along this twist from the identity.
+
+This is the exponential map of SE(2). Its value and derivatives are
+accurate for all twists, including those with zero angular part.
+
+Returns:
+    The pose.
+
+)doc";
+
+constexpr char mkd_doc_slp_exp_2[] =
+R"doc(Returns the pose reached by moving along this twist from the identity.
+
+This is the exponential map of SE(3). Its value and derivatives are
+accurate for all twists, including those with zero angular part.
+
+Returns:
+    The pose.
+
+)doc";
+
+constexpr char mkd_doc_slp_exp_3[] =
 R"doc(exp() for Reals.
 
 Args:
@@ -5864,18 +6362,19 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_add_10[] =
-R"doc(Unary plus operator.
+R"doc(Adds two twists.
 
 Args:
-    v: The vector.
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
 
 Returns:
-    The vector.
+    The sum.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_add_11[] =
-R"doc(Addition operator.
+R"doc(Adds two twists.
 
 Args:
     lhs: Operator left-hand side.
@@ -5887,6 +6386,17 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_add_12[] =
+R"doc(Unary plus operator.
+
+Args:
+    v: The vector.
+
+Returns:
+    The vector.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_add_13[] =
 R"doc(Addition operator.
 
 Args:
@@ -5898,7 +6408,19 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_add_13[] =
+constexpr char mkd_doc_slp_operator_add_14[] =
+R"doc(Addition operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The sum.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_add_15[] =
 R"doc(Addition operator.
 
 Args:
@@ -6102,20 +6624,32 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_eq_7[] =
-R"doc(Equality operator that returns an equality constraint for two Reals.
+R"doc(Equality operator that returns an equality constraint for two poses.
+
+The constraint is that the translations are equal and the rotations
+are equal. See Rotation2's operator==.
 
 Args:
     lhs: Left-hand side.
-    rhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraint.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_eq_8[] =
-R"doc(Equality operator that returns an equality constraint for two Reals.
+R"doc(Equality operator that returns an equality constraint for two poses.
+
+The constraint is that the translations are equal and the rotations
+are equal. See Rotation3's operator==.
 
 Args:
     lhs: Left-hand side.
-    rhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraint.
 
 )doc";
 
@@ -6129,6 +6663,24 @@ Args:
 )doc";
 
 constexpr char mkd_doc_slp_operator_eq_10[] =
+R"doc(Equality operator that returns an equality constraint for two Reals.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Left-hand side.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_11[] =
+R"doc(Equality operator that returns an equality constraint for two Reals.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Left-hand side.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_12[] =
 R"doc(Equality operator that returns an equality constraint for two
 rotations.
 
@@ -6145,7 +6697,7 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_eq_11[] =
+constexpr char mkd_doc_slp_operator_eq_13[] =
 R"doc(Equality operator that returns an equality constraint for two
 rotations.
 
@@ -6163,33 +6715,63 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_eq_12[] =
-R"doc(Equality operator that returns an equality constraint for two
-translations.
-
-Args:
-    lhs: Left-hand side.
-    rhs: Right-hand side.
-
-Returns:
-    The equality constraint.
-
-)doc";
-
-constexpr char mkd_doc_slp_operator_eq_13[] =
-R"doc(Equality operator that returns an equality constraint for two
-translations.
-
-Args:
-    lhs: Left-hand side.
-    rhs: Right-hand side.
-
-Returns:
-    The equality constraint.
-
-)doc";
-
 constexpr char mkd_doc_slp_operator_eq_14[] =
+R"doc(Equality operator that returns an equality constraint for two
+translations.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraint.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_15[] =
+R"doc(Equality operator that returns an equality constraint for two
+translations.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraint.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_16[] =
+R"doc(Equality operator that returns an equality constraint for two twists.
+
+The constraint is that the linear parts are equal and the angular
+parts are equal.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraint.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_17[] =
+R"doc(Equality operator that returns an equality constraint for two twists.
+
+The constraint is that the linear parts are equal and the angular
+parts are equal.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraint.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_18[] =
 R"doc(Equality operator that returns an equality constraint for two unit
 vectors.
 
@@ -6210,7 +6792,7 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_eq_15[] =
+constexpr char mkd_doc_slp_operator_eq_19[] =
 R"doc(Equality operator that returns an equality constraint for a unit
 vector and a constant direction.
 
@@ -6226,7 +6808,7 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_eq_16[] =
+constexpr char mkd_doc_slp_operator_eq_20[] =
 R"doc(Equality operator that returns an equality constraint for a constant
 direction and a unit vector.
 
@@ -6391,6 +6973,36 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_mul_8[] =
+R"doc(Composes two poses.
+
+lhs * rhs transforms by rhs, then by lhs. If rhs is a pose in lhs's
+frame, the result is that pose in lhs's parent frame.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The composed pose.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_9[] =
+R"doc(Composes two poses.
+
+lhs * rhs transforms by rhs, then by lhs. If rhs is a pose in lhs's
+frame, the result is that pose in lhs's parent frame.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The composed pose.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_10[] =
 R"doc(Matrix-scalar multiplication operator.
 
 Args:
@@ -6402,7 +7014,7 @@ Template Args:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_mul_9[] =
+constexpr char mkd_doc_slp_operator_mul_11[] =
 R"doc(Scalar-matrix multiplication operator.
 
 Args:
@@ -6414,7 +7026,7 @@ Template Args:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_mul_10[] =
+constexpr char mkd_doc_slp_operator_mul_12[] =
 R"doc(Composes two rotations with complex multiplication.
 
 lhs * rhs rotates by rhs, then by lhs, so the angles add.
@@ -6428,7 +7040,7 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_mul_11[] =
+constexpr char mkd_doc_slp_operator_mul_13[] =
 R"doc(Composes two rotations with the Hamilton product.
 
 lhs * rhs rotates by rhs, then by lhs.
@@ -6439,30 +7051,6 @@ Args:
 
 Returns:
     The composed rotation.
-
-)doc";
-
-constexpr char mkd_doc_slp_operator_mul_12[] =
-R"doc(Scales a translation.
-
-Args:
-    lhs: The translation.
-    rhs: The factor.
-
-Returns:
-    The scaled translation.
-
-)doc";
-
-constexpr char mkd_doc_slp_operator_mul_13[] =
-R"doc(Scales a translation.
-
-Args:
-    lhs: The factor.
-    rhs: The translation.
-
-Returns:
-    The scaled translation.
 
 )doc";
 
@@ -6491,30 +7079,78 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_mul_16[] =
-R"doc(Multiplication operator.
+R"doc(Scales a translation.
 
 Args:
-    lhs: Operator left-hand side.
-    rhs: Operator right-hand side.
+    lhs: The translation.
+    rhs: The factor.
 
 Returns:
-    The product.
+    The scaled translation.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_mul_17[] =
-R"doc(Multiplication operator.
+R"doc(Scales a translation.
 
 Args:
-    lhs: Operator left-hand side.
-    rhs: Operator right-hand side.
+    lhs: The factor.
+    rhs: The translation.
 
 Returns:
-    The product.
+    The scaled translation.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_mul_18[] =
+R"doc(Scales a twist.
+
+Args:
+    lhs: The twist.
+    rhs: The factor.
+
+Returns:
+    The scaled twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_19[] =
+R"doc(Scales a twist.
+
+Args:
+    lhs: The factor.
+    rhs: The twist.
+
+Returns:
+    The scaled twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_20[] =
+R"doc(Scales a twist.
+
+Args:
+    lhs: The twist.
+    rhs: The factor.
+
+Returns:
+    The scaled twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_21[] =
+R"doc(Scales a twist.
+
+Args:
+    lhs: The factor.
+    rhs: The twist.
+
+Returns:
+    The scaled twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_22[] =
 R"doc(Multiplication operator.
 
 Args:
@@ -6526,7 +7162,31 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_mul_19[] =
+constexpr char mkd_doc_slp_operator_mul_23[] =
+R"doc(Multiplication operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The product.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_24[] =
+R"doc(Multiplication operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The product.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_25[] =
 R"doc(Multiplication operator.
 
 Args:
@@ -6667,18 +7327,7 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_sub_12[] =
-R"doc(Unary minus operator.
-
-Args:
-    v: The vector.
-
-Returns:
-    The negated vector, which is also unit-length.
-
-)doc";
-
-constexpr char mkd_doc_slp_operator_sub_13[] =
-R"doc(Subtraction operator.
+R"doc(Subtracts two twists.
 
 Args:
     lhs: Operator left-hand side.
@@ -6689,8 +7338,19 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_operator_sub_13[] =
+R"doc(Negates a twist.
+
+Args:
+    twist: The twist.
+
+Returns:
+    The negated twist.
+
+)doc";
+
 constexpr char mkd_doc_slp_operator_sub_14[] =
-R"doc(Subtraction operator.
+R"doc(Subtracts two twists.
 
 Args:
     lhs: Operator left-hand side.
@@ -6702,6 +7362,52 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_sub_15[] =
+R"doc(Negates a twist.
+
+Args:
+    twist: The twist.
+
+Returns:
+    The negated twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_16[] =
+R"doc(Unary minus operator.
+
+Args:
+    v: The vector.
+
+Returns:
+    The negated vector, which is also unit-length.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_17[] =
+R"doc(Subtraction operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The difference.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_18[] =
+R"doc(Subtraction operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The difference.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_19[] =
 R"doc(Subtraction operator.
 
 Args:
@@ -6827,6 +7533,34 @@ Args:
 
 Template Args:
     Scalar: Scalar type.
+
+)doc";
+
+constexpr char mkd_doc_slp_transform_by[] =
+R"doc(Returns this point transformed by a pose.
+
+The result is R p + t, where p is this point, and R and t are the
+pose's rotation and translation.
+
+Args:
+    pose: The pose.
+
+Returns:
+    The transformed point.
+
+)doc";
+
+constexpr char mkd_doc_slp_transform_by_2[] =
+R"doc(Returns this point transformed by a pose.
+
+The result is R p + t, where p is this point, and R and t are the
+pose's rotation and translation.
+
+Args:
+    pose: The pose.
+
+Returns:
+    The transformed point.
 
 )doc";
 

@@ -413,13 +413,13 @@ void bind_real_matrix(nb::module_& autodiff,
         return "rhs"_a;
       }
     }();
-    cls.def(nb::self == T(), rhs, DOC(slp, operator, eq, 7));
+    cls.def(nb::self == T(), rhs, DOC(slp, operator, eq, 9));
     cls.def(nb::self < T(), rhs, DOC(slp, operator, lt));
     cls.def(nb::self <= T(), rhs, DOC(slp, operator, le));
     cls.def(nb::self > T(), rhs, DOC(slp, operator, gt));
     cls.def(nb::self >= T(), rhs, DOC(slp, operator, ge));
     if constexpr (!std::same_as<nb::detail::self_t, T>) {
-      cls.def(T() == nb::self, "rhs"_a, DOC(slp, operator, eq, 7));
+      cls.def(T() == nb::self, "rhs"_a, DOC(slp, operator, eq, 9));
       cls.def(T() < nb::self, "rhs"_a, DOC(slp, operator, lt));
       cls.def(T() <= nb::self, "rhs"_a, DOC(slp, operator, le));
       cls.def(T() > nb::self, "rhs"_a, DOC(slp, operator, gt));
@@ -431,7 +431,7 @@ void bind_real_matrix(nb::module_& autodiff,
     cls.def(
         "__eq__",
         [](const RealMatrix<double>& lhs, T&& rhs) { return lhs == rhs; },
-        nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 7));
+        nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 9));
     cls.def(
         "__lt__",
         [](const RealMatrix<double>& lhs, T&& rhs) { return lhs < rhs; },

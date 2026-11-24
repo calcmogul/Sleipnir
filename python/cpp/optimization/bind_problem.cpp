@@ -15,6 +15,8 @@
 #include <string_view>
 #include <utility>
 
+#include <sleipnir/autodiff/pose2.hpp>
+#include <sleipnir/autodiff/pose3.hpp>
 #include <sleipnir/autodiff/real.hpp>
 #include <sleipnir/autodiff/real_matrix.hpp>
 #include <sleipnir/autodiff/rotation2.hpp>
@@ -170,6 +172,10 @@ void bind_problem(nb::class_<Problem<double>>& cls) {
   cls.def("rotation3_decision_variable",
           &Problem<double>::rotation3_decision_variable,
           DOC(slp, Problem, rotation3_decision_variable));
+  cls.def("pose2_decision_variable", &Problem<double>::pose2_decision_variable,
+          DOC(slp, Problem, pose2_decision_variable));
+  cls.def("pose3_decision_variable", &Problem<double>::pose3_decision_variable,
+          DOC(slp, Problem, pose3_decision_variable));
   cls.def("parameter", nb::overload_cast<>(&Problem<double>::parameter),
           DOC(slp, Problem, parameter));
   cls.def("parameter", nb::overload_cast<int, int>(&Problem<double>::parameter),
@@ -194,6 +200,10 @@ void bind_problem(nb::class_<Problem<double>>& cls) {
           DOC(slp, Problem, rotation2_parameter));
   cls.def("rotation3_parameter", &Problem<double>::rotation3_parameter,
           DOC(slp, Problem, rotation3_parameter));
+  cls.def("pose2_parameter", &Problem<double>::pose2_parameter,
+          DOC(slp, Problem, pose2_parameter));
+  cls.def("pose3_parameter", &Problem<double>::pose3_parameter,
+          DOC(slp, Problem, pose3_parameter));
   for_each_type<double, const Real<double>&, const RealMatrix<double>&>(
       [&]<typename T> {
         cls.def(

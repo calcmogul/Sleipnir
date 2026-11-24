@@ -4,6 +4,8 @@ import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation
 from sleipnir.autodiff import (
+    ExpressionType,
+    Pose3,
     RealMatrix,
     Rotation2,
     Rotation3,
@@ -15,6 +17,47 @@ from sleipnir.optimization import (
     bounds,
 )
 from tolerance import solution_tolerance
+
+
+def test_heading_equality_from_the_opposite_heading() -> None:
+    problem = Problem()
+    pose = problem.pose2_decision_variable()
+
+    # The initial heading is 0, opposite the constrained heading
+    problem.minimize(pose.translation().squared_distance(Translation2(1.0, 2.0)))
+    problem.subject_to(pose.rotation() == Rotation2(math.pi))
+
+    assert problem.equality_constraint_type() == ExpressionType.NONLINEAR
+    assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS
+
+    assert abs(pose.rotation().value()) == pytest.approx(
+        math.pi, abs=solution_tolerance(1)
+    )
+    assert pose.translation().x().value() == pytest.approx(
+        1.0, abs=solution_tolerance(1)
+    )
+
+
+def test_pose3_equality() -> None:
+    q_target_axis = np.array([1.0, -2.0, 0.5])
+    q_target = Rotation.from_rotvec(
+        2.9 * q_target_axis / np.linalg.norm(q_target_axis)
+    ).as_quat(scalar_first=True)
+    target = Pose3(np.array([1.0, -0.5, 2.0]), Rotation3(*q_target))
+
+    problem = Problem()
+    pose = problem.pose3_decision_variable()
+    problem.subject_to(pose == target)
+
+    assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS
+
+    assert pose.translation().value() == pytest.approx(
+        np.array([1.0, -0.5, 2.0]), abs=solution_tolerance(1)
+    )
+    assert abs(pose.rotation().value() @ q_target) == pytest.approx(
+        1.0, abs=solution_tolerance(1)
+    )
+
 
 A = np.array([[2.0, -1.0, 0.5], [-1.0, 3.0, 0.25], [0.5, 0.25, 1.0]])
 
@@ -118,6 +161,24 @@ def test_rotation3_and_unit_vector_tolerances() -> None:
         0.4, abs=solution_tolerance(1)
     )
     assert n.value(0) == pytest.approx(math.cos(0.3), abs=solution_tolerance(1))
+
+
+def test_distance_tolerances_at_most() -> None:
+    problem = Problem()
+    pose = problem.pose2_decision_variable()
+    problem.minimize(pose.translation().squared_distance(Translation2(3.0, 4.0)))
+    problem.subject_to(
+        pose.translation().squared_distance(Translation2(0.0, 0.0)) <= 1.0
+    )
+
+    assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS
+
+    assert pose.translation().x().value() == pytest.approx(
+        0.6, abs=solution_tolerance(1)
+    )
+    assert pose.translation().y().value() == pytest.approx(
+        0.8, abs=solution_tolerance(1)
+    )
 
 
 def test_distance_tolerances_at_least() -> None:

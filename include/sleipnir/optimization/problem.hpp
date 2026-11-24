@@ -26,6 +26,8 @@
 #include "sleipnir/autodiff/gradient.hpp"
 #include "sleipnir/autodiff/hessian.hpp"
 #include "sleipnir/autodiff/jacobian.hpp"
+#include "sleipnir/autodiff/pose2.hpp"
+#include "sleipnir/autodiff/pose3.hpp"
 #include "sleipnir/autodiff/real.hpp"
 #include "sleipnir/autodiff/real_matrix.hpp"
 #include "sleipnir/autodiff/rotation2.hpp"
@@ -398,6 +400,82 @@ class Problem {
     RealMatrix<Scalar> q = parameter(4);
     q[0].set_value(Scalar(1));
     return Rotation3<Scalar>{q[0], q[1], q[2], q[3]};
+  }
+
+  /// Creates a 2D pose decision variable in the optimization problem.
+  ///
+  /// The translation is two ordinary decision variables, and the rotation is
+  /// a 2D rotation decision variable (see rotation2_decision_variable()).
+  ///
+  /// The pose has an initial value of the identity.
+  ///
+  /// @return A 2D pose of decision variables in the optimization problem.
+  [[nodiscard]]
+  Pose2<Scalar> pose2_decision_variable() {
+    // Create components separately because MSVC has incorrect evaluation order:
+    // https://developercommunity.visualstudio.com/t/Incorrect-evaluation-order-of-initialize/10993665
+    auto translation = translation2_decision_variable();
+    auto rotation = rotation2_decision_variable();
+    return Pose2<Scalar>{std::move(translation), std::move(rotation)};
+  }
+
+  /// Creates a 2D pose parameter in the optimization problem.
+  ///
+  /// A parameter is a constant whose value can be changed between solves with
+  /// set_value(). Unlike constants, parameters aren't folded into expressions.
+  ///
+  /// The pose is a 2D translation parameter (see translation2_parameter()) and
+  /// a 2D rotation parameter (see rotation2_parameter()). Set their values
+  /// through translation() and rotation().
+  ///
+  /// The pose has an initial value of the identity.
+  ///
+  /// @return A 2D pose of parameters in the optimization problem.
+  [[nodiscard]]
+  Pose2<Scalar> pose2_parameter() {
+    // Create components separately because MSVC has incorrect evaluation order:
+    // https://developercommunity.visualstudio.com/t/Incorrect-evaluation-order-of-initialize/10993665
+    auto translation = translation2_parameter();
+    auto rotation = rotation2_parameter();
+    return Pose2<Scalar>{std::move(translation), std::move(rotation)};
+  }
+
+  /// Creates a 3D pose decision variable in the optimization problem.
+  ///
+  /// The translation is three ordinary decision variables, and the rotation
+  /// is a 3D rotation decision variable (see rotation3_decision_variable()).
+  ///
+  /// The pose has an initial value of the identity.
+  ///
+  /// @return A 3D pose of decision variables in the optimization problem.
+  [[nodiscard]]
+  Pose3<Scalar> pose3_decision_variable() {
+    // Create components separately because MSVC has incorrect evaluation order:
+    // https://developercommunity.visualstudio.com/t/Incorrect-evaluation-order-of-initialize/10993665
+    auto translation = translation3_decision_variable();
+    auto rotation = rotation3_decision_variable();
+    return Pose3<Scalar>{std::move(translation), std::move(rotation)};
+  }
+
+  /// Creates a 3D pose parameter in the optimization problem.
+  ///
+  /// A parameter is a constant whose value can be changed between solves with
+  /// set_value(). Unlike constants, parameters aren't folded into expressions.
+  ///
+  /// The pose is a 3D translation parameter (see translation3_parameter()) and
+  /// a 3D rotation parameter (see rotation3_parameter()). Set their values
+  /// through translation() and rotation().
+  ///
+  /// The pose has an initial value of the identity.
+  ///
+  /// @return A 3D pose of parameters in the optimization problem.
+  [[nodiscard]]
+  Pose3<Scalar> pose3_parameter() {
+    // Create components separately because MSVC has incorrect evaluation order:
+    // https://developercommunity.visualstudio.com/t/Incorrect-evaluation-order-of-initialize/10993665
+    auto translation = translation3_parameter();
+    auto rotation = rotation3_parameter();
+    return Pose3<Scalar>{std::move(translation), std::move(rotation)};
   }
 
   /// Tells the solver to minimize the output of the given cost function.
