@@ -403,13 +403,21 @@ void bind_real_matrix(nb::module_& autodiff,
   cls.def_static("constant", &RealMatrix<double>::constant, "rows"_a, "cols"_a,
                  "constant"_a, DOC(slp, RealMatrix, constant));
 
-  // Comparison operators
+  // Comparison operators. Like C++'s, which are templates, they don't apply
+  // implicit conversions to matrix operands.
   for_each_type<nb::detail::self_t, double, int, Real<double>>([&]<typename T> {
-    cls.def(nb::self == T(), "rhs"_a, DOC(slp, operator, eq, 7));
-    cls.def(nb::self < T(), "rhs"_a, DOC(slp, operator, lt));
-    cls.def(nb::self <= T(), "rhs"_a, DOC(slp, operator, le));
-    cls.def(nb::self > T(), "rhs"_a, DOC(slp, operator, gt));
-    cls.def(nb::self >= T(), "rhs"_a, DOC(slp, operator, ge));
+    auto rhs = [] {
+      if constexpr (std::same_as<nb::detail::self_t, T>) {
+        return "rhs"_a.noconvert();
+      } else {
+        return "rhs"_a;
+      }
+    }();
+    cls.def(nb::self == T(), rhs, DOC(slp, operator, eq, 7));
+    cls.def(nb::self < T(), rhs, DOC(slp, operator, lt));
+    cls.def(nb::self <= T(), rhs, DOC(slp, operator, le));
+    cls.def(nb::self > T(), rhs, DOC(slp, operator, gt));
+    cls.def(nb::self >= T(), rhs, DOC(slp, operator, ge));
     if constexpr (!std::same_as<nb::detail::self_t, T>) {
       cls.def(T() == nb::self, "rhs"_a, DOC(slp, operator, eq, 7));
       cls.def(T() < nb::self, "rhs"_a, DOC(slp, operator, lt));
@@ -484,6 +492,7 @@ void bind_real_matrix(nb::module_& autodiff,
         return solve(RealMatrix<double>(A), B);
       },
       "A"_a, "B"_a, DOC(slp, solve));
+
   // Products with constant complex numbers
   cls.def(
       "__mul__",

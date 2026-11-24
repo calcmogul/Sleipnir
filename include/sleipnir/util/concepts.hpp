@@ -87,4 +87,23 @@ concept SleipnirScalarLike =
     SleipnirType<T> && ScalarLike<T> &&
     std::same_as<typename std::decay_t<T>::Scalar, Scalar>;
 
+template <typename Scalar>
+class UnitVector;
+
+namespace detail {
+
+template <typename T>
+inline constexpr bool is_unit_vector = false;
+
+template <typename Scalar>
+inline constexpr bool is_unit_vector<UnitVector<Scalar>> = true;
+
+}  // namespace detail
+
+/// A unit vector. Its equality constraints are on the sphere's tangent space,
+/// so the generic elementwise equality operators exclude it. Elementwise
+/// inequalities are componentwise bounds, which are still allowed.
+template <typename T>
+concept UnitVectorLike = detail::is_unit_vector<std::decay_t<T>>;
+
 }  // namespace slp

@@ -17,6 +17,7 @@
 #include <sleipnir/autodiff/real_submatrix.hpp>
 #include <sleipnir/autodiff/translation2.hpp>
 #include <sleipnir/autodiff/translation3.hpp>
+#include <sleipnir/autodiff/unit_vector.hpp>
 #include <sleipnir/optimization/lint.hpp>
 #include <sleipnir/optimization/ocp.hpp>
 #include <sleipnir/optimization/ocp/dynamics_type.hpp>
@@ -57,6 +58,8 @@ NB_MODULE(_sleipnir, m) {
       autodiff, "ComplexSubmatrix", DOC(slp, ComplexSubmatrix)};
   nb::class_<RealSubmatrix<RealMatrix<double>>> real_submatrix{
       autodiff, "RealSubmatrix", DOC(slp, RealSubmatrix)};
+  nb::class_<UnitVector<double>> unit_vector{autodiff, "UnitVector",
+                                             DOC(slp, UnitVector)};
   nb::class_<Translation2<double>> translation2{autodiff, "Translation2",
                                                 DOC(slp, Translation2)};
   nb::class_<Translation3<double>> translation3{autodiff, "Translation3",
@@ -97,8 +100,10 @@ NB_MODULE(_sleipnir, m) {
   nb::class_<LintFinding> lint_finding{optimization, "LintFinding",
                                        DOC(slp, LintFinding)};
 
+  // The forward declaration in unit_vector.hpp sorts first, so it takes the
+  // first Problem docstring
   nb::class_<Problem<double>> problem{optimization, "Problem",
-                                      DOC(slp, Problem)};
+                                      DOC(slp, Problem, 2)};
 
   nb::enum_<DynamicsType> dynamics_type{optimization, "DynamicsType",
                                         DOC(slp, DynamicsType)};
@@ -118,11 +123,13 @@ NB_MODULE(_sleipnir, m) {
   bind_complex_matrix(complex_matrix);
   bind_complex_submatrix(complex_submatrix);
   bind_real_submatrix(real_submatrix);
+  bind_unit_vector(unit_vector);
   bind_translation2(translation2);
   bind_translation3(translation3);
 
   // Implicit conversions
   real_matrix.def(nb::init_implicit<RealSubmatrix<RealMatrix<double>>>());
+  real_matrix.def(nb::init_implicit<UnitVector<double>>());
   real_matrix.def(nb::init_implicit<Translation2<double>>());
   real_matrix.def(nb::init_implicit<Translation3<double>>());
   complex.def(nb::init_implicit<std::complex<double>>());

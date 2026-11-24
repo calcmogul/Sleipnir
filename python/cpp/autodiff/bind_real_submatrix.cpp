@@ -361,13 +361,21 @@ void bind_real_submatrix(nb::class_<RealSubmatrix<RealMatrix<double>>>& cls) {
   cls.def("exp", &RealSubmatrix<RealMatrix<double>>::exp,
           DOC(slp, RealSubmatrix, exp));
 
-  // Comparison operators
+  // Comparison operators. Like C++'s, which are templates, they don't apply
+  // implicit conversions to matrix operands.
   for_each_type<nb::detail::self_t, double, int, Real<double>>([&]<typename T> {
-    cls.def(nb::self == T(), "rhs"_a, DOC(slp, operator, eq, 7));
-    cls.def(nb::self < T(), "rhs"_a, DOC(slp, operator, lt));
-    cls.def(nb::self <= T(), "rhs"_a, DOC(slp, operator, le));
-    cls.def(nb::self > T(), "rhs"_a, DOC(slp, operator, gt));
-    cls.def(nb::self >= T(), "rhs"_a, DOC(slp, operator, ge));
+    auto rhs = [] {
+      if constexpr (std::same_as<nb::detail::self_t, T>) {
+        return "rhs"_a.noconvert();
+      } else {
+        return "rhs"_a;
+      }
+    }();
+    cls.def(nb::self == T(), rhs, DOC(slp, operator, eq, 7));
+    cls.def(nb::self < T(), rhs, DOC(slp, operator, lt));
+    cls.def(nb::self <= T(), rhs, DOC(slp, operator, le));
+    cls.def(nb::self > T(), rhs, DOC(slp, operator, gt));
+    cls.def(nb::self >= T(), rhs, DOC(slp, operator, ge));
     if constexpr (!std::same_as<nb::detail::self_t, T>) {
       cls.def(T() == nb::self, "rhs"_a, DOC(slp, operator, eq, 7));
       cls.def(T() < nb::self, "rhs"_a, DOC(slp, operator, lt));
@@ -378,36 +386,43 @@ void bind_real_submatrix(nb::class_<RealSubmatrix<RealMatrix<double>>>& cls) {
   });
   for_each_type<const RealMatrix<double>&, nb::DRef<Eigen::MatrixXd>>(
       [&]<typename T> {
+        auto rhs = [] {
+          if constexpr (std::same_as<T, const RealMatrix<double>&>) {
+            return "rhs"_a.noconvert();
+          } else {
+            return "rhs"_a;
+          }
+        }();
         cls.def(
             "__eq__",
             [](const RealSubmatrix<RealMatrix<double>>& lhs, T&& rhs) {
               return lhs == rhs;
             },
-            nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 7));
+            nb::is_operator(), rhs, DOC(slp, operator, eq, 7));
         cls.def(
             "__lt__",
             [](const RealSubmatrix<RealMatrix<double>>& lhs, T&& rhs) {
               return lhs < rhs;
             },
-            nb::is_operator(), "rhs"_a, DOC(slp, operator, lt));
+            nb::is_operator(), rhs, DOC(slp, operator, lt));
         cls.def(
             "__le__",
             [](const RealSubmatrix<RealMatrix<double>>& lhs, T&& rhs) {
               return lhs <= rhs;
             },
-            nb::is_operator(), "rhs"_a, DOC(slp, operator, le));
+            nb::is_operator(), rhs, DOC(slp, operator, le));
         cls.def(
             "__gt__",
             [](const RealSubmatrix<RealMatrix<double>>& lhs, T&& rhs) {
               return lhs > rhs;
             },
-            nb::is_operator(), "rhs"_a, DOC(slp, operator, gt));
+            nb::is_operator(), rhs, DOC(slp, operator, gt));
         cls.def(
             "__ge__",
             [](const RealSubmatrix<RealMatrix<double>>& lhs, T&& rhs) {
               return lhs >= rhs;
             },
-            nb::is_operator(), "rhs"_a, DOC(slp, operator, ge));
+            nb::is_operator(), rhs, DOC(slp, operator, ge));
       });
 
   cls.def("__len__", &RealSubmatrix<RealMatrix<double>>::rows,
@@ -420,6 +435,7 @@ void bind_real_submatrix(nb::class_<RealSubmatrix<RealMatrix<double>>>& cls) {
                                  "value_iterator", self.begin(), self.end());
       },
       nb::keep_alive<0, 1>());
+
   // RealMatrix multiplication with SciPy sparse matrices on the right. These
   // come after every other overload because the sparse caster converts scalars
   // to 1x1 matrices. SciPy sparse matrices on the left don't defer to reflected

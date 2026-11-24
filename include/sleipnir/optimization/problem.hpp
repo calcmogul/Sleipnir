@@ -30,6 +30,7 @@
 #include "sleipnir/autodiff/real_matrix.hpp"
 #include "sleipnir/autodiff/translation2.hpp"
 #include "sleipnir/autodiff/translation3.hpp"
+#include "sleipnir/autodiff/unit_vector.hpp"
 #include "sleipnir/optimization/lint.hpp"
 #include "sleipnir/optimization/solver/control_flow.hpp"
 #include "sleipnir/optimization/solver/exit_status.hpp"
@@ -45,7 +46,9 @@
 #include "sleipnir/optimization/solver/util/manifold.hpp"
 #include "sleipnir/optimization/solver/util/manifold_type.hpp"
 #include "sleipnir/optimization/solver/util/problem_scaling.hpp"
+#include "sleipnir/optimization/solver/util/sphere_manifold.hpp"
 #include "sleipnir/optimization/solver/util/time_trace.hpp"
+#include "sleipnir/util/assert.hpp"
 #include "sleipnir/util/empty.hpp"
 #include "sleipnir/util/print.hpp"
 #include "sleipnir/util/print_diagnostics.hpp"
@@ -227,6 +230,48 @@ class Problem {
     }
 
     return params;
+  }
+
+  /// Creates a unit vector of decision variables in the optimization problem.
+  ///
+  /// The solver keeps the vector on the unit sphere by stepping along the
+  /// sphere instead of through ℝⁿ, so no equality constraint is needed.
+  ///
+  /// The vector has an initial value of e₁ = [1, 0, …, 0]ᵀ. Values set
+  /// elsewhere are normalized when the solve starts.
+  ///
+  /// @param rows The vector's dimension. Must be at least 2.
+  /// @return A unit vector of decision variables in the optimization problem.
+  [[nodiscard]]
+  UnitVector<Scalar> unit_vector_decision_variable(int rows) {
+    slp_assert(rows >= 2);
+
+    m_manifold_blocks.emplace_back(
+        sphere_manifold<Scalar>, static_cast<int>(m_decision_variables.size()),
+        rows);
+
+    RealMatrix<Scalar> vars = real_decision_variable(rows);
+    vars[0].set_value(Scalar(1));
+    return UnitVector<Scalar>{std::move(vars)};
+  }
+
+  /// Creates a unit vector of parameters in the optimization problem.
+  ///
+  /// A parameter is a constant whose value can be changed between solves with
+  /// set_value(). Unlike constants, parameters aren't folded into expressions.
+  ///
+  /// The vector has an initial value of e₁ = [1, 0, …, 0]ᵀ, and set_value()
+  /// normalizes its argument.
+  ///
+  /// @param rows The vector's dimension. Must be at least 2.
+  /// @return A unit vector of parameters in the optimization problem.
+  [[nodiscard]]
+  UnitVector<Scalar> unit_vector_parameter(int rows) {
+    slp_assert(rows >= 2);
+
+    RealMatrix<Scalar> params = parameter(rows);
+    params[0].set_value(Scalar(1));
+    return UnitVector<Scalar>{std::move(params)};
   }
 
   /// Creates a 2D translation decision variable in the optimization problem.

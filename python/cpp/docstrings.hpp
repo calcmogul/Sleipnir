@@ -1790,7 +1790,8 @@ same. if_else() and the conversion to bool distinguish them.)doc";
 constexpr char mkd_doc_slp_IterationInfo[] =
 R"doc(Solver iteration information exposed to an iteration callback.
 
-If some decision variables lie on a manifold, x is the point in the
+If some decision variables lie on a manifold (e.g., from
+Problem::unit_vector_decision_variable()), x is the point in the
 ambient space, and the derivatives are with respect to the manifold's
 tangent space at x, so they have fewer columns than x has rows.
 
@@ -2227,7 +2228,9 @@ R"doc(The solver will stop once the error is below this tolerance.
 
 Defaults to the square root of the scalar type's machine epsilon.)doc";
 
-constexpr char mkd_doc_slp_Problem[] =
+constexpr char mkd_doc_slp_Problem[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Problem_2[] =
 R"doc(This class allows the user to pose a constrained nonlinear
 optimization problem in natural mathematical notation and solve it.
 
@@ -2255,7 +2258,7 @@ mathematical form and it'll be converted for them.
 Template Args:
     Scalar: Scalar type.)doc";
 
-constexpr char mkd_doc_slp_Problem_2[] = R"doc()doc";
+constexpr char mkd_doc_slp_Problem_3[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Problem_Problem[] = R"doc(Constructs the optimization problem.)doc";
 
@@ -2674,6 +2677,42 @@ The translation has an initial value of zero.
 
 Returns:
     A 3D translation of parameters in the optimization problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_unit_vector_decision_variable[] =
+R"doc(Creates a unit vector of decision variables in the optimization
+problem.
+
+The solver keeps the vector on the unit sphere by stepping along the
+sphere instead of through ℝⁿ, so no equality constraint is needed.
+
+The vector has an initial value of e₁ = [1, 0, …, 0]ᵀ. Values set
+elsewhere are normalized when the solve starts.
+
+Args:
+    rows: The vector's dimension. Must be at least 2.
+
+Returns:
+    A unit vector of decision variables in the optimization problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_unit_vector_parameter[] =
+R"doc(Creates a unit vector of parameters in the optimization problem.
+
+A parameter is a constant whose value can be changed between solves
+with set_value(). Unlike constants, parameters aren't folded into
+expressions.
+
+The vector has an initial value of e₁ = [1, 0, …, 0]ᵀ, and set_value()
+normalizes its argument.
+
+Args:
+    rows: The vector's dimension. Must be at least 2.
+
+Returns:
+    A unit vector of parameters in the optimization problem.
 
 )doc";
 
@@ -4503,6 +4542,174 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_UnitVector[] =
+R"doc(A unit-length column vector of autodiff expressions.
+
+UnitVectors are created by Problem::unit_vector_decision_variable(n),
+which keeps them on the unit sphere during the solve, from constant
+Eigen vectors, and by operations that preserve unit length, like
+negation. Operations that don't preserve unit length, like addition
+and scaling, return a RealMatrix.
+
+Elements are read-only. A UnitVector converts implicitly to a
+RealMatrix for use in general expressions.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_UnitVector_2[] =
+R"doc(A unit-length column vector of autodiff expressions.
+
+UnitVectors are created by Problem::unit_vector_decision_variable(n),
+which keeps them on the unit sphere during the solve, from constant
+Eigen vectors, and by operations that preserve unit length, like
+negation. Operations that don't preserve unit length, like addition
+and scaling, return a RealMatrix.
+
+Elements are read-only. A UnitVector converts implicitly to a
+RealMatrix for use in general expressions.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_UnitVector_T[] =
+R"doc(Returns the transpose.
+
+Returns:
+    The transpose.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_UnitVector[] =
+R"doc(Constructs a constant unit vector from the normalized values.
+
+Args:
+    values: The values. They must form a column vector with nonzero
+            norm.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_UnitVector_2[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_UnitVector_begin[] =
+R"doc(Returns an iterator to the beginning of the vector.
+
+Returns:
+    An iterator to the beginning of the vector.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_cols[] =
+R"doc(Returns the number of columns, which is always 1.
+
+Returns:
+    The number of columns.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_cross[] =
+R"doc(Returns the cross product with another vector. Both vectors must be
+3D.
+
+Args:
+    rhs: The other vector.
+
+Returns:
+    The cross product.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_dot[] =
+R"doc(Returns the dot product with another vector.
+
+Args:
+    rhs: The other vector.
+
+Returns:
+    The dot product.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_end[] =
+R"doc(Returns an iterator to the end of the vector.
+
+Returns:
+    An iterator to the end of the vector.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_m_storage[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_UnitVector_operator_array[] =
+R"doc(Returns an element.
+
+Args:
+    row: The row of the element to return.
+
+Returns:
+    An element.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_operator_array_2[] =
+R"doc(Returns an element.
+
+Args:
+    row: The row of the element to return.
+    col: The column of the element to return, which must be 0.
+
+Returns:
+    An element.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_operator_slp_RealMatrix[] =
+R"doc(Converts the vector to a RealMatrix.
+
+Returns:
+    The vector as a RealMatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_rows[] =
+R"doc(Returns the number of rows.
+
+Returns:
+    The number of rows.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_set_value[] =
+R"doc(Sets the vector's values to the normalized values.
+
+This is only meaningful for UnitVectors created by
+Problem::unit_vector_decision_variable(n) or
+Problem::unit_vector_parameter(n).
+
+Args:
+    values: The values. They must have nonzero norm.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_value[] =
+R"doc(Returns an element's value.
+
+Args:
+    row: The row of the element whose value to return.
+
+Returns:
+    An element's value.
+
+)doc";
+
+constexpr char mkd_doc_slp_UnitVector_value_2[] =
+R"doc(Returns the vector's values.
+
+Returns:
+    The vector's values.
+
+)doc";
+
 constexpr char mkd_doc_slp_abs[] =
 R"doc(abs() for Reals.
 
@@ -4689,6 +4896,30 @@ constexpr char mkd_doc_slp_detail_ExpressionRole_EQUALITY_CONSTRAINT[] = R"doc(A
 
 constexpr char mkd_doc_slp_detail_ExpressionRole_INEQUALITY_CONSTRAINT[] = R"doc(An inequality constraint.)doc";
 
+constexpr char mkd_doc_slp_detail_atan2_over_norm[] =
+R"doc(Returns atan2(n, w)/n, where n = √n².
+
+Near n = 0, atan2(n, w)/n loses precision, and its derivatives are
+infinite at n = 0. Where w > 0 and n is small relative to w, this uses
+
+  atan2(n, w)/n = 1/w atan(√t)/√t
+                = 1/w (1 − t/3 + t²/5 − t³/7 + …)
+
+with t = n²/w², a series in n² that's smooth at n = 0. Truncating it
+after t⁷ makes its Hessian error grow like n¹⁴, and the atan2 form's
+Hessian roundoff grows like ε/n³, so they cross at t ≈ ε^(2/17).
+
+The result is infinite at n = 0 with w < 0.
+
+Args:
+    n_sq: n².
+    w: w.
+
+Returns:
+    atan2(n, w)/n.
+
+)doc";
+
 constexpr char mkd_doc_slp_detail_capitalize[] =
 R"doc(Returns the string with its first letter capitalized.
 
@@ -4759,6 +4990,17 @@ Template Args:
 
 Returns:
     The variable's gradient tree.
+
+)doc";
+
+constexpr char mkd_doc_slp_detail_is_constant[] =
+R"doc(Returns whether every element of a unit vector is constant.
+
+Args:
+    v: The unit vector.
+
+Returns:
+    Whether every element is constant.
 
 )doc";
 
@@ -4872,6 +5114,26 @@ Template Args:
 
 Returns:
     The forms found, without duplicates.
+
+)doc";
+
+constexpr char mkd_doc_slp_detail_sphere_log[] =
+R"doc(Returns the sphere's logarithm map log_b(a) in an orthonormal basis of
+b's tangent space.
+
+log_b(a) is the tangent vector at b that points toward a, with length
+equal to the angle between a and b. Its only zero is a = b.
+
+The basis comes from a Householder reflection built around b's current
+value. It's valid unless b later moves to that reflection's one
+singular point, which is more than 90° from b's current value.
+
+Args:
+    a: The unit vector the logarithm points to.
+    b: The unit vector whose tangent space the logarithm is in.
+
+Returns:
+    The n − 1 components of log_b(a).
 
 )doc";
 
@@ -5214,6 +5476,53 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_operator_add_10[] =
+R"doc(Unary plus operator.
+
+Args:
+    v: The vector.
+
+Returns:
+    The vector.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_add_11[] =
+R"doc(Addition operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The sum.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_add_12[] =
+R"doc(Addition operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The sum.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_add_13[] =
+R"doc(Addition operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The sum.
+
+)doc";
+
 constexpr char mkd_doc_slp_operator_div[] =
 R"doc(Divides two complex numbers.
 
@@ -5310,6 +5619,18 @@ Args:
 
 Returns:
     The divided translation.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_div_9[] =
+R"doc(Division operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The quotient.
 
 )doc";
 
@@ -5439,6 +5760,59 @@ translations.
 
 Args:
     lhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraint.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_12[] =
+R"doc(Equality operator that returns an equality constraint for two unit
+vectors.
+
+The constraint is that the angle between the vectors is zero. Unit
+vectors in ℝⁿ have n − 1 degrees of freedom, so it's n − 1 equations
+instead of the n redundant equations of lhs − rhs = 0. Its only
+solution is lhs = rhs.
+
+If both vectors are decision variables, the constraint is built around
+rhs's value when it's created, so set initial values first.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraint.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_13[] =
+R"doc(Equality operator that returns an equality constraint for a unit
+vector and a constant direction.
+
+The direction is normalized. See operator==(const UnitVector&, const
+UnitVector&).
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side. It must have nonzero norm.
+
+Returns:
+    The equality constraint.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_14[] =
+R"doc(Equality operator that returns an equality constraint for a constant
+direction and a unit vector.
+
+The direction is normalized. See operator==(const UnitVector&, const
+UnitVector&).
+
+Args:
+    lhs: Left-hand side. It must have nonzero norm.
     rhs: Right-hand side.
 
 Returns:
@@ -5666,6 +6040,54 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_operator_mul_14[] =
+R"doc(Multiplication operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The product.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_15[] =
+R"doc(Multiplication operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The product.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_16[] =
+R"doc(Multiplication operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The product.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_17[] =
+R"doc(Multiplication operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The product.
+
+)doc";
+
 constexpr char mkd_doc_slp_operator_sub[] =
 R"doc(Subtracts two complex numbers.
 
@@ -5791,6 +6213,53 @@ Args:
 
 Returns:
     The negated translation.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_12[] =
+R"doc(Unary minus operator.
+
+Args:
+    v: The vector.
+
+Returns:
+    The negated vector, which is also unit-length.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_13[] =
+R"doc(Subtraction operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The difference.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_14[] =
+R"doc(Subtraction operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The difference.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_15[] =
+R"doc(Subtraction operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The difference.
 
 )doc";
 

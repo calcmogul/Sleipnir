@@ -924,7 +924,8 @@ struct InequalityConstraints {
 /// @param rhs Left-hand side.
 template <typename LHS, typename RHS>
   requires(ScalarLike<LHS> || MatrixLike<LHS>) && SleipnirType<LHS> &&
-          (ScalarLike<RHS> || MatrixLike<RHS>) && (!SleipnirType<RHS>)
+          (ScalarLike<RHS> || MatrixLike<RHS>) && (!SleipnirType<RHS>) &&
+          (!UnitVectorLike<LHS>) && (!UnitVectorLike<RHS>)
 auto operator==(LHS&& lhs, RHS&& rhs) {
   return EqualityConstraints<typename std::decay_t<LHS>::Scalar>{lhs, rhs};
 }
@@ -935,7 +936,8 @@ auto operator==(LHS&& lhs, RHS&& rhs) {
 /// @param rhs Left-hand side.
 template <typename LHS, typename RHS>
   requires(ScalarLike<LHS> || MatrixLike<LHS>) && (!SleipnirType<LHS>) &&
-          (ScalarLike<RHS> || MatrixLike<RHS>) && SleipnirType<RHS>
+          (ScalarLike<RHS> || MatrixLike<RHS>) && SleipnirType<RHS> &&
+          (!UnitVectorLike<LHS>) && (!UnitVectorLike<RHS>)
 auto operator==(LHS&& lhs, RHS&& rhs) {
   return EqualityConstraints<typename std::decay_t<RHS>::Scalar>{lhs, rhs};
 }
@@ -946,7 +948,8 @@ auto operator==(LHS&& lhs, RHS&& rhs) {
 /// @param rhs Left-hand side.
 template <typename LHS, typename RHS>
   requires(ScalarLike<LHS> || MatrixLike<LHS>) && SleipnirType<LHS> &&
-          (ScalarLike<RHS> || MatrixLike<RHS>) && SleipnirType<RHS>
+          (ScalarLike<RHS> || MatrixLike<RHS>) && SleipnirType<RHS> &&
+          (!UnitVectorLike<LHS>) && (!UnitVectorLike<RHS>)
 auto operator==(LHS&& lhs, RHS&& rhs) {
   return EqualityConstraints<typename std::decay_t<LHS>::Scalar>{lhs, rhs};
 }

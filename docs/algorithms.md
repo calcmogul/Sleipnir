@@ -436,6 +436,54 @@ where `D_c A` replaces `A` and `d_f ∇²ₓₓf + Σᵢ (D_c λ)ᵢ ∇²ₓₓ
 
 The algorithm is described in more detail in section 3.8 of [^2].
 
+## Manifold optimization
+
+Decision variables created with `Problem::unit_vector_decision_variable(n)` lie on a manifold M embedded in ℝⁿ, the unit sphere. The solver keeps them on the manifold instead of adding a unit-norm equality constraint. This removes a constraint and its multiplier, keeps every iterate feasible, and removes the null space a unit-norm constraint leaves in the KKT matrix. See [usage.md](usage.md#manifold-optimization) for how to use them.
+
+### Retractions
+
+Each iterate x is stored in the ambient space ℝⁿ, but steps p are taken in the k-dimensional tangent space of M at x. A retraction R_x(p) maps a tangent vector back onto M, with R_x(0) = x. Sleipnir uses:
+
+```
+  Sphere: R_x(p) = (x + Bp)/‖x + Bp‖
+```
+
+where B is an orthonormal basis for the sphere's tangent space at x, computed from a Householder reflection. Euclidean decision variables use R_x(p) = x + p.
+
+### Derivatives in the tangent space
+
+Each iteration minimizes f(R_x(p)) over p, subject to c(R_x(p)) constraints, near p = 0. With J = ∂R/∂p at p = 0, the chain rule gives
+
+```
+  ∇ₚf = Jᵀ∇ₓf
+  ∂c/∂p = AJ
+  ∇²ₚₚL = Jᵀ∇²ₓₓLJ + Σᵢ (∇ₓL)ᵢ ∇²ₚₚRᵢ
+```
+
+The last term is the curvature correction. Unconstrained in ℝⁿ, ∇ₓL would be zero at a solution and the term would vanish, but on M only the tangent component Jᵀ∇ₓL is zero, and the normal component generally isn't. Dropping the term would make the Newton step use the wrong Hessian and lose quadratic convergence.
+
+The sphere's retraction satisfies ∇²ₚₚRᵢ = −xᵢI, which follows from its second-order expansion
+
+```
+  Sphere: R_x(p) = x + Bp − x‖p‖²/2 + O(‖p‖³)
+```
+
+so the correction for each sphere block is −(xᵀ∇ₓL)I.
+
+The KKT system, its inertia, and the step are k-dimensional, while the cost and constraints are evaluated at ambient points R_x(αp) during the line search. Feasibility restoration uses the same manifold, extended by the Euclidean relaxation variables.
+
+### Constraints on manifold variables
+
+Constraining manifold variables elementwise is ill-posed. `n == d` for unit vectors in ℝⁿ would give n equations for n − 1 degrees of freedom, so the constraint Jacobian is rank-deficient.
+
+`operator==` on `UnitVector` constrains the logarithm of the relative value instead. That gives one equation per tangent dimension, with Jacobian I at the solution:
+
+```
+  UnitVector: Bᵀ log_b(a) = 0                   (n − 1 equations)
+```
+
+The logarithm's only zero is the solution, and its discontinuity is at the point opposite the solution. The constraint is therefore well-conditioned from anywhere except exactly opposite. log_b(a) = atan2(‖r‖, a·b)/‖r‖ r with r = a − (a·b)b is undefined for exactly opposite unit vectors. B is an orthonormal basis of b's tangent space from a Householder reflection built around b's value when the constraint is created. If b is constant, B is exact. If b is a decision variable, B stays valid unless b moves to a single point more than 90° from that value.
+
 ## Works cited
 
 [^1]: Nocedal, J. and Wright, S. "Numerical Optimization", 2nd. ed., Ch. 19. Springer, 2006.

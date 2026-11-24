@@ -17,6 +17,7 @@
 
 #include <sleipnir/autodiff/real.hpp>
 #include <sleipnir/autodiff/real_matrix.hpp>
+#include <sleipnir/autodiff/unit_vector.hpp>
 #include <sleipnir/optimization/problem.hpp>
 #include <sleipnir/optimization/solver/iteration_info.hpp>
 #include <sleipnir/optimization/solver/options.hpp>
@@ -152,6 +153,9 @@ void bind_problem(nb::class_<Problem<double>>& cls) {
         return self.complex_decision_variable(rows, cols);
       },
       "rows"_a, "cols"_a = 1, DOC(slp, Problem, complex_decision_variable, 2));
+  cls.def("unit_vector_decision_variable",
+          &Problem<double>::unit_vector_decision_variable, "rows"_a,
+          DOC(slp, Problem, unit_vector_decision_variable));
   cls.def("translation2_decision_variable",
           &Problem<double>::translation2_decision_variable,
           DOC(slp, Problem, translation2_decision_variable));
@@ -172,6 +176,8 @@ void bind_problem(nb::class_<Problem<double>>& cls) {
         return self.complex_parameter(rows, cols);
       },
       "rows"_a, "cols"_a = 1, DOC(slp, Problem, complex_parameter, 2));
+  cls.def("unit_vector_parameter", &Problem<double>::unit_vector_parameter,
+          "rows"_a, DOC(slp, Problem, unit_vector_parameter));
   cls.def("translation2_parameter", &Problem<double>::translation2_parameter,
           DOC(slp, Problem, translation2_parameter));
   cls.def("translation3_parameter", &Problem<double>::translation3_parameter,

@@ -490,3 +490,47 @@ problem.minimize(sum(dt))
 
 problem.solve()
 ```
+
+### Manifold optimization
+
+Unit vectors can be decision variables. Instead of constraining them with `n.T @ n == 1`, the solver steps along the set of valid values, so every iterate is valid, and the problem has fewer constraints and multipliers.
+
+| Decision variable                             | Type           | Value                                      | Initial value      |
+|-----------------------------------------------|----------------|--------------------------------------------|--------------------|
+| `problem.unit_vector_decision_variable(rows)` | `UnitVector`   | unit vector                                | e₁ = [1, 0, …, 0]ᵀ |
+| `problem.translation2_decision_variable()`    | `Translation2` | [x, y]                                     | 0                  |
+| `problem.translation3_decision_variable()`    | `Translation3` | [x, y, z]                                  | 0                  |
+
+`set_value()` takes the same form as `value()` and normalizes unit vectors. The types are in `sleipnir.autodiff`.
+
+Each decision variable has a parameter counterpart with the same initial value, like `problem.unit_vector_parameter(n)`, for known values that change between solves.
+
+The types support these operations:
+
+* `Translation2` and `Translation3` have `x()`, `y()`, `z()`, `distance()`, and `squared_distance()`.
+
+#### Constraints
+
+Use `==` between two values of the same type to constrain them equal. For unit vectors, it constrains their relative direction, which is one equation per degree of freedom with no spurious solutions. A `UnitVector` can also equal a constant direction, but not a `RealMatrix`. Elementwise alternatives are worse:
+
+* `n == d` with `n` and `d` as `RealMatrix` gives n equations for a unit vector with n − 1 degrees of freedom, so the constraints are redundant.
+
+If both sides of a `UnitVector` equality are decision variables, set their initial values before creating the constraint, and don't start them exactly opposite each other.
+
+For tolerances, use quantities that are smooth near the bound. Angles and distances themselves have a kink at zero, where their derivatives are undefined, so compare squares instead.
+
+```python
+from sleipnir.autodiff import RealMatrix
+
+# Position within tol of target
+problem.subject_to(t.squared_distance(target) <= tol**2)
+
+# Unit vector within angle tol of the constant direction d, an n×1 array
+problem.subject_to(n.dot(RealMatrix(d)) >= math.cos(tol))
+```
+
+#### Iteration callbacks
+
+`IterationInfo.x` contains the decision variables' values, with each manifold variable's components in order. The gradient, Hessian, and Jacobians are with respect to the manifold's tangent space, which has one dimension per degree of freedom, so they have fewer columns than `x` has rows when the problem has manifold variables.
+
+See [algorithms.md](algorithms.md#manifold-optimization) for how the solver handles manifold variables.
