@@ -593,6 +593,10 @@ if(SLEIPNIR_BUILD_PYTHON)
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/pose3.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/rotation2.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/rotation3.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/similarity_twist2.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/similarity_twist3.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/similarity2.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/similarity3.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/translation2.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/translation3.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/twist2.hpp

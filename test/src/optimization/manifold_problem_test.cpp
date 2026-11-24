@@ -22,6 +22,7 @@
 #include <sleipnir/autodiff/real_matrix.hpp>
 #include <sleipnir/autodiff/rotation2.hpp>
 #include <sleipnir/autodiff/rotation3.hpp>
+#include <sleipnir/autodiff/similarity2.hpp>
 #include <sleipnir/autodiff/translation2.hpp>
 #include <sleipnir/autodiff/translation3.hpp>
 #include <sleipnir/autodiff/unit_vector.hpp>
@@ -312,6 +313,80 @@ TEMPLATE_TEST_CASE("Problem - SE(3) point set registration",
   }
   using std::abs;
   CHECK_THAT(abs(q.dot(q_true)), WithinAbs(T(1), solution_tolerance<T>(1)));
+}
+
+TEMPLATE_TEST_CASE("Problem - Sim(2) point set registration",
+                   "[Problem][Manifold]", SCALAR_TYPES) {
+  using T = TestType;
+
+  const slp::Similarity2<T> similarity_true{Eigen::Vector2<T>{T(1), T(-0.5)},
+                                            T(2.8), T(2.5)};
+
+  std::vector<slp::Translation2<T>> points{
+      {T(1), T(0)}, {T(0), T(2)}, {T(-1), T(-1)}, {T(2), T(1)}};
+
+  slp::Problem<T> problem;
+  auto similarity = problem.similarity2_decision_variable();
+  similarity.rotation().set_value(T(-2.8));
+
+  slp::Real<T> cost{T(0)};
+  for (auto& p : points) {
+    const slp::Translation2<T> measured{
+        p.transform_by(similarity_true).value()};
+    cost += p.transform_by(similarity).squared_distance(measured);
+  }
+  problem.minimize(cost);
+  check_iterates_on_manifold(problem, 2, 2);
+
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
+
+  CHECK_THAT(similarity.rotation().value(),
+             WithinAbs(T(2.8), solution_tolerance<T>(1)));
+  CHECK_THAT(similarity.translation().x().value(),
+             WithinAbs(T(1), solution_tolerance<T>(1)));
+  CHECK_THAT(similarity.translation().y().value(),
+             WithinAbs(T(-0.5), solution_tolerance<T>(1)));
+  CHECK_THAT(similarity.scale().value(),
+             WithinAbs(T(2.5), solution_tolerance<T>(1)));
+}
+
+TEMPLATE_TEST_CASE("Problem - Sim(3) point set registration",
+                   "[Problem][Manifold]", SCALAR_TYPES) {
+  using T = TestType;
+
+  const Eigen::Quaternion<T> q_true{Eigen::AngleAxis<T>{
+      T(2.5), Eigen::Vector3<T>{T(0.2), T(1), T(-0.4)}.normalized()}};
+  const Eigen::Vector3<T> t_true{T(1), T(-0.5), T(2)};
+  const T s_true(0.3);
+
+  std::vector<slp::Translation3<T>> points{{T(1), T(0), T(0)},
+                                           {T(0), T(2), T(0)},
+                                           {T(0), T(0), T(-1)},
+                                           {T(1), T(1), T(1)}};
+
+  slp::Problem<T> problem;
+  auto similarity = problem.similarity3_decision_variable();
+
+  slp::Real<T> cost{T(0)};
+  for (auto& p : points) {
+    Eigen::Vector3<T> measured = s_true * (q_true * p.value()) + t_true;
+    cost += p.transform_by(similarity)
+                .squared_distance(slp::Translation3<T>{measured});
+  }
+  problem.minimize(cost);
+  check_iterates_on_manifold(problem, 3, 4);
+
+  CHECK(problem.solve({.diagnostics = true}) == slp::ExitStatus::SUCCESS);
+
+  Eigen::Vector3<T> t = similarity.translation().value();
+  Eigen::Quaternion<T> q = similarity.rotation().value();
+  for (int i = 0; i < 3; ++i) {
+    CHECK_THAT(t[i], WithinAbs(t_true[i], solution_tolerance<T>(1)));
+  }
+  using std::abs;
+  CHECK_THAT(abs(q.dot(q_true)), WithinAbs(T(1), solution_tolerance<T>(1)));
+  CHECK_THAT(similarity.scale().value(),
+             WithinAbs(s_true, solution_tolerance<T>(1)));
 }
 
 TEMPLATE_TEST_CASE("Problem - Pose estimation with inequality constraints",

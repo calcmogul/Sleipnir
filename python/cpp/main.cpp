@@ -19,6 +19,10 @@
 #include <sleipnir/autodiff/real_submatrix.hpp>
 #include <sleipnir/autodiff/rotation2.hpp>
 #include <sleipnir/autodiff/rotation3.hpp>
+#include <sleipnir/autodiff/similarity2.hpp>
+#include <sleipnir/autodiff/similarity3.hpp>
+#include <sleipnir/autodiff/similarity_twist2.hpp>
+#include <sleipnir/autodiff/similarity_twist3.hpp>
 #include <sleipnir/autodiff/translation2.hpp>
 #include <sleipnir/autodiff/translation3.hpp>
 #include <sleipnir/autodiff/twist2.hpp>
@@ -72,8 +76,16 @@ NB_MODULE(_sleipnir, m) {
                                           DOC(slp, Rotation3)};
   nb::class_<Pose2<double>> pose2{autodiff, "Pose2", DOC(slp, Pose2)};
   nb::class_<Pose3<double>> pose3{autodiff, "Pose3", DOC(slp, Pose3)};
+  nb::class_<Similarity2<double>> similarity2{autodiff, "Similarity2",
+                                              DOC(slp, Similarity2)};
+  nb::class_<Similarity3<double>> similarity3{autodiff, "Similarity3",
+                                              DOC(slp, Similarity3)};
   nb::class_<Twist2<double>> twist2{autodiff, "Twist2", DOC(slp, Twist2)};
   nb::class_<Twist3<double>> twist3{autodiff, "Twist3", DOC(slp, Twist3)};
+  nb::class_<SimilarityTwist2<double>> similarity_twist2{
+      autodiff, "SimilarityTwist2", DOC(slp, SimilarityTwist2)};
+  nb::class_<SimilarityTwist3<double>> similarity_twist3{
+      autodiff, "SimilarityTwist3", DOC(slp, SimilarityTwist3)};
   nb::class_<Translation2<double>> translation2{autodiff, "Translation2",
                                                 DOC(slp, Translation2)};
   nb::class_<Translation3<double>> translation3{autodiff, "Translation3",
@@ -143,8 +155,12 @@ NB_MODULE(_sleipnir, m) {
   bind_rotation3(rotation3);
   bind_pose2(pose2);
   bind_pose3(pose3);
+  bind_similarity2(similarity2);
+  bind_similarity3(similarity3);
   bind_twist2(twist2);
   bind_twist3(twist3);
+  bind_similarity_twist2(similarity_twist2);
+  bind_similarity_twist3(similarity_twist3);
   bind_translation2(translation2);
   bind_translation3(translation3);
 

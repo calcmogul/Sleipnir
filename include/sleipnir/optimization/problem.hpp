@@ -32,6 +32,8 @@
 #include "sleipnir/autodiff/real_matrix.hpp"
 #include "sleipnir/autodiff/rotation2.hpp"
 #include "sleipnir/autodiff/rotation3.hpp"
+#include "sleipnir/autodiff/similarity2.hpp"
+#include "sleipnir/autodiff/similarity3.hpp"
 #include "sleipnir/autodiff/translation2.hpp"
 #include "sleipnir/autodiff/translation3.hpp"
 #include "sleipnir/autodiff/unit_vector.hpp"
@@ -476,6 +478,100 @@ class Problem {
     auto translation = translation3_parameter();
     auto rotation = rotation3_parameter();
     return Pose3<Scalar>{std::move(translation), std::move(rotation)};
+  }
+
+  /// Creates a 2D similarity transform decision variable in the optimization
+  /// problem.
+  ///
+  /// The translation is two ordinary decision variables, the rotation is a
+  /// 2D rotation decision variable (see rotation2_decision_variable()), and the
+  /// log scale is an ordinary decision variable.
+  ///
+  /// The similarity transform has an initial value of the identity.
+  ///
+  /// @return A 2D similarity transform of decision variables in the
+  ///     optimization problem.
+  [[nodiscard]]
+  Similarity2<Scalar> similarity2_decision_variable() {
+    // Create components separately because MSVC has incorrect evaluation order:
+    // https://developercommunity.visualstudio.com/t/Incorrect-evaluation-order-of-initialize/10993665
+    auto translation = translation2_decision_variable();
+    auto rotation = rotation2_decision_variable();
+    auto log_scale = real_decision_variable();
+    return Similarity2<Scalar>{std::move(translation), std::move(rotation),
+                               std::move(log_scale)};
+  }
+
+  /// Creates a 2D similarity transform parameter in the optimization problem.
+  ///
+  /// A parameter is a constant whose value can be changed between solves with
+  /// set_value(). Unlike constants, parameters aren't folded into expressions.
+  ///
+  /// The similarity transform is a 2D translation parameter (see
+  /// translation2_parameter()), a 2D rotation parameter (see
+  /// rotation2_parameter()), and a log scale parameter. Set their values
+  /// through translation(), rotation(), and log_scale().
+  ///
+  /// The similarity transform has an initial value of the identity.
+  ///
+  /// @return A 2D similarity transform of parameters in the optimization
+  ///     problem.
+  [[nodiscard]]
+  Similarity2<Scalar> similarity2_parameter() {
+    // Create components separately because MSVC has incorrect evaluation order:
+    // https://developercommunity.visualstudio.com/t/Incorrect-evaluation-order-of-initialize/10993665
+    auto translation = translation2_parameter();
+    auto rotation = rotation2_parameter();
+    auto log_scale = parameter();
+    return Similarity2<Scalar>{std::move(translation), std::move(rotation),
+                               std::move(log_scale)};
+  }
+
+  /// Creates a 3D similarity transform decision variable in the optimization
+  /// problem.
+  ///
+  /// The translation is three ordinary decision variables, the rotation is a
+  /// 3D rotation decision variable (see rotation3_decision_variable()), and the
+  /// log scale is an ordinary decision variable.
+  ///
+  /// The similarity transform has an initial value of the identity.
+  ///
+  /// @return A 3D similarity transform of decision variables in the
+  ///     optimization problem.
+  [[nodiscard]]
+  Similarity3<Scalar> similarity3_decision_variable() {
+    // Create components separately because MSVC has incorrect evaluation order:
+    // https://developercommunity.visualstudio.com/t/Incorrect-evaluation-order-of-initialize/10993665
+    auto translation = translation3_decision_variable();
+    auto rotation = rotation3_decision_variable();
+    auto log_scale = real_decision_variable();
+    return Similarity3<Scalar>{std::move(translation), std::move(rotation),
+                               std::move(log_scale)};
+  }
+
+  /// Creates a 3D similarity transform parameter in the optimization problem.
+  ///
+  /// A parameter is a constant whose value can be changed between solves with
+  /// set_value(). Unlike constants, parameters aren't folded into expressions.
+  ///
+  /// The similarity transform is a 3D translation parameter (see
+  /// translation3_parameter()), a 3D rotation parameter (see
+  /// rotation3_parameter()), and a log scale parameter. Set their values
+  /// through translation(), rotation(), and log_scale().
+  ///
+  /// The similarity transform has an initial value of the identity.
+  ///
+  /// @return A 3D similarity transform of parameters in the optimization
+  ///     problem.
+  [[nodiscard]]
+  Similarity3<Scalar> similarity3_parameter() {
+    // Create components separately because MSVC has incorrect evaluation order:
+    // https://developercommunity.visualstudio.com/t/Incorrect-evaluation-order-of-initialize/10993665
+    auto translation = translation3_parameter();
+    auto rotation = rotation3_parameter();
+    auto log_scale = parameter();
+    return Similarity3<Scalar>{std::move(translation), std::move(rotation),
+                               std::move(log_scale)};
   }
 
   /// Tells the solver to minimize the output of the given cost function.

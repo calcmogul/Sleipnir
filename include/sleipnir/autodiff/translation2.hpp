@@ -18,6 +18,9 @@ namespace slp {
 template <typename Scalar>
 class Pose2;
 
+template <typename Scalar>
+class Similarity2;
+
 /// A 2D translation of autodiff expressions.
 ///
 /// A translation is a point or a displacement (x, y). It converts implicitly
@@ -143,6 +146,15 @@ class Translation2 {
   /// @param pose The pose.
   /// @return The transformed point.
   Translation2 transform_by(const Pose2<Scalar>& pose) const;
+
+  /// Returns this point transformed by a similarity transform.
+  ///
+  /// The result is s R p + t, where p is this point, and s, R, and t are the
+  /// similarity transform's scale, rotation, and translation.
+  ///
+  /// @param similarity The similarity transform.
+  /// @return The transformed point.
+  Translation2 transform_by(const Similarity2<Scalar>& similarity) const;
 
  private:
   Real<Scalar> m_x;

@@ -8,6 +8,7 @@
 #include <sleipnir/autodiff/real.hpp>
 #include <sleipnir/autodiff/real_matrix.hpp>
 #include <sleipnir/autodiff/rotation3.hpp>
+#include <sleipnir/autodiff/similarity3.hpp>
 #include <sleipnir/autodiff/translation3.hpp>
 
 #include "docstrings.hpp"
@@ -56,28 +57,32 @@ void bind_translation3(nb::class_<Translation3<double>>& cls) {
   cls.def("transform_by",
           nb::overload_cast<const Pose3<double>&>(&T::transform_by, nb::const_),
           "pose"_a, DOC(slp, Translation3, transform_by));
+  cls.def("transform_by",
+          nb::overload_cast<const Similarity3<double>&>(&T::transform_by,
+                                                        nb::const_),
+          "similarity"_a, DOC(slp, Translation3, transform_by, 2));
 
   cls.def(
       "__add__", [](const T& lhs, const T& rhs) { return lhs + rhs; },
-      nb::is_operator(), "rhs"_a, DOC(slp, operator, add, 8));
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, add, 10));
   cls.def(
       "__sub__", [](const T& lhs, const T& rhs) { return lhs - rhs; },
-      nb::is_operator(), "rhs"_a, DOC(slp, operator, sub, 8));
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, sub, 12));
   cls.def(
       "__neg__", [](const T& self) { return -self; },
-      DOC(slp, operator, sub, 9));
+      DOC(slp, operator, sub, 13));
   cls.def(
       "__mul__", [](const T& lhs, const V& rhs) { return lhs * rhs; },
-      nb::is_operator(), "rhs"_a, DOC(slp, operator, mul, 14));
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, mul, 20));
   cls.def(
       "__rmul__", [](const T& rhs, const V& lhs) { return lhs * rhs; },
-      nb::is_operator(), "lhs"_a, DOC(slp, operator, mul, 15));
+      nb::is_operator(), "lhs"_a, DOC(slp, operator, mul, 21));
   cls.def(
       "__truediv__", [](const T& lhs, const V& rhs) { return lhs / rhs; },
       nb::is_operator(), "rhs"_a, DOC(slp, operator, div, 7));
   cls.def(
       "__eq__", [](const T& lhs, const T& rhs) { return lhs == rhs; },
-      nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 14));
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 18));
 }
 
 }  // namespace slp

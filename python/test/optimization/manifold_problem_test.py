@@ -9,6 +9,7 @@ from sleipnir.autodiff import (
     Real,
     RealMatrix,
     Rotation3,
+    Similarity2,
     Translation2,
     Translation3,
     UnitVector,
@@ -266,6 +267,74 @@ def test_se3_point_set_registration() -> None:
     assert abs(
         pose.rotation().value() @ q_true.as_quat(scalar_first=True)
     ) == pytest.approx(1.0, abs=solution_tolerance(1))
+
+
+def test_sim2_point_set_registration() -> None:
+    similarity_true = Similarity2(np.array([1.0, -0.5]), 2.8, 2.5)
+
+    points = [
+        Translation2(1.0, 0.0),
+        Translation2(0.0, 2.0),
+        Translation2(-1.0, -1.0),
+        Translation2(2.0, 1.0),
+    ]
+
+    problem = Problem()
+    similarity = problem.similarity2_decision_variable()
+    similarity.rotation().set_value(-2.8)
+
+    cost = Real(0.0)
+    for p in points:
+        measured = Translation2(p.transform_by(similarity_true).value())
+        cost += p.transform_by(similarity).squared_distance(measured)
+    problem.minimize(cost)
+    check_iterates_on_manifold(problem, 2, 2)
+
+    assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS
+
+    assert similarity.rotation().value() == pytest.approx(
+        2.8, abs=solution_tolerance(1)
+    )
+    assert similarity.translation().value() == pytest.approx(
+        np.array([1.0, -0.5]), abs=solution_tolerance(1)
+    )
+    assert similarity.scale().value() == pytest.approx(2.5, abs=solution_tolerance(1))
+
+
+def test_sim3_point_set_registration() -> None:
+    q_true_axis = np.array([0.2, 1.0, -0.4])
+    q_true = Rotation.from_rotvec(2.5 * q_true_axis / np.linalg.norm(q_true_axis))
+    t_true = np.array([1.0, -0.5, 2.0])
+    s_true = 0.3
+
+    points = [
+        Translation3(1.0, 0.0, 0.0),
+        Translation3(0.0, 2.0, 0.0),
+        Translation3(0.0, 0.0, -1.0),
+        Translation3(1.0, 1.0, 1.0),
+    ]
+
+    problem = Problem()
+    similarity = problem.similarity3_decision_variable()
+
+    cost = Real(0.0)
+    for p in points:
+        measured = Translation3(s_true * q_true.apply(p.value()) + t_true)
+        cost += p.transform_by(similarity).squared_distance(measured)
+    problem.minimize(cost)
+    check_iterates_on_manifold(problem, 3, 4)
+
+    assert problem.solve(diagnostics=True) == ExitStatus.SUCCESS
+
+    assert similarity.translation().value() == pytest.approx(
+        t_true, abs=solution_tolerance(1)
+    )
+    assert abs(
+        similarity.rotation().value() @ q_true.as_quat(scalar_first=True)
+    ) == pytest.approx(1.0, abs=solution_tolerance(1))
+    assert similarity.scale().value() == pytest.approx(
+        s_true, abs=solution_tolerance(1)
+    )
 
 
 def test_pose_estimation_with_inequality_constraints() -> None:

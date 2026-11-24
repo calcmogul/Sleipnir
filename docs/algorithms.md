@@ -454,6 +454,8 @@ where B is an orthonormal basis for the sphere's tangent space at x, computed fr
 
 `Problem::pose2_decision_variable()` and `Problem::pose3_decision_variable()` return poses made of a Euclidean translation and an SO(2) or SO(3) rotation, so SE(2) and SE(3) use the product retraction (t + pₜ, R_R(p_R)). It differs from the group exponential, which couples the translation step to the rotation, only at second order in p, so the solver's convergence is unaffected, and it keeps the translation's derivatives independent of the rotation.
 
+`Problem::similarity2_decision_variable()` and `Problem::similarity3_decision_variable()` return similarity transforms made of a pose and a Euclidean log scale σ, with scale s = exp(σ). They use the product retraction (t + pₜ, R_R(p_R), σ + p_σ). The log scale keeps s positive without a bound constraint, and its retraction matches the group's, since s exp(p_σ) = exp(σ + p_σ).
+
 ### Derivatives in the tangent space
 
 Each iteration minimizes f(R_x(p)) over p, subject to c(R_x(p)) constraints, near p = 0. With J = ∂R/∂p at p = 0, the chain rule gives
@@ -514,6 +516,30 @@ with θ = ‖ω‖ and Ω the cross product matrix of ω. t ↦ exp(tξ) is the 
 ```
 
 The coefficients are 0/0 at θ = 0, and computing them through θ = √(θ²) makes their derivatives infinite there, so they're evaluated as power series in θ² for θ² < 1 and in closed form otherwise. With 11 terms, each series' truncation error is below ε.
+
+`SimilarityTwist2::exp()`/`SimilarityTwist3::exp()` and `Similarity2::log()`/`Similarity3::log()` are the exponential and logarithm maps of Sim(2) and Sim(3). A similarity twist (linear part v, angular part ω, log-scale part σ) maps to the similarity transform with rotation exp(ω), log scale σ, and translation Wv, where W = ∫₀¹ e^(σt) R(tω) dt is
+
+```
+  Sim(2): W = f(λ) as a complex number, f(λ) = (e^λ − 1)/λ, λ = σ + iθ
+  Sim(3): W = A I + B Ω + C Ω²
+```
+
+with
+
+```
+  A = ∫₀¹ e^(σt) dt = (e^σ − 1)/σ
+  B = 1/θ ∫₀¹ e^(σt) sin θt dt
+  C = 1/θ² ∫₀¹ e^(σt) (1 − cos θt) dt
+```
+
+In 2D, f(λ) = A − θ²C + iθB. In 3D, W scales the rotation axis by A and multiplies the plane perpendicular to it by f(λ), so
+
+```
+  Sim(2): v = conj(f) t/|f|²
+  Sim(3): W⁻¹ = I/A − B/|f|² Φ + (B² − Re(f) C)/(A|f|²) Φ²
+```
+
+f(λ) is nonzero for θ in [0, π], and A is positive, so both inverses exist. A, B, and C are evaluated as power series in σ and θ² for σ² + θ² < 1, using the recurrences of λⁿ's real and imaginary parts so no term divides by θ. Otherwise, they're evaluated in closed form, with C written as (A − Re f)/θ² for θ² ≥ σ² and with a σ denominator otherwise, so neither divides by a small quantity. A itself is a power series in σ for σ² < 1. With 20 terms, each series' truncation error is below ε.
 
 ## Works cited
 

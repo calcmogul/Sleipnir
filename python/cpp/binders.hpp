@@ -17,6 +17,10 @@
 #include <sleipnir/autodiff/real_submatrix.hpp>
 #include <sleipnir/autodiff/rotation2.hpp>
 #include <sleipnir/autodiff/rotation3.hpp>
+#include <sleipnir/autodiff/similarity2.hpp>
+#include <sleipnir/autodiff/similarity3.hpp>
+#include <sleipnir/autodiff/similarity_twist2.hpp>
+#include <sleipnir/autodiff/similarity_twist3.hpp>
 #include <sleipnir/autodiff/translation2.hpp>
 #include <sleipnir/autodiff/translation3.hpp>
 #include <sleipnir/autodiff/twist2.hpp>
@@ -50,8 +54,12 @@ void bind_rotation2(nb::class_<Rotation2<double>>& cls);
 void bind_rotation3(nb::class_<Rotation3<double>>& cls);
 void bind_pose2(nb::class_<Pose2<double>>& cls);
 void bind_pose3(nb::class_<Pose3<double>>& cls);
+void bind_similarity2(nb::class_<Similarity2<double>>& cls);
+void bind_similarity3(nb::class_<Similarity3<double>>& cls);
 void bind_twist2(nb::class_<Twist2<double>>& cls);
 void bind_twist3(nb::class_<Twist3<double>>& cls);
+void bind_similarity_twist2(nb::class_<SimilarityTwist2<double>>& cls);
+void bind_similarity_twist3(nb::class_<SimilarityTwist3<double>>& cls);
 void bind_translation2(nb::class_<Translation2<double>>& cls);
 void bind_translation3(nb::class_<Translation3<double>>& cls);
 

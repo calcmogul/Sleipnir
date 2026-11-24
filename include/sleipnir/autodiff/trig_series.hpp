@@ -186,4 +186,148 @@ Real<Scalar> one_minus_half_theta_cot_half_theta_over_theta_sq(
   });
 }
 
+/// Number of series terms for similarity_coeffs().
+inline constexpr int similarity_series_terms = 20;
+
+/// The coefficients of a similarity transform's exponential map.
+///
+/// With log scale σ and rotation angle θ,
+///
+///   A = ∫₀¹ e^(σt) dt = (e^σ − 1)/σ
+///   B = 1/θ ∫₀¹ e^(σt) sin θt dt
+///   C = 1/θ² ∫₀¹ e^(σt) (1 − cos θt) dt
+template <typename Scalar>
+struct SimilarityCoeffs {
+  /// A = (e^σ − 1)/σ.
+  Real<Scalar> A;
+
+  /// B = 1/θ ∫₀¹ e^(σt) sin θt dt.
+  Real<Scalar> B;
+
+  /// C = 1/θ² ∫₀¹ e^(σt) (1 − cos θt) dt.
+  Real<Scalar> C;
+};
+
+/// Returns (e^σ − 1)/σ.
+///
+/// It's a power series in σ for σ² < 1 and the closed form otherwise.
+///
+/// @param σ The argument.
+/// @return (e^σ − 1)/σ.
+template <typename Scalar>
+Real<Scalar> expm1_over_x(const Real<Scalar>& σ) {
+  const Real<Scalar> zero{Scalar(0)};
+  const Real<Scalar> one{Scalar(1)};
+  Real<Scalar> σ_sq = σ * σ;
+  auto select = [&](const Real<Scalar>& series_value,
+                    const Real<Scalar>& closed_form_value) {
+    return if_else(σ_sq < one, series_value, closed_form_value);
+  };
+
+  // Σₙ σⁿ/(n + 1)!
+  Real<Scalar> series_σ = select(σ, zero);
+  Scalar factorial(1);
+  for (int n = 2; n <= similarity_series_terms; ++n) {
+    factorial *= Scalar(n);
+  }
+  Real<Scalar> series{Scalar(1) / factorial};
+  for (int n = similarity_series_terms - 2; n >= 0; --n) {
+    factorial /= Scalar(n + 2);
+    series = Scalar(1) / factorial + series_σ * series;
+  }
+
+  Real<Scalar> closed_σ = select(one, σ);
+  return select(series, (exp(closed_σ) - Scalar(1)) / closed_σ);
+}
+
+/// Returns the coefficients of a similarity transform's exponential map.
+///
+/// They're power series in σ and θ² for σ² + θ² < 1 and closed forms
+/// otherwise, so their values and derivatives are accurate everywhere. With 20
+/// terms, each series' truncation error is below ε for σ² + θ² < 1.
+///
+/// @param σ The log scale.
+/// @param s θ², where θ is the rotation angle.
+/// @return The coefficients.
+template <typename Scalar>
+SimilarityCoeffs<Scalar> similarity_coeffs(const Real<Scalar>& σ,
+                                           const Real<Scalar>& s) {
+  // Both branches are evaluated, and an unselected branch's infinite partial
+  // derivatives would turn its zero adjoint into NaN, so each branch gets a
+  // safe constant input when it's not selected
+  const Real<Scalar> zero{Scalar(0)};
+  const Real<Scalar> one{Scalar(1)};
+  Real<Scalar> λ_sq = σ * σ + s;
+  auto select = [&](const Real<Scalar>& series_value,
+                    const Real<Scalar>& closed_form_value) {
+    return if_else(λ_sq < one, series_value, closed_form_value);
+  };
+
+  // With λ = σ + iθ and λⁿ = pₙ + iqₙ, the series are
+  //
+  //   A = Σₙ σⁿ/(n + 1)!
+  //   B = Σₙ Qₙ/(n + 1)!, Qₙ = qₙ/θ
+  //   C = Σₙ Pₙ/(n + 1)!, Pₙ = (σⁿ − pₙ)/θ²
+  //
+  // λⁿ⁺¹ = λλⁿ gives Qₙ₊₁ = σQₙ + pₙ and Pₙ₊₁ = σPₙ + Qₙ, with
+  // pₙ = σⁿ − θ²Pₙ, so no term divides by θ.
+  Real<Scalar> series_σ = select(σ, zero);
+  Real<Scalar> series_s = select(s, zero);
+  Real<Scalar> series_A{Scalar(0)};
+  Real<Scalar> series_B{Scalar(0)};
+  Real<Scalar> series_C{Scalar(0)};
+  Real<Scalar> σ_n{Scalar(1)};
+  Real<Scalar> Q{Scalar(0)};
+  Real<Scalar> P{Scalar(0)};
+  Scalar factorial(1);
+  for (int n = 0; n < similarity_series_terms; ++n) {
+    factorial *= Scalar(n + 1);
+    series_A += σ_n / factorial;
+    if (n >= 1) {
+      series_B += Q / factorial;
+    }
+    if (n >= 2) {
+      series_C += P / factorial;
+    }
+    Real<Scalar> p = σ_n - series_s * P;
+    P = series_σ * P + Q;
+    Q = series_σ * Q + p;
+    σ_n *= series_σ;
+  }
+
+  // The closed forms use C = (A − Re f)/θ² for θ² ≥ σ² and
+  //
+  //   C = (e^σσ²(1 − cos θ)/θ² + e^σ − 1 − σe^σ sin θ/θ)/(σ(σ² + θ²))
+  //
+  // otherwise, where f = (e^λ − 1)/λ, so neither divides by a small θ² or σ.
+  Real<Scalar> closed_σ = select(one, σ);
+  Real<Scalar> closed_s = select(one, s);
+  Real<Scalar> e = exp(closed_σ);
+  Real<Scalar> L = closed_σ * closed_σ + closed_s;
+  Real<Scalar> sin_θ_over_θ = sin_over_theta(closed_s);
+  Real<Scalar> c2 = one_minus_cos_over_theta_sq(closed_s);
+  Real<Scalar> cos_θ = Scalar(1) - closed_s * c2;
+  Real<Scalar> closed_A = expm1_over_x(closed_σ);
+  Real<Scalar> closed_B =
+      (e * sin_θ_over_θ * closed_σ - e * cos_θ + Scalar(1)) / L;
+
+  Real<Scalar> σ_sq = closed_σ * closed_σ;
+  auto select_C = [&](const Real<Scalar>& σ_form, const Real<Scalar>& θ_form) {
+    return if_else(closed_s < σ_sq, σ_form, θ_form);
+  };
+
+  Real<Scalar> θ_form_s = select_C(one, closed_s);
+  Real<Scalar> re_f =
+      ((e * cos_θ - Scalar(1)) * closed_σ + e * closed_s * sin_θ_over_θ) / L;
+  Real<Scalar> θ_form_C = (closed_A - re_f) / θ_form_s;
+
+  Real<Scalar> σ_form_σ = select_C(closed_σ, one);
+  Real<Scalar> σ_form_C =
+      (e * σ_sq * c2 + e - Scalar(1) - closed_σ * e * sin_θ_over_θ) /
+      (σ_form_σ * L);
+
+  return {select(series_A, closed_A), select(series_B, closed_B),
+          select(series_C, select_C(σ_form_C, θ_form_C))};
+}
+
 }  // namespace slp::detail

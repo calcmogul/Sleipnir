@@ -2925,6 +2925,80 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_Problem_similarity2_decision_variable[] =
+R"doc(Creates a 2D similarity transform decision variable in the
+optimization problem.
+
+The translation is two ordinary decision variables, the rotation is a
+2D rotation decision variable (see rotation2_decision_variable()), and
+the log scale is an ordinary decision variable.
+
+The similarity transform has an initial value of the identity.
+
+Returns:
+    A 2D similarity transform of decision variables in the
+    optimization problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_similarity2_parameter[] =
+R"doc(Creates a 2D similarity transform parameter in the optimization
+problem.
+
+A parameter is a constant whose value can be changed between solves
+with set_value(). Unlike constants, parameters aren't folded into
+expressions.
+
+The similarity transform is a 2D translation parameter (see
+translation2_parameter()), a 2D rotation parameter (see
+rotation2_parameter()), and a log scale parameter. Set their values
+through translation(), rotation(), and log_scale().
+
+The similarity transform has an initial value of the identity.
+
+Returns:
+    A 2D similarity transform of parameters in the optimization
+    problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_similarity3_decision_variable[] =
+R"doc(Creates a 3D similarity transform decision variable in the
+optimization problem.
+
+The translation is three ordinary decision variables, the rotation is
+a 3D rotation decision variable (see rotation3_decision_variable()),
+and the log scale is an ordinary decision variable.
+
+The similarity transform has an initial value of the identity.
+
+Returns:
+    A 3D similarity transform of decision variables in the
+    optimization problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_similarity3_parameter[] =
+R"doc(Creates a 3D similarity transform parameter in the optimization
+problem.
+
+A parameter is a constant whose value can be changed between solves
+with set_value(). Unlike constants, parameters aren't folded into
+expressions.
+
+The similarity transform is a 3D translation parameter (see
+translation3_parameter()), a 3D rotation parameter (see
+rotation3_parameter()), and a log scale parameter. Set their values
+through translation(), rotation(), and log_scale().
+
+The similarity transform has an initial value of the identity.
+
+Returns:
+    A 3D similarity transform of parameters in the optimization
+    problem.
+
+)doc";
+
 constexpr char mkd_doc_slp_Problem_solve[] =
 R"doc(Solves the optimization problem. The solution will be stored in the
 original variables used to construct the problem.
@@ -4884,6 +4958,499 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_Similarity2[] =
+R"doc(A 2D similarity transform of autodiff expressions, which represents a
+transform in Sim(2).
+
+A similarity transform is a translation t, a rotation R, and a scale s
+> 0. It maps a point p in its own frame to s R p + t in the parent
+frame.
+
+The scale is stored as its logarithm σ = ln s, so s = exp(σ) is
+positive for every value of σ.
+
+Similarity transforms are created by
+Problem::similarity2_decision_variable(), from constants, and from a
+translation, a Rotation2, and a log scale.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_Similarity2_2[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Similarity2_3[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Similarity2_Similarity2[] =
+R"doc(Constructs a constant similarity transform.
+
+Args:
+    translation: The translation.
+    angle: The rotation angle in radians.
+    scale: The scale. Must be positive.
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity2_Similarity2_2[] =
+R"doc(Constructs a similarity transform from a translation, a rotation, and
+a log scale.
+
+Args:
+    translation: The translation.
+    rotation: The rotation.
+    log_scale: The natural logarithm of the scale.
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity2_inverse[] =
+R"doc(Returns the inverse similarity transform.
+
+It maps points in the parent frame to this transform's frame.
+
+Returns:
+    The inverse similarity transform.
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity2_log[] =
+R"doc(Returns the similarity twist that moves from the identity to this
+similarity transform.
+
+This is the inverse of SimilarityTwist2::exp(), and the logarithm map
+of Sim(2). The twist's angular part is in (−π, π].
+
+Returns:
+    The similarity twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity2_log_scale[] =
+R"doc(Returns the natural logarithm of the scale.
+
+Returns:
+    The natural logarithm of the scale.
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity2_log_scale_2[] =
+R"doc(Returns the natural logarithm of the scale.
+
+Returns:
+    The natural logarithm of the scale.
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity2_m_log_scale[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Similarity2_m_rotation[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Similarity2_m_translation[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Similarity2_relative_to[] =
+R"doc(Returns this similarity transform relative to another.
+
+The result is this transform expressed in the other transform's frame,
+other⁻¹ * this. It's often used as the error between a similarity
+transform and a reference.
+
+Args:
+    other: The similarity transform whose frame the result is
+           expressed in.
+
+Returns:
+    This similarity transform relative to the other.
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity2_rotation[] =
+R"doc(Returns the rotation.
+
+Returns:
+    The rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity2_rotation_2[] =
+R"doc(Returns the rotation.
+
+Returns:
+    The rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity2_scale[] =
+R"doc(Returns the scale.
+
+Returns:
+    The scale, exp(log_scale()).
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity2_to_matrix[] =
+R"doc(Returns the 3x3 homogeneous transformation matrix.
+
+Returns:
+    The 3x3 homogeneous transformation matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity2_translation[] =
+R"doc(Returns the translation.
+
+Returns:
+    The translation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity2_translation_2[] =
+R"doc(Returns the translation.
+
+Returns:
+    The translation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity3[] =
+R"doc(A 3D similarity transform of autodiff expressions, which represents a
+transform in Sim(3).
+
+A similarity transform is a translation t, a rotation R, and a scale s
+> 0. It maps a point p in its own frame to s R p + t in the parent
+frame.
+
+The scale is stored as its logarithm σ = ln s, so s = exp(σ) is
+positive for every value of σ.
+
+Similarity transforms are created by
+Problem::similarity3_decision_variable(), from constants, and from a
+translation, a Rotation3, and a log scale.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_Similarity3_2[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Similarity3_3[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Similarity3_Similarity3[] =
+R"doc(Constructs a constant similarity transform.
+
+Args:
+    translation: The translation.
+    rotation: The rotation. It's normalized, so it must have nonzero
+              norm.
+    scale: The scale. Must be positive.
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity3_Similarity3_2[] =
+R"doc(Constructs a similarity transform from a translation, a rotation, and
+a log scale.
+
+Args:
+    translation: The translation.
+    rotation: The rotation.
+    log_scale: The natural logarithm of the scale.
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity3_inverse[] =
+R"doc(Returns the inverse similarity transform.
+
+It maps points in the parent frame to this transform's frame.
+
+Returns:
+    The inverse similarity transform.
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity3_log[] =
+R"doc(Returns the similarity twist that moves from the identity to this
+similarity transform.
+
+This is the inverse of SimilarityTwist3::exp(), and the logarithm map
+of Sim(3). The twist's angular part is the rotation's to_vector(),
+whose angle is in [0, π].
+
+Returns:
+    The similarity twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity3_log_scale[] =
+R"doc(Returns the natural logarithm of the scale.
+
+Returns:
+    The natural logarithm of the scale.
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity3_log_scale_2[] =
+R"doc(Returns the natural logarithm of the scale.
+
+Returns:
+    The natural logarithm of the scale.
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity3_m_log_scale[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Similarity3_m_rotation[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Similarity3_m_translation[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Similarity3_relative_to[] =
+R"doc(Returns this similarity transform relative to another.
+
+The result is this transform expressed in the other transform's frame,
+other⁻¹ * this. It's often used as the error between a similarity
+transform and a reference.
+
+Args:
+    other: The similarity transform whose frame the result is
+           expressed in.
+
+Returns:
+    This similarity transform relative to the other.
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity3_rotation[] =
+R"doc(Returns the rotation.
+
+Returns:
+    The rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity3_rotation_2[] =
+R"doc(Returns the rotation.
+
+Returns:
+    The rotation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity3_scale[] =
+R"doc(Returns the scale.
+
+Returns:
+    The scale, exp(log_scale()).
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity3_to_matrix[] =
+R"doc(Returns the 4x4 homogeneous transformation matrix.
+
+Returns:
+    The 4x4 homogeneous transformation matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity3_translation[] =
+R"doc(Returns the translation.
+
+Returns:
+    The translation.
+
+)doc";
+
+constexpr char mkd_doc_slp_Similarity3_translation_2[] =
+R"doc(Returns the translation.
+
+Returns:
+    The translation.
+
+)doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist2[] =
+R"doc(A 2D similarity twist of autodiff expressions.
+
+A similarity twist is a change in similarity transform, expressed in
+the frame of the transform it starts from. It's a linear part (dx,
+dy), an angular part dθ in radians, and a log-scale part dσ.
+
+exp() returns the similarity transform reached by moving along the
+twist from the identity, and Similarity2::log() is its inverse. A
+body-frame velocity and log-scale rate times a timestep is a
+similarity twist, so similarity * (velocity * dt).exp() integrates
+them for dt.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist2_SimilarityTwist2[] =
+R"doc(Constructs a similarity twist from its linear, angular, and log-scale
+parts.
+
+Args:
+    linear: The linear part (dx, dy). Must be 2x1.
+    angular: The angular part dθ in radians.
+    log_scale: The log-scale part dσ.
+
+)doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist2_angular[] =
+R"doc(Returns the angular part dθ in radians.
+
+Returns:
+    The angular part.
+
+)doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist2_angular_2[] =
+R"doc(Returns the angular part dθ in radians.
+
+Returns:
+    The angular part.
+
+)doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist2_exp[] =
+R"doc(Returns the similarity transform reached by moving along this twist
+from the identity.
+
+This is the exponential map of Sim(2). Its value and derivatives are
+accurate for all twists, including those with zero angular or log-
+scale parts.
+
+Returns:
+    The similarity transform.
+
+)doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist2_linear[] =
+R"doc(Returns the linear part (dx, dy).
+
+Returns:
+    The linear part.
+
+)doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist2_linear_2[] =
+R"doc(Returns the linear part (dx, dy).
+
+Returns:
+    The linear part.
+
+)doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist2_log_scale[] =
+R"doc(Returns the log-scale part dσ.
+
+Returns:
+    The log-scale part.
+
+)doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist2_log_scale_2[] =
+R"doc(Returns the log-scale part dσ.
+
+Returns:
+    The log-scale part.
+
+)doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist2_m_angular[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist2_m_linear[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist2_m_log_scale[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist3[] =
+R"doc(A 3D similarity twist of autodiff expressions.
+
+A similarity twist is a change in similarity transform, expressed in
+the frame of the transform it starts from. It's a linear part (dx, dy,
+dz), an angular part (rx, ry, rz), a rotation vector in radians, and a
+log-scale part dσ.
+
+exp() returns the similarity transform reached by moving along the
+twist from the identity, and Similarity3::log() is its inverse. A
+body-frame velocity and log-scale rate times a timestep is a
+similarity twist, so similarity * (velocity * dt).exp() integrates
+them for dt.
+
+Template Args:
+    Scalar_: Scalar type.)doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist3_SimilarityTwist3[] =
+R"doc(Constructs a similarity twist from its linear, angular, and log-scale
+parts.
+
+Args:
+    linear: The linear part (dx, dy, dz). Must be 3x1.
+    angular: The angular part (rx, ry, rz) in radians. Must be 3x1.
+    log_scale: The log-scale part dσ.
+
+)doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist3_angular[] =
+R"doc(Returns the angular part (rx, ry, rz) in radians.
+
+Returns:
+    The angular part.
+
+)doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist3_angular_2[] =
+R"doc(Returns the angular part (rx, ry, rz) in radians.
+
+Returns:
+    The angular part.
+
+)doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist3_exp[] =
+R"doc(Returns the similarity transform reached by moving along this twist
+from the identity.
+
+This is the exponential map of Sim(3). Its value and derivatives are
+accurate for all twists, including those with zero angular or log-
+scale parts.
+
+Returns:
+    The similarity transform.
+
+)doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist3_linear[] =
+R"doc(Returns the linear part (dx, dy, dz).
+
+Returns:
+    The linear part.
+
+)doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist3_linear_2[] =
+R"doc(Returns the linear part (dx, dy, dz).
+
+Returns:
+    The linear part.
+
+)doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist3_log_scale[] =
+R"doc(Returns the log-scale part dσ.
+
+Returns:
+    The log-scale part.
+
+)doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist3_log_scale_2[] =
+R"doc(Returns the log-scale part dσ.
+
+Returns:
+    The log-scale part.
+
+)doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist3_m_angular[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist3_m_linear[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_SimilarityTwist3_m_log_scale[] = R"doc()doc";
+
 constexpr char mkd_doc_slp_TimestepMethod[] = R"doc(Enum describing the type of system timestep.)doc";
 
 constexpr char mkd_doc_slp_TimestepMethod_FIXED[] = R"doc(The timestep is a fixed constant.)doc";
@@ -5012,6 +5579,20 @@ pose's rotation and translation.
 
 Args:
     pose: The pose.
+
+Returns:
+    The transformed point.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation2_transform_by_2[] =
+R"doc(Returns this point transformed by a similarity transform.
+
+The result is s R p + t, where p is this point, and s, R, and t are
+the similarity transform's scale, rotation, and translation.
+
+Args:
+    similarity: The similarity transform.
 
 Returns:
     The transformed point.
@@ -5167,6 +5748,20 @@ pose's rotation and translation.
 
 Args:
     pose: The pose.
+
+Returns:
+    The transformed point.
+
+)doc";
+
+constexpr char mkd_doc_slp_Translation3_transform_by_2[] =
+R"doc(Returns this point transformed by a similarity transform.
+
+The result is s R p + t, where p is this point, and s, R, and t are
+the similarity transform's scale, rotation, and translation.
+
+Args:
+    similarity: The similarity transform.
 
 Returns:
     The transformed point.
@@ -5980,6 +6575,19 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_detail_similarity2_coeffs[] =
+R"doc(Returns the real and imaginary parts of f(λ) = (e^λ − 1)/λ, where λ =
+σ + iθ.
+
+Args:
+    σ: The log scale.
+    θ: The rotation angle.
+
+Returns:
+    Re f(λ) and Im f(λ).
+
+)doc";
+
 constexpr char mkd_doc_slp_detail_sphere_log[] =
 R"doc(Returns the sphere's logarithm map log_b(a) in an orthonormal basis of
 b's tangent space.
@@ -6041,6 +6649,32 @@ Args:
 
 Template Args:
     Scalar: Scalar type.
+
+)doc";
+
+constexpr char mkd_doc_slp_exp_4[] =
+R"doc(Returns the similarity transform reached by moving along this twist
+from the identity.
+
+This is the exponential map of Sim(2). Its value and derivatives are
+accurate for all twists, including those with zero angular or log-
+scale parts.
+
+Returns:
+    The similarity transform.
+
+)doc";
+
+constexpr char mkd_doc_slp_exp_5[] =
+R"doc(Returns the similarity transform reached by moving along this twist
+from the identity.
+
+This is the exponential map of Sim(3). Its value and derivatives are
+accurate for all twists, including those with zero angular or log-
+scale parts.
+
+Returns:
+    The similarity transform.
 
 )doc";
 
@@ -6338,7 +6972,7 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_add_8[] =
-R"doc(Adds two translations.
+R"doc(Adds two similarity twists.
 
 Args:
     lhs: Operator left-hand side.
@@ -6350,7 +6984,7 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_add_9[] =
-R"doc(Adds two translations.
+R"doc(Adds two similarity twists.
 
 Args:
     lhs: Operator left-hand side.
@@ -6362,7 +6996,7 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_add_10[] =
-R"doc(Adds two twists.
+R"doc(Adds two translations.
 
 Args:
     lhs: Operator left-hand side.
@@ -6374,7 +7008,7 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_add_11[] =
-R"doc(Adds two twists.
+R"doc(Adds two translations.
 
 Args:
     lhs: Operator left-hand side.
@@ -6386,18 +7020,19 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_add_12[] =
-R"doc(Unary plus operator.
+R"doc(Adds two twists.
 
 Args:
-    v: The vector.
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
 
 Returns:
-    The vector.
+    The sum.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_add_13[] =
-R"doc(Addition operator.
+R"doc(Adds two twists.
 
 Args:
     lhs: Operator left-hand side.
@@ -6409,6 +7044,17 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_add_14[] =
+R"doc(Unary plus operator.
+
+Args:
+    v: The vector.
+
+Returns:
+    The vector.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_add_15[] =
 R"doc(Addition operator.
 
 Args:
@@ -6420,7 +7066,19 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_add_15[] =
+constexpr char mkd_doc_slp_operator_add_16[] =
+R"doc(Addition operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The sum.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_add_17[] =
 R"doc(Addition operator.
 
 Args:
@@ -6717,7 +7375,10 @@ Returns:
 
 constexpr char mkd_doc_slp_operator_eq_14[] =
 R"doc(Equality operator that returns an equality constraint for two
-translations.
+similarity transforms.
+
+The constraint is that the translations are equal, the rotations are
+equal, and the log scales are equal. See Rotation2's operator==.
 
 Args:
     lhs: Left-hand side.
@@ -6730,7 +7391,10 @@ Returns:
 
 constexpr char mkd_doc_slp_operator_eq_15[] =
 R"doc(Equality operator that returns an equality constraint for two
-translations.
+similarity transforms.
+
+The constraint is that the translations are equal, the rotations are
+equal, and the log scales are equal. See Rotation3's operator==.
 
 Args:
     lhs: Left-hand side.
@@ -6742,10 +7406,11 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_eq_16[] =
-R"doc(Equality operator that returns an equality constraint for two twists.
+R"doc(Equality operator that returns an equality constraint for two
+similarity twists.
 
-The constraint is that the linear parts are equal and the angular
-parts are equal.
+The constraint is that the linear parts are equal, the angular parts
+are equal, and the log-scale parts are equal.
 
 Args:
     lhs: Left-hand side.
@@ -6757,6 +7422,48 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_eq_17[] =
+R"doc(Equality operator that returns an equality constraint for two
+similarity twists.
+
+The constraint is that the linear parts are equal, the angular parts
+are equal, and the log-scale parts are equal.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraint.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_18[] =
+R"doc(Equality operator that returns an equality constraint for two
+translations.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraint.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_19[] =
+R"doc(Equality operator that returns an equality constraint for two
+translations.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraint.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_20[] =
 R"doc(Equality operator that returns an equality constraint for two twists.
 
 The constraint is that the linear parts are equal and the angular
@@ -6771,7 +7478,22 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_eq_18[] =
+constexpr char mkd_doc_slp_operator_eq_21[] =
+R"doc(Equality operator that returns an equality constraint for two twists.
+
+The constraint is that the linear parts are equal and the angular
+parts are equal.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraint.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_22[] =
 R"doc(Equality operator that returns an equality constraint for two unit
 vectors.
 
@@ -6792,7 +7514,7 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_eq_19[] =
+constexpr char mkd_doc_slp_operator_eq_23[] =
 R"doc(Equality operator that returns an equality constraint for a unit
 vector and a constant direction.
 
@@ -6808,7 +7530,7 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_eq_20[] =
+constexpr char mkd_doc_slp_operator_eq_24[] =
 R"doc(Equality operator that returns an equality constraint for a constant
 direction and a unit vector.
 
@@ -7055,30 +7777,86 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_mul_14[] =
-R"doc(Scales a translation.
+R"doc(Composes two similarity transforms.
+
+lhs * rhs transforms by rhs, then by lhs. If rhs is a similarity
+transform in lhs's frame, the result is that transform in lhs's parent
+frame.
 
 Args:
-    lhs: The translation.
-    rhs: The factor.
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
 
 Returns:
-    The scaled translation.
+    The composed similarity transform.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_mul_15[] =
-R"doc(Scales a translation.
+R"doc(Composes two similarity transforms.
+
+lhs * rhs transforms by rhs, then by lhs. If rhs is a similarity
+transform in lhs's frame, the result is that transform in lhs's parent
+frame.
 
 Args:
-    lhs: The factor.
-    rhs: The translation.
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
 
 Returns:
-    The scaled translation.
+    The composed similarity transform.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_mul_16[] =
+R"doc(Scales a similarity twist.
+
+Args:
+    lhs: The similarity twist.
+    rhs: The factor.
+
+Returns:
+    The scaled similarity twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_17[] =
+R"doc(Scales a similarity twist.
+
+Args:
+    lhs: The factor.
+    rhs: The similarity twist.
+
+Returns:
+    The scaled similarity twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_18[] =
+R"doc(Scales a similarity twist.
+
+Args:
+    lhs: The similarity twist.
+    rhs: The factor.
+
+Returns:
+    The scaled similarity twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_19[] =
+R"doc(Scales a similarity twist.
+
+Args:
+    lhs: The factor.
+    rhs: The similarity twist.
+
+Returns:
+    The scaled similarity twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_20[] =
 R"doc(Scales a translation.
 
 Args:
@@ -7090,7 +7868,7 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_mul_17[] =
+constexpr char mkd_doc_slp_operator_mul_21[] =
 R"doc(Scales a translation.
 
 Args:
@@ -7102,79 +7880,79 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_mul_18[] =
-R"doc(Scales a twist.
-
-Args:
-    lhs: The twist.
-    rhs: The factor.
-
-Returns:
-    The scaled twist.
-
-)doc";
-
-constexpr char mkd_doc_slp_operator_mul_19[] =
-R"doc(Scales a twist.
-
-Args:
-    lhs: The factor.
-    rhs: The twist.
-
-Returns:
-    The scaled twist.
-
-)doc";
-
-constexpr char mkd_doc_slp_operator_mul_20[] =
-R"doc(Scales a twist.
-
-Args:
-    lhs: The twist.
-    rhs: The factor.
-
-Returns:
-    The scaled twist.
-
-)doc";
-
-constexpr char mkd_doc_slp_operator_mul_21[] =
-R"doc(Scales a twist.
-
-Args:
-    lhs: The factor.
-    rhs: The twist.
-
-Returns:
-    The scaled twist.
-
-)doc";
-
 constexpr char mkd_doc_slp_operator_mul_22[] =
-R"doc(Multiplication operator.
+R"doc(Scales a translation.
 
 Args:
-    lhs: Operator left-hand side.
-    rhs: Operator right-hand side.
+    lhs: The translation.
+    rhs: The factor.
 
 Returns:
-    The product.
+    The scaled translation.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_mul_23[] =
-R"doc(Multiplication operator.
+R"doc(Scales a translation.
 
 Args:
-    lhs: Operator left-hand side.
-    rhs: Operator right-hand side.
+    lhs: The factor.
+    rhs: The translation.
 
 Returns:
-    The product.
+    The scaled translation.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_mul_24[] =
+R"doc(Scales a twist.
+
+Args:
+    lhs: The twist.
+    rhs: The factor.
+
+Returns:
+    The scaled twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_25[] =
+R"doc(Scales a twist.
+
+Args:
+    lhs: The factor.
+    rhs: The twist.
+
+Returns:
+    The scaled twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_26[] =
+R"doc(Scales a twist.
+
+Args:
+    lhs: The twist.
+    rhs: The factor.
+
+Returns:
+    The scaled twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_27[] =
+R"doc(Scales a twist.
+
+Args:
+    lhs: The factor.
+    rhs: The twist.
+
+Returns:
+    The scaled twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_28[] =
 R"doc(Multiplication operator.
 
 Args:
@@ -7186,7 +7964,31 @@ Returns:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_mul_25[] =
+constexpr char mkd_doc_slp_operator_mul_29[] =
+R"doc(Multiplication operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The product.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_30[] =
+R"doc(Multiplication operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The product.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_31[] =
 R"doc(Multiplication operator.
 
 Args:
@@ -7281,7 +8083,7 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_sub_8[] =
-R"doc(Subtracts two translations.
+R"doc(Subtracts two similarity twists.
 
 Args:
     lhs: Operator left-hand side.
@@ -7293,18 +8095,18 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_sub_9[] =
-R"doc(Negates a translation.
+R"doc(Negates a similarity twist.
 
 Args:
-    translation: The translation.
+    twist: The similarity twist.
 
 Returns:
-    The negated translation.
+    The negated similarity twist.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_sub_10[] =
-R"doc(Subtracts two translations.
+R"doc(Subtracts two similarity twists.
 
 Args:
     lhs: Operator left-hand side.
@@ -7316,18 +8118,18 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_sub_11[] =
-R"doc(Negates a translation.
+R"doc(Negates a similarity twist.
 
 Args:
-    translation: The translation.
+    twist: The similarity twist.
 
 Returns:
-    The negated translation.
+    The negated similarity twist.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_sub_12[] =
-R"doc(Subtracts two twists.
+R"doc(Subtracts two translations.
 
 Args:
     lhs: Operator left-hand side.
@@ -7339,18 +8141,18 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_sub_13[] =
-R"doc(Negates a twist.
+R"doc(Negates a translation.
 
 Args:
-    twist: The twist.
+    translation: The translation.
 
 Returns:
-    The negated twist.
+    The negated translation.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_sub_14[] =
-R"doc(Subtracts two twists.
+R"doc(Subtracts two translations.
 
 Args:
     lhs: Operator left-hand side.
@@ -7362,29 +8164,18 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_sub_15[] =
-R"doc(Negates a twist.
+R"doc(Negates a translation.
 
 Args:
-    twist: The twist.
+    translation: The translation.
 
 Returns:
-    The negated twist.
+    The negated translation.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_sub_16[] =
-R"doc(Unary minus operator.
-
-Args:
-    v: The vector.
-
-Returns:
-    The negated vector, which is also unit-length.
-
-)doc";
-
-constexpr char mkd_doc_slp_operator_sub_17[] =
-R"doc(Subtraction operator.
+R"doc(Subtracts two twists.
 
 Args:
     lhs: Operator left-hand side.
@@ -7395,8 +8186,19 @@ Returns:
 
 )doc";
 
+constexpr char mkd_doc_slp_operator_sub_17[] =
+R"doc(Negates a twist.
+
+Args:
+    twist: The twist.
+
+Returns:
+    The negated twist.
+
+)doc";
+
 constexpr char mkd_doc_slp_operator_sub_18[] =
-R"doc(Subtraction operator.
+R"doc(Subtracts two twists.
 
 Args:
     lhs: Operator left-hand side.
@@ -7408,6 +8210,52 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_sub_19[] =
+R"doc(Negates a twist.
+
+Args:
+    twist: The twist.
+
+Returns:
+    The negated twist.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_20[] =
+R"doc(Unary minus operator.
+
+Args:
+    v: The vector.
+
+Returns:
+    The negated vector, which is also unit-length.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_21[] =
+R"doc(Subtraction operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The difference.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_22[] =
+R"doc(Subtraction operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The difference.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_23[] =
 R"doc(Subtraction operator.
 
 Args:
@@ -7558,6 +8406,34 @@ pose's rotation and translation.
 
 Args:
     pose: The pose.
+
+Returns:
+    The transformed point.
+
+)doc";
+
+constexpr char mkd_doc_slp_transform_by_3[] =
+R"doc(Returns this point transformed by a similarity transform.
+
+The result is s R p + t, where p is this point, and s, R, and t are
+the similarity transform's scale, rotation, and translation.
+
+Args:
+    similarity: The similarity transform.
+
+Returns:
+    The transformed point.
+
+)doc";
+
+constexpr char mkd_doc_slp_transform_by_4[] =
+R"doc(Returns this point transformed by a similarity transform.
+
+The result is s R p + t, where p is this point, and s, R, and t are
+the similarity transform's scale, rotation, and translation.
+
+Args:
+    similarity: The similarity transform.
 
 Returns:
     The transformed point.

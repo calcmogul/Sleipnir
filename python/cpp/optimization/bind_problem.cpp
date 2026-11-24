@@ -21,6 +21,8 @@
 #include <sleipnir/autodiff/real_matrix.hpp>
 #include <sleipnir/autodiff/rotation2.hpp>
 #include <sleipnir/autodiff/rotation3.hpp>
+#include <sleipnir/autodiff/similarity2.hpp>
+#include <sleipnir/autodiff/similarity3.hpp>
 #include <sleipnir/autodiff/unit_vector.hpp>
 #include <sleipnir/optimization/problem.hpp>
 #include <sleipnir/optimization/solver/iteration_info.hpp>
@@ -176,6 +178,12 @@ void bind_problem(nb::class_<Problem<double>>& cls) {
           DOC(slp, Problem, pose2_decision_variable));
   cls.def("pose3_decision_variable", &Problem<double>::pose3_decision_variable,
           DOC(slp, Problem, pose3_decision_variable));
+  cls.def("similarity2_decision_variable",
+          &Problem<double>::similarity2_decision_variable,
+          DOC(slp, Problem, similarity2_decision_variable));
+  cls.def("similarity3_decision_variable",
+          &Problem<double>::similarity3_decision_variable,
+          DOC(slp, Problem, similarity3_decision_variable));
   cls.def("parameter", nb::overload_cast<>(&Problem<double>::parameter),
           DOC(slp, Problem, parameter));
   cls.def("parameter", nb::overload_cast<int, int>(&Problem<double>::parameter),
@@ -204,6 +212,10 @@ void bind_problem(nb::class_<Problem<double>>& cls) {
           DOC(slp, Problem, pose2_parameter));
   cls.def("pose3_parameter", &Problem<double>::pose3_parameter,
           DOC(slp, Problem, pose3_parameter));
+  cls.def("similarity2_parameter", &Problem<double>::similarity2_parameter,
+          DOC(slp, Problem, similarity2_parameter));
+  cls.def("similarity3_parameter", &Problem<double>::similarity3_parameter,
+          DOC(slp, Problem, similarity3_parameter));
   for_each_type<double, const Real<double>&, const RealMatrix<double>&>(
       [&]<typename T> {
         cls.def(

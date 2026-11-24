@@ -43,22 +43,22 @@ void bind_twist2(nb::class_<Twist2<double>>& cls) {
 
   cls.def(
       "__mul__", [](const T& lhs, const V& rhs) { return lhs * rhs; },
-      nb::is_operator(), "rhs"_a, DOC(slp, operator, mul, 18));
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, mul, 24));
   cls.def(
       "__rmul__", [](const T& rhs, const V& lhs) { return lhs * rhs; },
-      nb::is_operator(), "lhs"_a, DOC(slp, operator, mul, 19));
+      nb::is_operator(), "lhs"_a, DOC(slp, operator, mul, 25));
   cls.def(
       "__add__", [](const T& lhs, const T& rhs) { return lhs + rhs; },
-      nb::is_operator(), "rhs"_a, DOC(slp, operator, add, 10));
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, add, 12));
   cls.def(
       "__sub__", [](const T& lhs, const T& rhs) { return lhs - rhs; },
-      nb::is_operator(), "rhs"_a, DOC(slp, operator, sub, 12));
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, sub, 16));
   cls.def(
       "__neg__", [](const T& self) { return -self; },
-      DOC(slp, operator, sub, 13));
+      DOC(slp, operator, sub, 17));
   cls.def(
       "__eq__", [](const T& lhs, const T& rhs) { return lhs == rhs; },
-      nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 16));
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 20));
 }
 
 }  // namespace slp

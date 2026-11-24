@@ -493,7 +493,7 @@ problem.solve()
 
 ### Manifold optimization
 
-Unit vectors, rotations, and poses can be decision variables. Instead of constraining their unit-length parts with `n.T @ n == 1`, the solver steps along the set of valid values, so every iterate is valid, and the problem has fewer constraints and multipliers. Use them instead of angle decision variables too: rotations have no discontinuity at ±π, and they don't need `atan2()`.
+Unit vectors, rotations, poses, and similarity transforms can be decision variables. Instead of constraining their unit-length parts with `n.T @ n == 1`, the solver steps along the set of valid values, so every iterate is valid, and the problem has fewer constraints and multipliers. Use them instead of angle decision variables too: rotations have no discontinuity at ±π, and they don't need `atan2()`.
 
 | Decision variable                             | Type           | Value                                      | Initial value      |
 |-----------------------------------------------|----------------|--------------------------------------------|--------------------|
@@ -504,6 +504,8 @@ Unit vectors, rotations, and poses can be decision variables. Instead of constra
 | `problem.rotation3_decision_variable()`       | `Rotation3`    | unit quaternion [w, x, y, z]               | identity           |
 | `problem.pose2_decision_variable()`           | `Pose2`        | `Translation2` and `Rotation2`             | identity           |
 | `problem.pose3_decision_variable()`           | `Pose3`        | `Translation3` and `Rotation3`             | identity           |
+| `problem.similarity2_decision_variable()`     | `Similarity2`  | `Translation2`, `Rotation2`, and log scale | identity           |
+| `problem.similarity3_decision_variable()`     | `Similarity3`  | `Translation3`, `Rotation3`, and log scale | identity           |
 
 `set_value()` takes the same form as `value()` and normalizes unit vectors and quaternions. The types are in `sleipnir.autodiff`.
 
@@ -534,15 +536,16 @@ x, y = robot.translation().value()
 
 The types support these operations:
 
-* Rotations and poses compose with `*` (`a * b` applies `b`, then `a`), and have `inverse()` and `relative_to(other)`, which is `other.inverse() * self`.
-* Unit vectors and translations rotate with `v.rotate_by(rotation)`, and points transform with `p.transform_by(pose)`.
+* Rotations, poses, and similarity transforms compose with `*` (`a * b` applies `b`, then `a`), and have `inverse()` and `relative_to(other)`, which is `other.inverse() * self`.
+* Unit vectors and translations rotate with `v.rotate_by(rotation)`, and points transform with `p.transform_by(pose)` or `p.transform_by(similarity)`.
 * `Rotation2` has `cos()`, `sin()`, and `angle()`. `Rotation3` has `w()`, `x()`, `y()`, `z()`, and `to_vector()`, which returns the rotation vector (axis times angle). Both have `to_matrix()`.
 * `Rotation2(angle)` and `Rotation3(rvec)` construct rotations from an angle or rotation vector, which can be constants or autodiff variables. `Rotation3(w, x, y, z)` constructs one from a quaternion.
 * `Translation2` and `Translation3` have `x()`, `y()`, `z()`, `distance()`, and `squared_distance()`.
+* A similarity transform maps a point p to s R p + t. `Similarity2` and `Similarity3` store the scale s as its natural logarithm, so it stays positive without a constraint. `log_scale()` returns the log scale, and `scale()` returns exp(`log_scale()`). Set the scale with `log_scale().set_value(math.log(s))`. `Similarity2(translation, angle, scale)` constructs a constant one, and `Similarity2(translation, rotation, log_scale)` and `Similarity3(translation, rotation, log_scale)` construct one from parts.
 
 #### Constraints
 
-Use `==` between two values of the same type to constrain them equal. It constrains their relative angle or rotation vector, which is one equation per degree of freedom with no spurious solutions. A `UnitVector` can also equal a constant direction, but not a `RealMatrix`. Elementwise alternatives are worse:
+Use `==` between two values of the same type to constrain them equal. It constrains their relative angle or rotation vector, which is one equation per degree of freedom with no spurious solutions. Similarity transforms also constrain their log scales equal. A `UnitVector` can also equal a constant direction, but not a `RealMatrix`. Elementwise alternatives are worse:
 
 * `n == d` with `n` and `d` as `RealMatrix` gives n equations for a unit vector with n − 1 degrees of freedom, so the constraints are redundant.
 * `rotation.cos() == math.cos(θ)` and `rotation.sin() == math.sin(θ)` gives two equations for one degree of freedom.
@@ -589,8 +592,10 @@ for k in range(N):
 
 and angular velocity integrates with `q[k + 1] == q[k] * Rotation3(ω[k] * dt)`. `log()` of a relative pose, `pose.relative_to(reference).log()`, is a residual for pose errors.
 
+Similarity transforms have similarity twists, which add a log-scale part dσ: `SimilarityTwist2(linear, angular, log_scale)` and `SimilarityTwist3(linear, angular, log_scale)`. `twist.exp()` returns a `Similarity2` or `Similarity3`, `similarity.log()` is its inverse, and `similarity * (velocity * dt).exp()` integrates a constant body-frame velocity and log-scale rate exactly.
+
 #### Iteration callbacks
 
-`IterationInfo.x` contains the decision variables' values, with each manifold variable's components in order: a `Rotation2`'s cos θ and sin θ, a `Rotation3`'s w, x, y, and z, and a pose's translation followed by its rotation. The gradient, Hessian, and Jacobians are with respect to the manifold's tangent space, which has one dimension per degree of freedom, so they have fewer columns than `x` has rows when the problem has manifold variables.
+`IterationInfo.x` contains the decision variables' values, with each manifold variable's components in order: a `Rotation2`'s cos θ and sin θ, a `Rotation3`'s w, x, y, and z, a pose's translation followed by its rotation, and a similarity transform's translation, rotation, and log scale. The gradient, Hessian, and Jacobians are with respect to the manifold's tangent space, which has one dimension per degree of freedom, so they have fewer columns than `x` has rows when the problem has manifold variables.
 
 See [algorithms.md](algorithms.md#manifold-optimization) for how the solver handles manifold variables.

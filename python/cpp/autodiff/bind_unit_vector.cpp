@@ -178,12 +178,12 @@ void bind_unit_vector(nb::class_<UV>& cls) {
     if constexpr (std::same_as<T, const UV&>) {
       cls.def(
           "__eq__", [](const UV& lhs, const UV& rhs) { return lhs == rhs; },
-          nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 18));
+          nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 22));
     } else if constexpr (std::same_as<T, nb::DRef<Eigen::MatrixXd>>) {
       cls.def(
           "__eq__",
           [](const UV& lhs, const Eigen::VectorXd& rhs) { return lhs == rhs; },
-          nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 19));
+          nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 23));
     }
     cls.def(
         "__lt__",
