@@ -1790,6 +1790,10 @@ same. if_else() and the conversion to bool distinguish them.)doc";
 constexpr char mkd_doc_slp_IterationInfo[] =
 R"doc(Solver iteration information exposed to an iteration callback.
 
+If some decision variables lie on a manifold, x is the point in the
+ambient space, and the derivatives are with respect to the manifold's
+tangent space at x, so they have fewer columns than x has rows.
+
 Template Args:
     Scalar: Scalar type.)doc";
 
@@ -2437,6 +2441,8 @@ constexpr char mkd_doc_slp_Problem_m_f[] = R"doc()doc";
 constexpr char mkd_doc_slp_Problem_m_inequality_constraints[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Problem_m_iteration_callbacks[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Problem_m_manifold_blocks[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_Problem_m_persistent_iteration_callbacks[] = R"doc()doc";
 

@@ -40,6 +40,8 @@
 #include "sleipnir/optimization/solver/sqp.hpp"
 #include "sleipnir/optimization/solver/sqp_matrix_callbacks.hpp"
 #include "sleipnir/optimization/solver/util/bounds.hpp"
+#include "sleipnir/optimization/solver/util/manifold.hpp"
+#include "sleipnir/optimization/solver/util/manifold_type.hpp"
 #include "sleipnir/optimization/solver/util/problem_scaling.hpp"
 #include "sleipnir/optimization/solver/util/time_trace.hpp"
 #include "sleipnir/util/empty.hpp"
@@ -401,6 +403,16 @@ class Problem {
       print_problem_analysis();
     }
 
+    // Create the initial value column vector
+    DenseVector x{m_decision_variables.size()};
+    for (size_t i = 0; i < m_decision_variables.size(); ++i) {
+      x[i] = m_decision_variables[i].value();
+    }
+
+    // Move the initial guess onto the manifold
+    const Manifold<Scalar> manifold{m_manifold_blocks};
+    manifold.project(x);
+
     // If the problem is empty or constant, there's nothing to do
     if (cost_function_type() <= ExpressionType::PARAMETER &&
         equality_constraint_type() <= ExpressionType::PARAMETER &&
@@ -408,35 +420,31 @@ class Problem {
       if (options.diagnostics) {
         slp::println("\nInvoking no-op solver\n");
       }
-      return ExitStatus::SUCCESS;
-    }
 
-    // Create the initial value column vector
-    DenseVector x{m_decision_variables.size()};
-    for (size_t i = 0; i < m_decision_variables.size(); ++i) {
-      x[i] = m_decision_variables[i].value();
+      RealMatrix<Scalar>{m_decision_variables}.set_value(x);
+      return ExitStatus::SUCCESS;
     }
 
     // Solve the optimization problem
     ExitStatus status;
-    if (m_equality_constraints.empty() && m_inequality_constraints.empty()) {
-      if (options.diagnostics) {
-        slp::println("\nInvoking Newton solver\n");
-      }
-
-      status = solve_newton(options, spy, x);
-    } else if (m_inequality_constraints.empty()) {
-      if (options.diagnostics) {
-        slp::println("\nInvoking SQP solver\n");
-      }
-
-      status = solve_sqp(options, spy, x);
-    } else {
+    if (!m_inequality_constraints.empty()) {
       if (options.diagnostics) {
         slp::println("\nInvoking IPM solver\n");
       }
 
-      status = solve_ipm(options, spy, x);
+      status = solve_ipm(options, spy, manifold, x);
+    } else if (m_equality_constraints.empty()) {
+      if (options.diagnostics) {
+        slp::println("\nInvoking Newton solver\n");
+      }
+
+      status = solve_newton(options, spy, manifold, x);
+    } else {
+      if (options.diagnostics) {
+        slp::println("\nInvoking SQP solver\n");
+      }
+
+      status = solve_sqp(options, spy, manifold, x);
     }
 
     if (options.diagnostics) {
@@ -507,6 +515,9 @@ class Problem {
   // expression tree
   gch::small_vector<Real<Scalar>> m_decision_variables;
 
+  // The decision variable blocks constrained to manifolds
+  gch::small_vector<ManifoldBlock<Scalar>> m_manifold_blocks;
+
   // The cost function: f(x)
   std::optional<Real<Scalar>> m_f;
 
@@ -525,7 +536,8 @@ class Problem {
       m_persistent_iteration_callbacks;
 
   ExitStatus solve_newton(const Options<Scalar>& options,
-                          [[maybe_unused]] bool spy, DenseVector& x) {
+                          [[maybe_unused]] bool spy,
+                          const Manifold<Scalar>& manifold, DenseVector& x) {
     using SparseMatrix = Eigen::SparseMatrix<Scalar>;
     using SparseVector = Eigen::SparseVector<Scalar>;
     using enum SetupTimeTracerID;
@@ -573,7 +585,8 @@ class Problem {
     if (spy) {
       H_spy = std::make_unique<Spy<Scalar>>(
           "H.spy", "Hessian", "Decision variables", "Decision variables",
-          num_decision_variables, num_decision_variables);
+          manifold.tangent_dimension(num_decision_variables),
+          manifold.tangent_dimension(num_decision_variables));
       iteration_callbacks.push_back([&](const IterationInfo<Scalar>& info) {
         H_spy->add(info.H);
         return ControlFlow::CONTINUE;
@@ -600,14 +613,16 @@ class Problem {
           x_ad.set_value(x);
           return scaling.f * H.value();
         },
-        scaling};
+        scaling,
+        manifold};
 
     // Invoke Newton solver
     return newton<Scalar>(matrix_callbacks, iteration_callbacks, options, x);
   }
 
   ExitStatus solve_sqp(const Options<Scalar>& options,
-                       [[maybe_unused]] bool spy, DenseVector& x) {
+                       [[maybe_unused]] bool spy,
+                       const Manifold<Scalar>& manifold, DenseVector& x) {
     using SparseMatrix = Eigen::SparseMatrix<Scalar>;
     using SparseVector = Eigen::SparseVector<Scalar>;
     using enum SetupTimeTracerID;
@@ -672,11 +687,12 @@ class Problem {
     if (spy) {
       H_spy = std::make_unique<Spy<Scalar>>(
           "H.spy", "Hessian", "Decision variables", "Decision variables",
-          num_decision_variables, num_decision_variables);
+          manifold.tangent_dimension(num_decision_variables),
+          manifold.tangent_dimension(num_decision_variables));
       A_e_spy = std::make_unique<Spy<Scalar>>(
           "A_e.spy", "Equality constraint Jacobian", "Constraints",
           "Decision variables", num_equality_constraints,
-          num_decision_variables);
+          manifold.tangent_dimension(num_decision_variables));
       iteration_callbacks.push_back([&](const IterationInfo<Scalar>& info) {
         H_spy->add(info.H);
         A_e_spy->add(info.A_e);
@@ -720,14 +736,16 @@ class Problem {
           x_ad.set_value(x);
           return scaling.c_e.asDiagonal() * A_e.value();
         },
-        scaling};
+        scaling,
+        manifold};
 
     // Invoke SQP solver
     return sqp<Scalar>(matrix_callbacks, iteration_callbacks, options, x);
   }
 
   ExitStatus solve_ipm(const Options<Scalar>& options,
-                       [[maybe_unused]] bool spy, DenseVector& x) {
+                       [[maybe_unused]] bool spy,
+                       const Manifold<Scalar>& manifold, DenseVector& x) {
     using SparseMatrix = Eigen::SparseMatrix<Scalar>;
     using SparseVector = Eigen::SparseVector<Scalar>;
     using enum SetupTimeTracerID;
@@ -801,15 +819,16 @@ class Problem {
     if (spy) {
       H_spy = std::make_unique<Spy<Scalar>>(
           "H.spy", "Hessian", "Decision variables", "Decision variables",
-          num_decision_variables, num_decision_variables);
+          manifold.tangent_dimension(num_decision_variables),
+          manifold.tangent_dimension(num_decision_variables));
       A_e_spy = std::make_unique<Spy<Scalar>>(
           "A_e.spy", "Equality constraint Jacobian", "Constraints",
           "Decision variables", num_equality_constraints,
-          num_decision_variables);
+          manifold.tangent_dimension(num_decision_variables));
       A_i_spy = std::make_unique<Spy<Scalar>>(
           "A_i.spy", "Inequality constraint Jacobian", "Constraints",
           "Decision variables", num_inequality_constraints,
-          num_decision_variables);
+          manifold.tangent_dimension(num_decision_variables));
       iteration_callbacks.push_back([&](const IterationInfo<Scalar>& info) {
         H_spy->add(info.H);
         A_e_spy->add(info.A_e);
@@ -821,7 +840,7 @@ class Problem {
 
     const auto [bound_constraint_mask, bounds, conflicting_bound_indices] =
         get_bounds<Scalar>(m_decision_variables, m_inequality_constraints,
-                           A_i.value());
+                           A_i.value(), manifold);
     if (!conflicting_bound_indices.empty()) {
       if (options.diagnostics) {
         print_bound_constraint_global_infeasibility_error(
@@ -882,7 +901,8 @@ class Problem {
           x_ad.set_value(x);
           return scaling.c_i.asDiagonal() * A_i.value();
         },
-        scaling};
+        scaling,
+        manifold};
 
     // Invoke interior-point method solver
     return ipm<Scalar>(matrix_callbacks, iteration_callbacks, options,

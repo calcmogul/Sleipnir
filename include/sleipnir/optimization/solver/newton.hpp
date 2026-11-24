@@ -22,6 +22,7 @@
 #include "sleipnir/optimization/solver/util/filter.hpp"
 #include "sleipnir/optimization/solver/util/kkt_error.hpp"
 #include "sleipnir/optimization/solver/util/kkt_system.hpp"
+#include "sleipnir/optimization/solver/util/tangent_space.hpp"
 #include "sleipnir/optimization/solver/util/time_trace.hpp"
 #include "sleipnir/util/assert.hpp"
 #include "sleipnir/util/print_diagnostics.hpp"
@@ -80,12 +81,24 @@ ExitStatus newton(
                             traced(diagnostics[COST], matrix_callbacks.f),
                             traced(diagnostics[GRADIENT], matrix_callbacks.g),
                             traced(diagnostics[HESSIAN], matrix_callbacks.H),
-                            matrix_callbacks.scaling);
+                            matrix_callbacks.scaling,
+                            matrix_callbacks.manifold);
   }
-  const auto& matrices = traced_matrices ? *traced_matrices : matrix_callbacks;
+  const auto& ambient_matrices =
+      traced_matrices ? *traced_matrices : matrix_callbacks;
 #else
-  const auto& matrices = matrix_callbacks;
+  const auto& ambient_matrices = matrix_callbacks;
 #endif
+
+  // Take derivatives in the manifold's tangent space if it isn't Euclidean
+  const auto& manifold = matrix_callbacks.manifold;
+  TangentSpace<Scalar> tangent_space{manifold};
+  std::optional<NewtonMatrixCallbacks<Scalar>> tangent_matrices;
+  if (!manifold.is_euclidean()) {
+    tangent_matrices.emplace(tangent_space.callbacks(ambient_matrices));
+  }
+  const auto& matrices =
+      tangent_matrices ? *tangent_matrices : ambient_matrices;
 
   ScopedTimeTracer setup_tracer{diagnostics[SETUP]};
 
@@ -171,11 +184,11 @@ ExitStatus newton(
     // α_min is zero when the search direction is a descent direction, so also
     // end the line search when the step becomes negligible relative to the
     // iterate. This bounds the number of step size reductions.
-    const Scalar α_tiny = step.tiny_step_size(x);
+    const Scalar α_tiny = step.tiny_step_size(x, manifold);
 
     // Loop until a step is accepted
     while (1) {
-      trial_x = x + α * step.p_x;
+      manifold.retract(x, α, step.p_x, trial_x);
 
       trial_f = matrices.f(trial_x);
 
@@ -204,7 +217,7 @@ ExitStatus newton(
       if (α < α_min || α < α_tiny) {
         Scalar current_kkt_error = kkt_error_one_norm<Scalar>(g);
 
-        trial_x = x + α_max * step.p_x;
+        manifold.retract(x, α_max, step.p_x, trial_x);
 
         trial_f = matrices.f(trial_x);
 
