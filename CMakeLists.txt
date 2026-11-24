@@ -273,6 +273,20 @@ if(PROJECT_IS_TOP_LEVEL AND BUILD_TESTING)
     endif()
     list(JOIN SLEIPNIR_TEST_SCALAR_TYPES "," sleipnir_test_scalar_types)
 
+    # Complex and ComplexMatrix only support floating-point scalar types because
+    # std::complex is only specified for those
+    set(sleipnir_floating_point_test_scalar_types ${SLEIPNIR_TEST_SCALAR_TYPES})
+    list(
+        FILTER sleipnir_floating_point_test_scalar_types
+        INCLUDE
+        REGEX "^(float|double)$"
+    )
+    list(
+        JOIN sleipnir_floating_point_test_scalar_types
+        ","
+        sleipnir_floating_point_test_scalar_types_joined
+    )
+
     # Build explicit template instantiations for each tested scalar type other
     # than double (Sleipnir itself instantiates double). The instantiations for
     # <type> are in test/src/<module>/*_<suffix>.cpp.
@@ -317,7 +331,9 @@ if(PROJECT_IS_TOP_LEVEL AND BUILD_TESTING)
         compiler_flags(${name})
         target_compile_definitions(
             ${name}
-            PRIVATE SCALAR_TYPES=${sleipnir_test_scalar_types}
+            PRIVATE
+                SCALAR_TYPES=${sleipnir_test_scalar_types}
+                FLOATING_POINT_SCALAR_TYPES=${sleipnir_floating_point_test_scalar_types_joined}
         )
         target_include_directories(
             ${name}
@@ -356,6 +372,13 @@ if(PROJECT_IS_TOP_LEVEL AND BUILD_TESTING)
             FILTER sleipnir_optimization_test_src
             EXCLUDE
             REGEX "/multistart_test\\.cpp$"
+        )
+    endif()
+    if(NOT sleipnir_floating_point_test_scalar_types)
+        list(
+            FILTER sleipnir_optimization_test_src
+            EXCLUDE
+            REGEX "/complex(_problem)?_test\\.cpp$"
         )
     endif()
     sleipnir_add_test(
@@ -559,6 +582,9 @@ if(SLEIPNIR_BUILD_PYTHON)
     endif()
 
     set(sleipnir_headers
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/complex.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/complex_matrix.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/complex_submatrix.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/expression_type.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/gradient.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/include/sleipnir/autodiff/hessian.hpp

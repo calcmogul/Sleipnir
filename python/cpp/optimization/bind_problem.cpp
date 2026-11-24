@@ -141,10 +141,30 @@ void bind_problem(nb::class_<Problem<double>>& cls) {
   cls.def("real_decision_variable",
           nb::overload_cast<int, int>(&Problem<double>::real_decision_variable),
           "rows"_a, "cols"_a = 1, DOC(slp, Problem, real_decision_variable, 2));
+  cls.def(
+      "complex_decision_variable",
+      [](Problem<double>& self) { return self.complex_decision_variable(); },
+      DOC(slp, Problem, complex_decision_variable));
+  cls.def(
+      "complex_decision_variable",
+      [](Problem<double>& self, int rows, int cols) {
+        return self.complex_decision_variable(rows, cols);
+      },
+      "rows"_a, "cols"_a = 1, DOC(slp, Problem, complex_decision_variable, 2));
   cls.def("parameter", nb::overload_cast<>(&Problem<double>::parameter),
           DOC(slp, Problem, parameter));
   cls.def("parameter", nb::overload_cast<int, int>(&Problem<double>::parameter),
           "rows"_a, "cols"_a = 1, DOC(slp, Problem, parameter, 2));
+  cls.def(
+      "complex_parameter",
+      [](Problem<double>& self) { return self.complex_parameter(); },
+      DOC(slp, Problem, complex_parameter));
+  cls.def(
+      "complex_parameter",
+      [](Problem<double>& self, int rows, int cols) {
+        return self.complex_parameter(rows, cols);
+      },
+      "rows"_a, "cols"_a = 1, DOC(slp, Problem, complex_parameter, 2));
   for_each_type<double, const Real<double>&, const RealMatrix<double>&>(
       [&]<typename T> {
         cls.def(

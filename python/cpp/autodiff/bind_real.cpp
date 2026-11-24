@@ -11,10 +11,12 @@
 #include <string>
 #include <utility>
 
+#include <sleipnir/autodiff/complex.hpp>
 #include <sleipnir/autodiff/real.hpp>
 #include <sleipnir/autodiff/real_matrix.hpp>
 #include <sleipnir/autodiff/real_submatrix.hpp>
 
+#include "complex_scalar.hpp"
 #include "docstrings.hpp"
 #include "for_each_type.hpp"
 #include "try_cast.hpp"
@@ -265,13 +267,13 @@ void bind_real(nb::module_& autodiff, nb::class_<Real<double>>& cls) {
 
   // Comparison operators
   for_each_type<nb::detail::self_t, double, int>([&]<typename T> {
-    cls.def(nb::self == T(), "rhs"_a, DOC(slp, operator, eq));
+    cls.def(nb::self == T(), "rhs"_a, DOC(slp, operator, eq, 7));
     cls.def(nb::self < T(), "rhs"_a, DOC(slp, operator, lt));
     cls.def(nb::self <= T(), "rhs"_a, DOC(slp, operator, le));
     cls.def(nb::self > T(), "rhs"_a, DOC(slp, operator, gt));
     cls.def(nb::self >= T(), "rhs"_a, DOC(slp, operator, ge));
     if constexpr (!std::same_as<T, nb::detail::self_t>) {
-      cls.def(T() == nb::self, "lhs"_a, DOC(slp, operator, eq));
+      cls.def(T() == nb::self, "lhs"_a, DOC(slp, operator, eq, 7));
       cls.def(T() < nb::self, "lhs"_a, DOC(slp, operator, lt));
       cls.def(T() <= nb::self, "lhs"_a, DOC(slp, operator, le));
       cls.def(T() > nb::self, "lhs"_a, DOC(slp, operator, gt));
@@ -298,7 +300,7 @@ void bind_real(nb::module_& autodiff, nb::class_<Real<double>>& cls) {
   def_ternary_math(
       autodiff, "hypot",
       nb::overload_cast<const V&, const V&, const V&>(&hypot<double>), "x"_a,
-      "y"_a, "z"_a, DOC(slp, hypot, 2));
+      "y"_a, "z"_a, DOC(slp, hypot));
   autodiff.def(
       "if_else",
       [](const EqualityConstraints<double>& cond, const V& t, const V& f) {
@@ -327,6 +329,58 @@ void bind_real(nb::module_& autodiff, nb::class_<Real<double>>& cls) {
   def_unary_math(autodiff, "sqrt", &sqrt<double>, "x"_a, DOC(slp, sqrt));
   def_unary_math(autodiff, "tan", &tan<double>, "x"_a, DOC(slp, tan));
   def_unary_math(autodiff, "tanh", &tanh<double>, "x"_a, DOC(slp, tanh));
+
+  // Arithmetic with constant complex numbers
+  using C = ComplexScalar;
+  cls.def(
+      "__add__", [](const Real<double>& lhs, C rhs) { return lhs + rhs.value; },
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, add, 3));
+  cls.def(
+      "__radd__",
+      [](const Real<double>& rhs, C lhs) { return lhs.value + rhs; },
+      nb::is_operator(), "lhs"_a, DOC(slp, operator, add, 4));
+  cls.def(
+      "__sub__", [](const Real<double>& lhs, C rhs) { return lhs - rhs.value; },
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, sub, 3));
+  cls.def(
+      "__rsub__",
+      [](const Real<double>& rhs, C lhs) { return lhs.value - rhs; },
+      nb::is_operator(), "lhs"_a, DOC(slp, operator, sub, 4));
+  cls.def(
+      "__mul__", [](const Real<double>& lhs, C rhs) { return lhs * rhs.value; },
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, mul, 3));
+  cls.def(
+      "__rmul__",
+      [](const Real<double>& rhs, C lhs) { return lhs.value * rhs; },
+      nb::is_operator(), "lhs"_a, DOC(slp, operator, mul, 4));
+  cls.def(
+      "__truediv__",
+      [](const Real<double>& lhs, C rhs) { return lhs / rhs.value; },
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, div, 3));
+  cls.def(
+      "__rtruediv__",
+      [](const Real<double>& rhs, C lhs) { return lhs.value / rhs; },
+      nb::is_operator(), "lhs"_a, DOC(slp, operator, div, 4));
+
+  // In-place operators with constant complex numbers return a Complex. Type
+  // checkers require each in-place operator to have the same overloads as its
+  // binary operator.
+  cls.def(
+      "__iadd__",
+      [](const Real<double>& lhs, C rhs) { return lhs + rhs.value; },
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, add, 3));
+  cls.def(
+      "__isub__",
+      [](const Real<double>& lhs, C rhs) { return lhs - rhs.value; },
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, sub, 3));
+  cls.def(
+      "__imul__",
+      [](const Real<double>& lhs, C rhs) { return lhs * rhs.value; },
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, mul, 3));
+  cls.def(
+      "__itruediv__",
+      [](const Real<double>& lhs, C rhs) { return lhs / rhs.value; },
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, div, 3));
 }
 
 }  // namespace slp

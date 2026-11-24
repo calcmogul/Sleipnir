@@ -93,6 +93,1372 @@ constexpr char mkd_doc_slp_4[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_5[] = R"doc()doc";
 
+constexpr char mkd_doc_slp_6[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_7[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_8[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_9[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Complex[] =
+R"doc(A complex number of autodiff expressions.
+
+A complex number z = a + bi stores its real part a and imaginary part
+b as two Reals, so the solver sees two real decision variables per
+complex decision variable. Costs must be real-valued, so a cost is
+written with real(), imag(), abs2(), or similar.
+
+An equality constraint between complex numbers constrains the real and
+imaginary parts separately. Complex numbers aren't ordered, so
+inequality constraints are written on real-valued expressions like
+abs2() or real().
+
+Complex numbers are created by Problem::complex_decision_variable(),
+from constants, and from expressions.
+
+Template Args:
+    Scalar_: Scalar type. std::complex is only specified for floating-
+             point types.)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix[] =
+R"doc(A matrix of complex autodiff expressions.
+
+Entries are Complex, and the solver sees two real decision variables
+per complex decision variable. Arithmetic mixes freely with
+RealMatrix, Complex, Real, and Eigen dense or sparse matrices of real
+or complex constants.
+
+T() is the plain transpose, conj() is the elementwise conjugate, and
+H() is the conjugate transpose. An equality constraint between complex
+matrices constrains the real and imaginary parts of each entry.
+Complex numbers aren't ordered, so inequality constraints are written
+on real-valued matrices like real(), imag(), or abs2().
+
+Slicing returns a ComplexSubmatrix that points to the matrix's
+entries, so assigning to a slice assigns to the matrix.
+
+Template Args:
+    Scalar_: Scalar type. std::complex is only specified for floating-
+             point types.)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_ComplexMatrix[] = R"doc(Constructs an empty ComplexMatrix.)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_ComplexMatrix_2[] =
+R"doc(Constructs a zero-initialized ComplexMatrix column vector with the
+given rows.
+
+Args:
+    rows: The number of matrix rows.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_ComplexMatrix_3[] =
+R"doc(Constructs a zero-initialized ComplexMatrix with the given dimensions.
+
+Args:
+    rows: The number of matrix rows.
+    cols: The number of matrix columns.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_ComplexMatrix_4[] =
+R"doc(Constructs an empty ComplexMatrix with the given dimensions.
+
+Args:
+    rows: The number of matrix rows.
+    cols: The number of matrix columns.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_ComplexMatrix_5[] =
+R"doc(Constructs a ComplexMatrix from a nested list of complex numbers.
+
+Args:
+    list: The nested list of complex numbers.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_ComplexMatrix_6[] =
+R"doc(Constructs a ComplexMatrix from a nested list of complex numbers.
+
+This overload is for Python bindings only.
+
+Args:
+    list: The nested list of complex numbers.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_ComplexMatrix_7[] =
+R"doc(Constructs a ComplexMatrix from its real and imaginary parts.
+
+Args:
+    real: The real part.
+    imag: The imaginary part.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_ComplexMatrix_8[] =
+R"doc(Constructs a ComplexMatrix from a real matrix operand or an Eigen
+matrix of real or complex constants.
+
+Args:
+    values: The matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_ComplexMatrix_9[] =
+R"doc(Constructs a scalar ComplexMatrix from a Complex.
+
+Args:
+    value: Complex.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_H[] =
+R"doc(Returns the conjugate transpose of the matrix.
+
+Returns:
+    The conjugate transpose of the matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_T[] =
+R"doc(Returns the transpose of the matrix.
+
+The entries aren't conjugated. For the conjugate transpose, use H().
+
+Returns:
+    The transpose of the matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_abs2[] =
+R"doc(Returns the squared magnitude of each element.
+
+Returns:
+    The squared magnitude of each element.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_begin[] =
+R"doc(Returns begin iterator.
+
+Returns:
+    Begin iterator.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_begin_2[] =
+R"doc(Returns const begin iterator.
+
+Returns:
+    Const begin iterator.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_block[] =
+R"doc(Returns a block of the matrix.
+
+Args:
+    row_offset: The row offset of the block selection.
+    col_offset: The column offset of the block selection.
+    block_rows: The number of rows in the block selection.
+    block_cols: The number of columns in the block selection.
+
+Returns:
+    A block of the matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_block_2[] =
+R"doc(Returns a block of the matrix.
+
+Args:
+    row_offset: The row offset of the block selection.
+    col_offset: The column offset of the block selection.
+    block_rows: The number of rows in the block selection.
+    block_cols: The number of columns in the block selection.
+
+Returns:
+    A block of the matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_cbegin[] =
+R"doc(Returns const begin iterator.
+
+Returns:
+    Const begin iterator.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_cend[] =
+R"doc(Returns const end iterator.
+
+Returns:
+    Const end iterator.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_col[] =
+R"doc(Returns a column slice of the matrix.
+
+Args:
+    col: The column to slice.
+
+Returns:
+    A column slice of the matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_col_2[] =
+R"doc(Returns a column slice of the matrix.
+
+Args:
+    col: The column to slice.
+
+Returns:
+    A column slice of the matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_cols[] =
+R"doc(Returns the number of columns in the matrix.
+
+Returns:
+    The number of columns in the matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_conj[] =
+R"doc(Returns the elementwise complex conjugate of the matrix.
+
+Returns:
+    The elementwise complex conjugate of the matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_cwise_product[] =
+R"doc(Returns the coefficient-wise product with another matrix.
+
+Args:
+    rhs: The other matrix.
+
+Returns:
+    The coefficient-wise product.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_cwise_transform[] =
+R"doc(Transforms the matrix coefficient-wise with an unary operator.
+
+Args:
+    unary_op: The unary operator to use for the transform operation.
+
+Returns:
+    Result of the unary operator.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_end[] =
+R"doc(Returns end iterator.
+
+Returns:
+    End iterator.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_end_2[] =
+R"doc(Returns const end iterator.
+
+Returns:
+    Const end iterator.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_identity[] =
+R"doc(Returns an identity matrix.
+
+Args:
+    rows: The number of matrix rows.
+
+Returns:
+    An identity matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_imag[] =
+R"doc(Returns the imaginary part of each element.
+
+Returns:
+    The imaginary part of each element.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_m_cols[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_m_rows[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_m_storage[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_operator_array[] =
+R"doc(Returns the element at the given row and column.
+
+Args:
+    row: The row.
+    col: The column.
+
+Returns:
+    The element at the given row and column.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_operator_array_2[] =
+R"doc(Returns the element at the given row and column.
+
+Args:
+    row: The row.
+    col: The column.
+
+Returns:
+    The element at the given row and column.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_operator_array_3[] =
+R"doc(Returns the element at the given index.
+
+Args:
+    index: The index.
+
+Returns:
+    The element at the given index.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_operator_array_4[] =
+R"doc(Returns the element at the given index.
+
+Args:
+    index: The index.
+
+Returns:
+    The element at the given index.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_operator_array_5[] =
+R"doc(Returns a slice of the matrix.
+
+Args:
+    row_slice: The row slice.
+    col_slice: The column slice.
+
+Returns:
+    A slice of the matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_operator_array_6[] =
+R"doc(Returns a slice of the matrix.
+
+Args:
+    row_slice: The row slice.
+    col_slice: The column slice.
+
+Returns:
+    A slice of the matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_operator_array_7[] =
+R"doc(Returns a slice of the matrix.
+
+The given slices aren't adjusted. This overload is for Python bindings
+only.
+
+Args:
+    row_slice: The row slice.
+    row_slice_length: The row slice length.
+    col_slice: The column slice.
+    col_slice_length: The column slice length.
+
+Returns:
+    A slice of the matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_operator_array_8[] =
+R"doc(Returns a slice of the matrix.
+
+The given slices aren't adjusted. This overload is for Python bindings
+only.
+
+Args:
+    row_slice: The row slice.
+    row_slice_length: The row slice length.
+    col_slice: The column slice.
+    col_slice_length: The column slice length.
+
+Returns:
+    A slice of the matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_operator_iadd[] =
+R"doc(Compound addition-assignment operator.
+
+Args:
+    rhs: Complex to add.
+
+Returns:
+    Result of addition.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_operator_idiv[] =
+R"doc(Compound matrix division-assignment operator.
+
+Args:
+    rhs: Complex to divide.
+
+Returns:
+    Result of division.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_operator_imul[] =
+R"doc(Compound matrix multiplication-assignment operator.
+
+Args:
+    rhs: Complex to multiply.
+
+Returns:
+    Result of multiplication.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_operator_imul_2[] =
+R"doc(Compound matrix-scalar multiplication-assignment operator.
+
+Args:
+    rhs: Complex to multiply.
+
+Returns:
+    Result of multiplication.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_operator_isub[] =
+R"doc(Compound subtraction-assignment operator.
+
+Args:
+    rhs: Complex to subtract.
+
+Returns:
+    Result of subtraction.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_operator_slp_Complex[] = R"doc(Implicit conversion operator from 1x1 ComplexMatrix to Complex.)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_real[] =
+R"doc(Returns the real part of each element.
+
+Returns:
+    The real part of each element.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_row[] =
+R"doc(Returns a row slice of the matrix.
+
+Args:
+    row: The row to slice.
+
+Returns:
+    A row slice of the matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_row_2[] =
+R"doc(Returns a row slice of the matrix.
+
+Args:
+    row: The row to slice.
+
+Returns:
+    A row slice of the matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_rows[] =
+R"doc(Returns the number of rows in the matrix.
+
+Returns:
+    The number of rows in the matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_segment[] =
+R"doc(Returns a segment of the vector.
+
+Args:
+    offset: The offset of the segment.
+    length: The length of the segment.
+
+Returns:
+    A segment of the vector.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_segment_2[] =
+R"doc(Returns a segment of the vector.
+
+Args:
+    offset: The offset of the segment.
+    length: The length of the segment.
+
+Returns:
+    A segment of the vector.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_set_value[] =
+R"doc(Sets the ComplexMatrix's internal values.
+
+Real values set the imaginary parts to zero.
+
+Args:
+    values: Eigen matrix of values.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_size[] =
+R"doc(Returns number of elements in matrix.
+
+Returns:
+    Number of elements in matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_trace[] =
+R"doc(Returns the trace of the matrix, the sum of its diagonal.
+
+Returns:
+    The trace of the matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_value[] =
+R"doc(Returns an element of the matrix.
+
+Args:
+    row: The row of the element to return.
+    col: The column of the element to return.
+
+Returns:
+    An element of the matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_value_2[] =
+R"doc(Returns an element of the matrix.
+
+Args:
+    index: The index of the element to return.
+
+Returns:
+    An element of the matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_value_3[] =
+R"doc(Returns the contents of the matrix.
+
+Returns:
+    The contents of the matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexMatrix_zero[] =
+R"doc(Returns a matrix filled with zeros.
+
+Args:
+    rows: The number of matrix rows.
+    cols: The number of matrix columns.
+
+Returns:
+    A matrix filled with zeros.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix[] =
+R"doc(A submatrix of complex autodiff expressions with reference semantics.
+
+Assigning to a ComplexSubmatrix assigns to the entries of the matrix
+it points to.
+
+Template Args:
+    Mat: The type of the matrix whose storage this class points to.)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_ComplexSubmatrix[] = R"doc(Copy constructor.)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_ComplexSubmatrix_2[] = R"doc(Move constructor.)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_ComplexSubmatrix_3[] =
+R"doc(Constructs a ComplexSubmatrix pointing to all of the given matrix.
+
+Args:
+    mat: The matrix to which to point.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_ComplexSubmatrix_4[] =
+R"doc(Constructs a ComplexSubmatrix pointing to a subset of the given
+matrix.
+
+Args:
+    mat: The matrix to which to point.
+    row_offset: The block's row offset.
+    col_offset: The block's column offset.
+    block_rows: The number of rows in the block.
+    block_cols: The number of columns in the block.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_ComplexSubmatrix_5[] =
+R"doc(Constructs a ComplexSubmatrix pointing to a subset of the given
+matrix.
+
+Note that the slices are taken as is rather than adjusted.
+
+Args:
+    mat: The matrix to which to point.
+    row_slice: The block's row slice.
+    row_slice_length: The block's row length.
+    col_slice: The block's column slice.
+    col_slice_length: The block's column length.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_H[] =
+R"doc(Returns the conjugate transpose of the submatrix.
+
+Returns:
+    The conjugate transpose of the submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_T[] =
+R"doc(Returns the transpose of the submatrix.
+
+The entries aren't conjugated. For the conjugate transpose, use H().
+
+Returns:
+    The transpose of the submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_abs2[] =
+R"doc(Returns the squared magnitude of each element.
+
+Returns:
+    The squared magnitude of each element.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_begin[] =
+R"doc(Returns begin iterator.
+
+Returns:
+    Begin iterator.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_begin_2[] =
+R"doc(Returns const begin iterator.
+
+Returns:
+    Const begin iterator.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_block[] =
+R"doc(Returns a block of the submatrix.
+
+Args:
+    row_offset: The row offset of the block selection.
+    col_offset: The column offset of the block selection.
+    block_rows: The number of rows in the block selection.
+    block_cols: The number of columns in the block selection.
+
+Returns:
+    A block of the submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_block_2[] =
+R"doc(Returns a block of the submatrix.
+
+Args:
+    row_offset: The row offset of the block selection.
+    col_offset: The column offset of the block selection.
+    block_rows: The number of rows in the block selection.
+    block_cols: The number of columns in the block selection.
+
+Returns:
+    A block of the submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_cbegin[] =
+R"doc(Returns const begin iterator.
+
+Returns:
+    Const begin iterator.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_cend[] =
+R"doc(Returns const end iterator.
+
+Returns:
+    Const end iterator.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_col[] =
+R"doc(Returns a column slice of the submatrix.
+
+Args:
+    col: The column to slice.
+
+Returns:
+    A column slice of the submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_col_2[] =
+R"doc(Returns a column slice of the submatrix.
+
+Args:
+    col: The column to slice.
+
+Returns:
+    A column slice of the submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_cols[] =
+R"doc(Returns the number of columns in the matrix.
+
+Returns:
+    The number of columns in the matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_compose[] =
+R"doc(Returns a slice of this submatrix's slice in the matrix's indices.
+
+Args:
+    outer: This submatrix's slice of the matrix.
+    inner: The slice of this submatrix.
+
+Returns:
+    The slice of the matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_conj[] =
+R"doc(Returns the elementwise complex conjugate of the submatrix.
+
+Returns:
+    The elementwise complex conjugate of the submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_const_iterator[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_const_iterator_const_iterator[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_const_iterator_const_iterator_2[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_const_iterator_m_index[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_const_iterator_m_mat[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_const_iterator_operator_dec[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_const_iterator_operator_dec_2[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_const_iterator_operator_eq[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_const_iterator_operator_inc[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_const_iterator_operator_inc_2[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_const_iterator_operator_mul[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_cwise_product[] =
+R"doc(Returns the coefficient-wise product with another matrix.
+
+Args:
+    rhs: The other matrix.
+
+Returns:
+    The coefficient-wise product.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_cwise_transform[] =
+R"doc(Transforms the matrix coefficient-wise with an unary operator.
+
+Args:
+    unary_op: The unary operator to use for the transform operation.
+
+Returns:
+    Result of the unary operator.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_end[] =
+R"doc(Returns end iterator.
+
+Returns:
+    End iterator.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_end_2[] =
+R"doc(Returns const end iterator.
+
+Returns:
+    Const end iterator.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_imag[] =
+R"doc(Returns the imaginary part of each element.
+
+Returns:
+    The imaginary part of each element.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_iterator[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_iterator_iterator[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_iterator_iterator_2[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_iterator_m_index[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_iterator_m_mat[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_iterator_operator_dec[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_iterator_operator_dec_2[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_iterator_operator_eq[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_iterator_operator_inc[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_iterator_operator_inc_2[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_iterator_operator_mul[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_m_col_slice[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_m_col_slice_length[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_m_mat[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_m_row_slice[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_m_row_slice_length[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_operator_array[] =
+R"doc(Returns the element at the given row and column.
+
+Args:
+    row: The row.
+    col: The column.
+
+Returns:
+    The element at the given row and column.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_operator_array_2[] =
+R"doc(Returns the element at the given row and column.
+
+Args:
+    row: The row.
+    col: The column.
+
+Returns:
+    The element at the given row and column.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_operator_array_3[] =
+R"doc(Returns the element at the given index.
+
+Args:
+    index: The index.
+
+Returns:
+    The element at the given index.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_operator_array_4[] =
+R"doc(Returns the element at the given index.
+
+Args:
+    index: The index.
+
+Returns:
+    The element at the given index.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_operator_array_5[] =
+R"doc(Returns a slice of the submatrix.
+
+Args:
+    row_slice: The row slice.
+    col_slice: The column slice.
+
+Returns:
+    A slice of the submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_operator_array_6[] =
+R"doc(Returns a slice of the submatrix.
+
+Args:
+    row_slice: The row slice.
+    col_slice: The column slice.
+
+Returns:
+    A slice of the submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_operator_array_7[] =
+R"doc(Returns a slice of the submatrix.
+
+The given slices aren't adjusted. This overload is for Python bindings
+only.
+
+Args:
+    row_slice: The row slice.
+    row_slice_length: The row slice length.
+    col_slice: The column slice.
+    col_slice_length: The column slice length.
+
+Returns:
+    A slice of the submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_operator_array_8[] =
+R"doc(Returns a slice of the submatrix.
+
+The given slices aren't adjusted. This overload is for Python bindings
+only.
+
+Args:
+    row_slice: The row slice.
+    row_slice_length: The row slice length.
+    col_slice: The column slice.
+    col_slice_length: The column slice length.
+
+Returns:
+    A slice of the submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_operator_assign[] =
+R"doc(Assigns a ComplexSubmatrix to the block.
+
+Args:
+    values: ComplexSubmatrix of values.
+
+Returns:
+    This submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_operator_assign_2[] =
+R"doc(Assigns a ComplexSubmatrix to the block.
+
+Args:
+    values: ComplexSubmatrix of values.
+
+Returns:
+    This submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_operator_assign_3[] =
+R"doc(Assigns a scalar to the block.
+
+This only works for blocks with one row and one column.
+
+Args:
+    value: Value to assign.
+
+Returns:
+    This submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_operator_assign_4[] =
+R"doc(Assigns an Eigen matrix of real or complex constants to the block.
+
+Args:
+    values: Eigen matrix of values to assign.
+
+Returns:
+    This submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_operator_assign_5[] =
+R"doc(Assigns a ComplexMatrix to the block.
+
+Args:
+    values: ComplexMatrix of values.
+
+Returns:
+    This submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_operator_assign_6[] =
+R"doc(Assigns a ComplexMatrix to the block.
+
+Args:
+    values: ComplexMatrix of values.
+
+Returns:
+    This submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_operator_iadd[] =
+R"doc(Compound addition-assignment operator.
+
+Args:
+    rhs: Matrix to add.
+
+Returns:
+    Result of addition.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_operator_idiv[] =
+R"doc(Compound division-assignment operator.
+
+Args:
+    rhs: Scalar to divide.
+
+Returns:
+    Result of division.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_operator_imul[] =
+R"doc(Compound multiplication-assignment operator.
+
+Args:
+    rhs: Matrix or scalar to multiply.
+
+Returns:
+    Result of multiplication.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_operator_isub[] =
+R"doc(Compound subtraction-assignment operator.
+
+Args:
+    rhs: Matrix to subtract.
+
+Returns:
+    Result of subtraction.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_operator_slp_Complex[] = R"doc(Implicit conversion operator from 1x1 ComplexSubmatrix to Complex.)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_real[] =
+R"doc(Returns the real part of each element.
+
+Returns:
+    The real part of each element.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_row[] =
+R"doc(Returns a row slice of the submatrix.
+
+Args:
+    row: The row to slice.
+
+Returns:
+    A row slice of the submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_row_2[] =
+R"doc(Returns a row slice of the submatrix.
+
+Args:
+    row: The row to slice.
+
+Returns:
+    A row slice of the submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_rows[] =
+R"doc(Returns the number of rows in the matrix.
+
+Returns:
+    The number of rows in the matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_segment[] =
+R"doc(Returns a segment of the submatrix.
+
+Args:
+    offset: The offset of the segment.
+    length: The length of the segment.
+
+Returns:
+    A segment of the submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_segment_2[] =
+R"doc(Returns a segment of the submatrix.
+
+Args:
+    offset: The offset of the segment.
+    length: The length of the segment.
+
+Returns:
+    A segment of the submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_set_value[] =
+R"doc(Sets the block's internal value.
+
+This only works for blocks with one row and one column.
+
+Args:
+    value: Value to assign.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_set_value_2[] =
+R"doc(Sets the block's internal values.
+
+Real values set the imaginary parts to zero.
+
+Args:
+    values: Eigen matrix of values.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_size[] =
+R"doc(Returns number of elements in matrix.
+
+Returns:
+    Number of elements in matrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_trace[] =
+R"doc(Returns the trace of the submatrix, the sum of its diagonal.
+
+Returns:
+    The trace of the submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_value[] =
+R"doc(Returns an element of the submatrix.
+
+Args:
+    row: The row of the element to return.
+    col: The column of the element to return.
+
+Returns:
+    An element of the submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_value_2[] =
+R"doc(Returns an element of the submatrix.
+
+Args:
+    index: The index of the element to return.
+
+Returns:
+    An element of the submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_ComplexSubmatrix_value_3[] =
+R"doc(Returns the contents of the submatrix.
+
+Returns:
+    The contents of the submatrix.
+
+)doc";
+
+constexpr char mkd_doc_slp_Complex_Complex[] = R"doc(Constructs a complex zero.)doc";
+
+constexpr char mkd_doc_slp_Complex_Complex_2[] = R"doc(Constructs an empty complex number.)doc";
+
+constexpr char mkd_doc_slp_Complex_Complex_3[] =
+R"doc(Constructs a complex number from its real and imaginary parts.
+
+Args:
+    real: The real part.
+    imag: The imaginary part.
+
+)doc";
+
+constexpr char mkd_doc_slp_Complex_Complex_4[] =
+R"doc(Constructs a complex number with a zero imaginary part.
+
+Args:
+    real: The real part.
+
+)doc";
+
+constexpr char mkd_doc_slp_Complex_Complex_5[] =
+R"doc(Constructs a constant complex number.
+
+Args:
+    value: The value.
+
+)doc";
+
+constexpr char mkd_doc_slp_Complex_abs[] =
+R"doc(Returns the magnitude √(a² + b²).
+
+The magnitude isn't differentiable at zero. For constraints and costs
+that can reach zero, use abs2().
+
+Returns:
+    The magnitude.
+
+)doc";
+
+constexpr char mkd_doc_slp_Complex_abs2[] =
+R"doc(Returns the squared magnitude a² + b².
+
+Returns:
+    The squared magnitude.
+
+)doc";
+
+constexpr char mkd_doc_slp_Complex_arg[] =
+R"doc(Returns the angle atan2(b, a) in radians.
+
+The angle isn't differentiable at zero or continuous across the
+negative real axis.
+
+Returns:
+    The angle.
+
+)doc";
+
+constexpr char mkd_doc_slp_Complex_conj[] =
+R"doc(Returns the complex conjugate a − bi.
+
+Returns:
+    The complex conjugate.
+
+)doc";
+
+constexpr char mkd_doc_slp_Complex_imag[] =
+R"doc(Returns the imaginary part.
+
+Returns:
+    The imaginary part.
+
+)doc";
+
+constexpr char mkd_doc_slp_Complex_imag_2[] =
+R"doc(Returns the imaginary part.
+
+Returns:
+    The imaginary part.
+
+)doc";
+
+constexpr char mkd_doc_slp_Complex_m_imag[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Complex_m_real[] = R"doc()doc";
+
+constexpr char mkd_doc_slp_Complex_polar[] =
+R"doc(Returns a complex number from its polar form r e^{iθ}.
+
+Args:
+    magnitude: The magnitude r.
+    angle: The angle θ in radians.
+
+Returns:
+    The complex number.
+
+)doc";
+
+constexpr char mkd_doc_slp_Complex_real[] =
+R"doc(Returns the real part.
+
+Returns:
+    The real part.
+
+)doc";
+
+constexpr char mkd_doc_slp_Complex_real_2[] =
+R"doc(Returns the real part.
+
+Returns:
+    The real part.
+
+)doc";
+
+constexpr char mkd_doc_slp_Complex_set_value[] =
+R"doc(Sets the complex number's value.
+
+This is only meaningful for complex decision variables and parameters.
+
+Args:
+    value: The value.
+
+)doc";
+
+constexpr char mkd_doc_slp_Complex_value[] =
+R"doc(Returns the complex number's value.
+
+Returns:
+    The complex number's value.
+
+)doc";
+
 constexpr char mkd_doc_slp_DynamicsType[] = R"doc(Enum describing a type of system dynamics constraints.)doc";
 
 constexpr char mkd_doc_slp_DynamicsType_DISCRETE[] = R"doc(The dynamics are a function in the form xₖ₊₁ = f(t, xₖ, uₖ).)doc";
@@ -843,6 +2209,66 @@ Args:
 )doc";
 
 constexpr char mkd_doc_slp_Problem_clear_callbacks[] = R"doc(Clears the registered callbacks.)doc";
+
+constexpr char mkd_doc_slp_Problem_complex_decision_variable[] =
+R"doc(Creates a complex decision variable in the optimization problem.
+
+The real and imaginary parts are two real decision variables. Complex
+decision variables have an initial value of zero.
+
+Returns:
+    A complex decision variable in the optimization problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_complex_decision_variable_2[] =
+R"doc(Creates a matrix of complex decision variables in the optimization
+problem.
+
+The real and imaginary parts of each entry are two real decision
+variables. Complex decision variables have an initial value of zero.
+
+Args:
+    rows: Number of matrix rows.
+    cols: Number of matrix columns.
+
+Returns:
+    A matrix of complex decision variables in the optimization
+    problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_complex_parameter[] =
+R"doc(Creates a complex parameter in the optimization problem.
+
+A parameter is a constant whose value can be changed between solves
+with set_value(). Unlike constants, parameters aren't folded into
+expressions.
+
+Complex parameters have an initial value of zero.
+
+Returns:
+    A complex parameter in the optimization problem.
+
+)doc";
+
+constexpr char mkd_doc_slp_Problem_complex_parameter_2[] =
+R"doc(Creates a matrix of complex parameters in the optimization problem.
+
+A parameter is a constant whose value can be changed between solves
+with set_value(). Unlike constants, parameters aren't folded into
+expressions.
+
+Complex parameters have an initial value of zero.
+
+Args:
+    rows: Number of matrix rows.
+    cols: Number of matrix columns.
+
+Returns:
+    A matrix of complex parameters in the optimization problem.
+
+)doc";
 
 constexpr char mkd_doc_slp_Problem_cost_function_type[] =
 R"doc(Returns the cost function's type.
@@ -1876,7 +3302,7 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_RealSubmatrix_block_2[] =
-R"doc(Returns a block slice of the submatrix.
+R"doc(Returns a block of the submatrix.
 
 Args:
     row_offset: The row offset of the block selection.
@@ -1885,7 +3311,7 @@ Args:
     block_cols: The number of columns in the block selection.
 
 Returns:
-    A block slice of the submatrix.
+    A block of the submatrix.
 
 )doc";
 
@@ -2041,48 +3467,48 @@ constexpr char mkd_doc_slp_RealSubmatrix_m_row_slice[] = R"doc()doc";
 constexpr char mkd_doc_slp_RealSubmatrix_m_row_slice_length[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_RealSubmatrix_operator_array[] =
-R"doc(Returns a scalar subblock at the given row and column.
+R"doc(Returns the element at the given row and column.
 
 Args:
-    row: The scalar subblock's row.
-    col: The scalar subblock's column.
+    row: The row.
+    col: The column.
 
 Returns:
-    A scalar subblock at the given row and column.
+    The element at the given row and column.
 
 )doc";
 
 constexpr char mkd_doc_slp_RealSubmatrix_operator_array_2[] =
-R"doc(Returns a scalar subblock at the given row and column.
+R"doc(Returns the element at the given row and column.
 
 Args:
-    row: The scalar subblock's row.
-    col: The scalar subblock's column.
+    row: The row.
+    col: The column.
 
 Returns:
-    A scalar subblock at the given row and column.
+    The element at the given row and column.
 
 )doc";
 
 constexpr char mkd_doc_slp_RealSubmatrix_operator_array_3[] =
-R"doc(Returns a scalar subblock at the given index.
+R"doc(Returns the element at the given index.
 
 Args:
-    index: The scalar subblock's index.
+    index: The index.
 
 Returns:
-    A scalar subblock at the given index.
+    The element at the given index.
 
 )doc";
 
 constexpr char mkd_doc_slp_RealSubmatrix_operator_array_4[] =
-R"doc(Returns a scalar subblock at the given index.
+R"doc(Returns the element at the given index.
 
 Args:
-    index: The scalar subblock's index.
+    index: The index.
 
 Returns:
-    A scalar subblock at the given index.
+    The element at the given index.
 
 )doc";
 
@@ -2388,7 +3814,7 @@ Args:
 )doc";
 
 constexpr char mkd_doc_slp_RealSubmatrix_set_value_2[] =
-R"doc(Sets block's internal values.
+R"doc(Sets the block's internal values.
 
 Args:
     values: Eigen matrix of values.
@@ -2776,6 +4202,28 @@ Template Args:
 
 )doc";
 
+constexpr char mkd_doc_slp_detail_ComplexMatrixOperandTraits[] =
+R"doc(Classifies an operand of complex matrix arithmetic.
+
+Template Args:
+    T: The operand type.)doc";
+
+constexpr char mkd_doc_slp_detail_complex_entry[] =
+R"doc(Returns entry (row, col) of a matrix operand as a Complex.
+
+Args:
+    m: The matrix operand.
+    row: The entry's row.
+    col: The entry's column.
+
+Template Args:
+    Scalar: Scalar type.
+
+Returns:
+    The entry.
+
+)doc";
+
 constexpr char mkd_doc_slp_detail_gradient_tree[] = R"doc()doc";
 
 constexpr char mkd_doc_slp_detail_gradient_tree_2[] =
@@ -3031,7 +4479,149 @@ Template Args:
 
 )doc";
 
+constexpr char mkd_doc_slp_operator_add[] =
+R"doc(Adds two complex numbers.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The sum.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_add_2[] =
+R"doc(Adds two complex numbers.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The sum.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_add_3[] =
+R"doc(Adds a Real and a constant complex number.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The sum.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_add_4[] =
+R"doc(Adds a constant complex number and a Real.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The sum.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_add_5[] =
+R"doc(Returns a complex number unchanged.
+
+Args:
+    z: The complex number.
+
+Returns:
+    The complex number.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_add_6[] =
+R"doc(Binary addition operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    Result of addition.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_add_7[] =
+R"doc(Unary plus operator.
+
+Args:
+    z: Operand for unary plus.
+
+Returns:
+    The matrix.
+
+)doc";
+
 constexpr char mkd_doc_slp_operator_div[] =
+R"doc(Divides two complex numbers.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The quotient.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_div_2[] =
+R"doc(Divides two complex numbers.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The quotient.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_div_3[] =
+R"doc(Divides a Real by a constant complex number.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The quotient.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_div_4[] =
+R"doc(Divides a constant complex number by a Real.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The quotient.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_div_5[] =
+R"doc(Binary division operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    Result of division.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_div_6[] =
 R"doc(Binary division operator.
 
 Args:
@@ -3047,15 +4637,86 @@ Returns:
 )doc";
 
 constexpr char mkd_doc_slp_operator_eq[] =
-R"doc(Equality operator that returns an equality constraint for two Reals.
+R"doc(Equality operator that returns equality constraints on the real and
+imaginary parts of two complex numbers.
 
 Args:
     lhs: Left-hand side.
-    rhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraints.
 
 )doc";
 
 constexpr char mkd_doc_slp_operator_eq_2[] =
+R"doc(Equality operator that returns equality constraints on the real and
+imaginary parts of a complex number and another operand.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side. It's a Real, a std::complex, or a real
+         constant.
+
+Returns:
+    The equality constraints.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_3[] =
+R"doc(Equality operator that returns equality constraints on the real and
+imaginary parts of another operand and a complex number.
+
+Args:
+    lhs: Left-hand side. It's a Real, a std::complex, or a real
+         constant.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraints.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_4[] =
+R"doc(Equality operator that returns equality constraints on the real and
+imaginary parts of each entry of two matrices.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraints.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_5[] =
+R"doc(Equality operator that returns equality constraints on the real and
+imaginary parts of each entry of a matrix and a scalar.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraints.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_6[] =
+R"doc(Equality operator that returns equality constraints on the real and
+imaginary parts of each entry of a scalar and a matrix.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Right-hand side.
+
+Returns:
+    The equality constraints.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_7[] =
 R"doc(Equality operator that returns an equality constraint for two Reals.
 
 Args:
@@ -3064,7 +4725,16 @@ Args:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_eq_3[] =
+constexpr char mkd_doc_slp_operator_eq_8[] =
+R"doc(Equality operator that returns an equality constraint for two Reals.
+
+Args:
+    lhs: Left-hand side.
+    rhs: Left-hand side.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_eq_9[] =
 R"doc(Equality operator that returns an equality constraint for two Reals.
 
 Args:
@@ -3134,6 +4804,94 @@ Args:
 )doc";
 
 constexpr char mkd_doc_slp_operator_mul[] =
+R"doc(Multiplies two complex numbers.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The product.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_2[] =
+R"doc(Multiplies two complex numbers.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The product.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_3[] =
+R"doc(Multiplies a Real by a constant complex number.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The product.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_4[] =
+R"doc(Multiplies a constant complex number by a Real.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The product.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_5[] =
+R"doc(Matrix multiplication operator.
+
+Products with Eigen constants skip their zero entries, so a sparse
+constant matrix like a bus admittance matrix only builds expressions
+for its nonzeros.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    Result of multiplication.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_6[] =
+R"doc(Matrix-scalar multiplication operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    Result of multiplication.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_7[] =
+R"doc(Scalar-matrix multiplication operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    Result of multiplication.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_mul_8[] =
 R"doc(Matrix-scalar multiplication operator.
 
 Args:
@@ -3145,7 +4903,7 @@ Template Args:
 
 )doc";
 
-constexpr char mkd_doc_slp_operator_mul_2[] =
+constexpr char mkd_doc_slp_operator_mul_9[] =
 R"doc(Scalar-matrix multiplication operator.
 
 Args:
@@ -3154,6 +4912,88 @@ Args:
 
 Template Args:
     Scalar: Scalar type.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub[] =
+R"doc(Subtracts two complex numbers.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The difference.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_2[] =
+R"doc(Subtracts two complex numbers.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The difference.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_3[] =
+R"doc(Subtracts a constant complex number from a Real.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The difference.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_4[] =
+R"doc(Subtracts a Real from a constant complex number.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    The difference.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_5[] =
+R"doc(Negates a complex number.
+
+Args:
+    z: The complex number.
+
+Returns:
+    The negated complex number.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_6[] =
+R"doc(Binary subtraction operator.
+
+Args:
+    lhs: Operator left-hand side.
+    rhs: Operator right-hand side.
+
+Returns:
+    Result of subtraction.
+
+)doc";
+
+constexpr char mkd_doc_slp_operator_sub_7[] =
+R"doc(Unary minus operator.
+
+Args:
+    z: Operand for unary minus.
+
+Returns:
+    The negated matrix.
 
 )doc";
 

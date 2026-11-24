@@ -363,13 +363,13 @@ void bind_real_submatrix(nb::class_<RealSubmatrix<RealMatrix<double>>>& cls) {
 
   // Comparison operators
   for_each_type<nb::detail::self_t, double, int, Real<double>>([&]<typename T> {
-    cls.def(nb::self == T(), "rhs"_a, DOC(slp, operator, eq));
+    cls.def(nb::self == T(), "rhs"_a, DOC(slp, operator, eq, 7));
     cls.def(nb::self < T(), "rhs"_a, DOC(slp, operator, lt));
     cls.def(nb::self <= T(), "rhs"_a, DOC(slp, operator, le));
     cls.def(nb::self > T(), "rhs"_a, DOC(slp, operator, gt));
     cls.def(nb::self >= T(), "rhs"_a, DOC(slp, operator, ge));
     if constexpr (!std::same_as<nb::detail::self_t, T>) {
-      cls.def(T() == nb::self, "rhs"_a, DOC(slp, operator, eq));
+      cls.def(T() == nb::self, "rhs"_a, DOC(slp, operator, eq, 7));
       cls.def(T() < nb::self, "rhs"_a, DOC(slp, operator, lt));
       cls.def(T() <= nb::self, "rhs"_a, DOC(slp, operator, le));
       cls.def(T() > nb::self, "rhs"_a, DOC(slp, operator, gt));
@@ -383,7 +383,7 @@ void bind_real_submatrix(nb::class_<RealSubmatrix<RealMatrix<double>>>& cls) {
             [](const RealSubmatrix<RealMatrix<double>>& lhs, T&& rhs) {
               return lhs == rhs;
             },
-            nb::is_operator(), "rhs"_a, DOC(slp, operator, eq));
+            nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 7));
         cls.def(
             "__lt__",
             [](const RealSubmatrix<RealMatrix<double>>& lhs, T&& rhs) {

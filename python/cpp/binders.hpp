@@ -4,6 +4,8 @@
 
 #include <nanobind/nanobind.h>
 
+#include <sleipnir/autodiff/complex.hpp>
+#include <sleipnir/autodiff/complex_matrix.hpp>
 #include <sleipnir/autodiff/expression_type.hpp>
 #include <sleipnir/autodiff/gradient.hpp>
 #include <sleipnir/autodiff/hessian.hpp>
@@ -28,6 +30,10 @@ void bind_expression_type(nb::enum_<ExpressionType>& e);
 void bind_real(nb::module_& autodiff, nb::class_<Real<double>>& cls);
 void bind_real_matrix(nb::module_& autodiff,
                       nb::class_<RealMatrix<double>>& cls);
+void bind_complex(nb::class_<Complex<double>>& cls);
+void bind_complex_matrix(nb::class_<ComplexMatrix<double>>& cls);
+void bind_complex_submatrix(
+    nb::class_<ComplexSubmatrix<ComplexMatrix<double>>>& cls);
 void bind_real_submatrix(nb::class_<RealSubmatrix<RealMatrix<double>>>& cls);
 
 void bind_gradient(nb::class_<Gradient<double>>& cls);

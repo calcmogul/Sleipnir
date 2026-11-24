@@ -22,12 +22,14 @@
 
 #include <Eigen/Core>
 #include <Eigen/SparseCore>
+#include <sleipnir/autodiff/complex_matrix.hpp>
 #include <sleipnir/autodiff/real.hpp>
 #include <sleipnir/autodiff/real_matrix.hpp>
 #include <sleipnir/autodiff/real_submatrix.hpp>
 #include <sleipnir/autodiff/slice.hpp>
 #include <sleipnir/util/concepts.hpp>
 
+#include "complex_scalar.hpp"
 #include "docstrings.hpp"
 #include "for_each_type.hpp"
 #include "slice_tuple.hpp"
@@ -235,6 +237,13 @@ void bind_real_matrix(nb::module_& autodiff,
                            [&](auto& rhs) { return self * rhs; }, inputs[1])) {
               return result.value();
             }
+          } else if (ufunc_name == "<ufunc 'multiply'>") {
+            // NumPy complex scalars, which subclass Python's complex
+            for (const auto& input : inputs) {
+              if (PyComplex_Check(input.ptr())) {
+                return nb::cast(nb::cast<ComplexScalar>(input).value * self);
+              }
+            }
           } else if (ufunc_name == "<ufunc 'add'>") {
             if (auto result = apply_eigen_op(
                     [&](auto& lhs) { return lhs + self; }, inputs[0])) {
@@ -396,13 +405,13 @@ void bind_real_matrix(nb::module_& autodiff,
 
   // Comparison operators
   for_each_type<nb::detail::self_t, double, int, Real<double>>([&]<typename T> {
-    cls.def(nb::self == T(), "rhs"_a, DOC(slp, operator, eq));
+    cls.def(nb::self == T(), "rhs"_a, DOC(slp, operator, eq, 7));
     cls.def(nb::self < T(), "rhs"_a, DOC(slp, operator, lt));
     cls.def(nb::self <= T(), "rhs"_a, DOC(slp, operator, le));
     cls.def(nb::self > T(), "rhs"_a, DOC(slp, operator, gt));
     cls.def(nb::self >= T(), "rhs"_a, DOC(slp, operator, ge));
     if constexpr (!std::same_as<nb::detail::self_t, T>) {
-      cls.def(T() == nb::self, "rhs"_a, DOC(slp, operator, eq));
+      cls.def(T() == nb::self, "rhs"_a, DOC(slp, operator, eq, 7));
       cls.def(T() < nb::self, "rhs"_a, DOC(slp, operator, lt));
       cls.def(T() <= nb::self, "rhs"_a, DOC(slp, operator, le));
       cls.def(T() > nb::self, "rhs"_a, DOC(slp, operator, gt));
@@ -414,7 +423,7 @@ void bind_real_matrix(nb::module_& autodiff,
     cls.def(
         "__eq__",
         [](const RealMatrix<double>& lhs, T&& rhs) { return lhs == rhs; },
-        nb::is_operator(), "rhs"_a, DOC(slp, operator, eq));
+        nb::is_operator(), "rhs"_a, DOC(slp, operator, eq, 7));
     cls.def(
         "__lt__",
         [](const RealMatrix<double>& lhs, T&& rhs) { return lhs < rhs; },
@@ -475,6 +484,20 @@ void bind_real_matrix(nb::module_& autodiff,
         return solve(RealMatrix<double>(A), B);
       },
       "A"_a, "B"_a, DOC(slp, solve));
+  // Products with constant complex numbers
+  cls.def(
+      "__mul__",
+      [](const RealMatrix<double>& lhs, ComplexScalar rhs) {
+        return lhs * rhs.value;
+      },
+      nb::is_operator(), "rhs"_a, DOC(slp, operator, mul, 6));
+  cls.def(
+      "__rmul__",
+      [](const RealMatrix<double>& rhs, ComplexScalar lhs) {
+        return lhs.value * rhs;
+      },
+      nb::is_operator(), "lhs"_a, DOC(slp, operator, mul, 7));
+
   // RealMatrix multiplication with SciPy sparse matrices on the right. These
   // come after every other overload because the sparse caster converts scalars
   // to 1x1 matrices. SciPy sparse matrices on the left don't defer to reflected

@@ -2,8 +2,14 @@
 
 #include <nanobind/eigen/dense.h>
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/complex.h>
+
+#include <complex>
 
 #include <Eigen/Core>
+#include <sleipnir/autodiff/complex.hpp>
+#include <sleipnir/autodiff/complex_matrix.hpp>
+#include <sleipnir/autodiff/complex_submatrix.hpp>
 #include <sleipnir/autodiff/expression_type.hpp>
 #include <sleipnir/autodiff/gradient.hpp>
 #include <sleipnir/autodiff/real.hpp>
@@ -41,6 +47,11 @@ NB_MODULE(_sleipnir, m) {
   nb::class_<Real<double>> real{autodiff, "Real", DOC(slp, Real)};
   nb::class_<RealMatrix<double>> real_matrix{autodiff, "RealMatrix",
                                              DOC(slp, RealMatrix, 2)};
+  nb::class_<Complex<double>> complex{autodiff, "Complex", DOC(slp, Complex)};
+  nb::class_<ComplexMatrix<double>> complex_matrix{autodiff, "ComplexMatrix",
+                                                   DOC(slp, ComplexMatrix)};
+  nb::class_<ComplexSubmatrix<ComplexMatrix<double>>> complex_submatrix{
+      autodiff, "ComplexSubmatrix", DOC(slp, ComplexSubmatrix)};
   nb::class_<RealSubmatrix<RealMatrix<double>>> real_submatrix{
       autodiff, "RealSubmatrix", DOC(slp, RealSubmatrix)};
 
@@ -92,10 +103,18 @@ NB_MODULE(_sleipnir, m) {
 
   bind_real(autodiff, real);
   bind_real_matrix(autodiff, real_matrix);
+  bind_complex(complex);
+  bind_complex_matrix(complex_matrix);
+  bind_complex_submatrix(complex_submatrix);
   bind_real_submatrix(real_submatrix);
 
   // Implicit conversions
   real_matrix.def(nb::init_implicit<RealSubmatrix<RealMatrix<double>>>());
+  complex.def(nb::init_implicit<std::complex<double>>());
+  complex.def(nb::init_implicit<Real<double>>());
+  complex_matrix.def(nb::init_implicit<RealMatrix<double>>());
+  complex_matrix.def(
+      nb::init_implicit<ComplexSubmatrix<ComplexMatrix<double>>>());
 
   bind_gradient(gradient);
   bind_hessian(hessian);

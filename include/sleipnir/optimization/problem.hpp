@@ -18,6 +18,8 @@
 #include <Eigen/SparseCore>
 #include <gch/small_vector.hpp>
 
+#include "sleipnir/autodiff/complex.hpp"
+#include "sleipnir/autodiff/complex_matrix.hpp"
 #include "sleipnir/autodiff/expression.hpp"
 #include "sleipnir/autodiff/expression_type.hpp"
 #include "sleipnir/autodiff/gradient.hpp"
@@ -140,6 +142,82 @@ class Problem {
 
     for (auto& param : params) {
       param = parameter();
+    }
+
+    return params;
+  }
+
+  /// Creates a complex decision variable in the optimization problem.
+  ///
+  /// The real and imaginary parts are two real decision variables. Complex
+  /// decision variables have an initial value of zero.
+  ///
+  /// @return A complex decision variable in the optimization problem.
+  [[nodiscard]]
+  auto complex_decision_variable()
+    requires std::floating_point<Scalar>
+  {
+    auto real = real_decision_variable();
+    auto imag = real_decision_variable();
+    return Complex<Scalar>{std::move(real), std::move(imag)};
+  }
+
+  /// Creates a matrix of complex decision variables in the optimization
+  /// problem.
+  ///
+  /// The real and imaginary parts of each entry are two real decision
+  /// variables. Complex decision variables have an initial value of zero.
+  ///
+  /// @param rows Number of matrix rows.
+  /// @param cols Number of matrix columns.
+  /// @return A matrix of complex decision variables in the optimization
+  ///     problem.
+  [[nodiscard]]
+  auto complex_decision_variable(int rows, int cols = 1)
+    requires std::floating_point<Scalar>
+  {
+    ComplexMatrix<Scalar> vars{detail::empty, rows, cols};
+
+    for (auto& var : vars) {
+      var = complex_decision_variable();
+    }
+
+    return vars;
+  }
+
+  /// Creates a complex parameter in the optimization problem.
+  ///
+  /// A parameter is a constant whose value can be changed between solves with
+  /// set_value(). Unlike constants, parameters aren't folded into expressions.
+  ///
+  /// Complex parameters have an initial value of zero.
+  ///
+  /// @return A complex parameter in the optimization problem.
+  [[nodiscard]]
+  auto complex_parameter()
+    requires std::floating_point<Scalar>
+  {
+    return Complex<Scalar>{parameter(), parameter()};
+  }
+
+  /// Creates a matrix of complex parameters in the optimization problem.
+  ///
+  /// A parameter is a constant whose value can be changed between solves with
+  /// set_value(). Unlike constants, parameters aren't folded into expressions.
+  ///
+  /// Complex parameters have an initial value of zero.
+  ///
+  /// @param rows Number of matrix rows.
+  /// @param cols Number of matrix columns.
+  /// @return A matrix of complex parameters in the optimization problem.
+  [[nodiscard]]
+  auto complex_parameter(int rows, int cols = 1)
+    requires std::floating_point<Scalar>
+  {
+    ComplexMatrix<Scalar> params{detail::empty, rows, cols};
+
+    for (auto& param : params) {
+      param = complex_parameter();
     }
 
     return params;

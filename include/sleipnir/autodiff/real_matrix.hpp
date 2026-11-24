@@ -151,6 +151,7 @@ class RealMatrix : public SleipnirBase {
   ///
   /// @param values Eigen matrix of values.
   template <typename Derived>
+    requires(!ComplexLike<Derived>)
   // NOLINTNEXTLINE (google-explicit-constructor)
   RealMatrix(const Eigen::MatrixBase<Derived>& values)
       : m_rows{static_cast<int>(values.rows())},

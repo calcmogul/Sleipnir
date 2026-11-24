@@ -171,7 +171,7 @@ class RealSubmatrix : public SleipnirBase {
     return *this;
   }
 
-  /// Sets block's internal values.
+  /// Sets the block's internal values.
   ///
   /// @param values Eigen matrix of values.
   template <typename Derived>
@@ -216,11 +216,11 @@ class RealSubmatrix : public SleipnirBase {
     return *this;
   }
 
-  /// Returns a scalar subblock at the given row and column.
+  /// Returns the element at the given row and column.
   ///
-  /// @param row The scalar subblock's row.
-  /// @param col The scalar subblock's column.
-  /// @return A scalar subblock at the given row and column.
+  /// @param row The row.
+  /// @param col The column.
+  /// @return The element at the given row and column.
   Real<Scalar>& operator[](int row, int col)
     requires(!std::is_const_v<Mat>)
   {
@@ -230,11 +230,11 @@ class RealSubmatrix : public SleipnirBase {
                     m_col_slice.start + col * m_col_slice.step];
   }
 
-  /// Returns a scalar subblock at the given row and column.
+  /// Returns the element at the given row and column.
   ///
-  /// @param row The scalar subblock's row.
-  /// @param col The scalar subblock's column.
-  /// @return A scalar subblock at the given row and column.
+  /// @param row The row.
+  /// @param col The column.
+  /// @return The element at the given row and column.
   const Real<Scalar>& operator[](int row, int col) const {
     slp_assert(row >= 0 && row < rows());
     slp_assert(col >= 0 && col < cols());
@@ -242,10 +242,10 @@ class RealSubmatrix : public SleipnirBase {
                     m_col_slice.start + col * m_col_slice.step];
   }
 
-  /// Returns a scalar subblock at the given index.
+  /// Returns the element at the given index.
   ///
-  /// @param index The scalar subblock's index.
-  /// @return A scalar subblock at the given index.
+  /// @param index The index.
+  /// @return The element at the given index.
   Real<Scalar>& operator[](int index)
     requires(!std::is_const_v<Mat>)
   {
@@ -253,10 +253,10 @@ class RealSubmatrix : public SleipnirBase {
     return (*this)[index / cols(), index % cols()];
   }
 
-  /// Returns a scalar subblock at the given index.
+  /// Returns the element at the given index.
   ///
-  /// @param index The scalar subblock's index.
-  /// @return A scalar subblock at the given index.
+  /// @param index The index.
+  /// @return The element at the given index.
   const Real<Scalar>& operator[](int index) const {
     slp_assert(index >= 0 && index < rows() * cols());
     return (*this)[index / cols(), index % cols()];
@@ -279,13 +279,13 @@ class RealSubmatrix : public SleipnirBase {
                    Slice{col_offset, col_offset + block_cols, 1}];
   }
 
-  /// Returns a block slice of the submatrix.
+  /// Returns a block of the submatrix.
   ///
   /// @param row_offset The row offset of the block selection.
   /// @param col_offset The column offset of the block selection.
   /// @param block_rows The number of rows in the block selection.
   /// @param block_cols The number of columns in the block selection.
-  /// @return A block slice of the submatrix.
+  /// @return A block of the submatrix.
   const RealSubmatrix<const Mat> block(int row_offset, int col_offset,
                                        int block_rows, int block_cols) const {
     slp_assert(row_offset >= 0 && row_offset <= rows());
